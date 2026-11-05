@@ -278,9 +278,21 @@ export interface HudState {
   phase: number;
   phaseName: string;
   boostReady: number; // 0..1
-  boss: { name: string; hp: number; maxHp: number; shield: number; shieldMax: number; phase: number } | null;
+  boss: {
+    name: string;
+    hp: number;
+    maxHp: number;
+    shield: number;
+    shieldMax: number;
+    phase: number;
+  } | null;
   weapons: { id: string; icon: string; level: number; max: number; evolved: boolean }[];
   passives: { id: string; icon: string; stacks: number }[];
-  banner: { title: string; sub: string; tone: "info" | "alert" | "good"; t: number } | null;
+  banner: {
+    title: string;
+    sub: string;
+    tone: "info" | "alert" | "good" | "warn";
+    t: number;
+  } | null;
   credits: number;
 }

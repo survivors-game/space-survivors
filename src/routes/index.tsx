@@ -53,6 +53,7 @@ import { UPGRADES, hangarBonuses as calcHangarBonuses, upgradeCost } from "@/gam
 import type { HudState, RunResult, UpgradeChoice } from "@/game/types";
 
 type Screen = "MENU" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER";
+type GameMode = "CAMPAIGN" | "ENDLESS";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -77,6 +78,7 @@ const WEAPON_NAMES: Record<string, string> = {
 
 function Index() {
   const [screen, setScreen] = useState<Screen>("MENU");
+  const [gameMode, setGameMode] = useState<GameMode>("CAMPAIGN");
   const [progress, setProgress] = useState<Progress>(() => defaultProgress());
   const [selectedShipId, setSelectedShipId] = useState("falcon");
   const [selectedStageId, setSelectedStageId] = useState("nova");
@@ -136,16 +138,21 @@ function Index() {
       stage: selectedStage,
       hangar: calcHangarBonuses(progress.upgrades),
       durationSec: 900,
+      isEndless: gameMode === "ENDLESS",
       callbacks: {
         onLevelUp: (nextChoices, nextRerolls) => {
           setChoices(nextChoices);
           setRerolls(nextRerolls);
         },
         onEnd: (result) => {
-          const outcome = recordRun(ProgressStore.get(), result);
-          saveProgress(outcome.progress);
+          if (gameMode === "ENDLESS") {
+            setRunCredits(0);
+          } else {
+            const outcome = recordRun(ProgressStore.get(), result);
+            saveProgress(outcome.progress);
+            setRunCredits(outcome.credits);
+          }
           setRunResult(result);
-          setRunCredits(outcome.credits);
           setChoices([]);
           setPaused(false);
           setScreen("GAMEOVER");
@@ -162,7 +169,7 @@ function Index() {
       engine.stop();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [screen, selectedShip, selectedStage, progress.upgrades]);
+  }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode]);
 
   const chooseShip = (id: string) => {
     if (!progress.ships.includes(id)) return;
@@ -232,7 +239,12 @@ function Index() {
     const healthPercent = hud ? Math.max(0, (hud.hp / Math.max(1, hud.maxHp)) * 100) : 100;
     const shieldPercent = hud ? Math.max(0, (hud.shield / Math.max(1, hud.shieldMax)) * 100) : 0;
     const xpPercent = hud ? Math.min(100, (hud.xp / Math.max(1, hud.xpToNext)) * 100) : 0;
-    const remaining = hud ? Math.max(0, Math.ceil(hud.duration - hud.time)) : 900;
+    const remaining =
+      gameMode === "ENDLESS"
+        ? (hud?.time ?? 0)
+        : hud
+          ? Math.max(0, Math.ceil(hud.duration - hud.time))
+          : 900;
 
     return (
       <main className="fixed inset-0 overflow-hidden bg-[#070814] font-pixel text-white">
@@ -275,11 +287,16 @@ function Index() {
             <div className="flex shrink-0 items-start gap-3 sm:gap-6">
               <div className="text-right">
                 <p className="text-[10px] uppercase tracking-[0.22em] text-cyan-100/65">
-                  TIEMPO RESTANTE
+                  {gameMode === "ENDLESS" ? "TIEMPO TRANSCURRIDO" : "TIEMPO RESTANTE"}
                 </p>
                 <p className="font-arcade text-sm tabular-nums text-white drop-shadow-[0_0_12px_#00f0ff99] sm:text-xl">
                   {formatTime(remaining)}
                 </p>
+                {gameMode === "ENDLESS" ? (
+                  <span className="mt-2 inline-flex border border-[#ff0055]/50 bg-[#ff0055]/10 px-2 py-1 text-[8px] uppercase tracking-widest text-[#ff9ab9] shadow-[0_0_12px_#ff005522]">
+                    MODO INFINITO
+                  </span>
+                ) : null}
                 <p className="mt-1 flex items-center justify-end gap-1 text-[10px] uppercase tracking-widest text-[#ff7fa6]">
                   <Skull className="size-3" />
                   <span className="font-arcade text-[8px]">{hud?.kills ?? 0} BAJAS</span>
@@ -701,6 +718,40 @@ function Index() {
                     Recompensa de sector ×{selectedStage.rewardMult.toFixed(2)}
                   </span>
                 </div>
+                <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    aria-pressed={gameMode === "CAMPAIGN"}
+                    onClick={() => setGameMode("CAMPAIGN")}
+                    className={`border p-3 text-left transition ${gameMode === "CAMPAIGN" ? "border-cyan-300/70 bg-cyan-300/10 shadow-[0_0_18px_#00f0ff16]" : "border-white/10 bg-white/[0.025] hover:border-cyan-300/35"}`}
+                  >
+                    <span
+                      className={`font-arcade block text-[8px] uppercase leading-relaxed ${gameMode === "CAMPAIGN" ? "text-cyan-100" : "text-white/55"}`}
+                    >
+                      CAMPAÑA (15 MIN)
+                    </span>
+                    <span className="mt-2 block text-[9px] leading-4 text-white/45">
+                      Sobrevive hasta derrotar al jefe supremo. Otorga créditos y progreso de
+                      misiones.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={gameMode === "ENDLESS"}
+                    onClick={() => setGameMode("ENDLESS")}
+                    className={`border p-3 text-left transition ${gameMode === "ENDLESS" ? "border-[#ff0055]/70 bg-[#ff0055]/10 shadow-[0_0_18px_#ff005518]" : "border-white/10 bg-white/[0.025] hover:border-[#ff0055]/35"}`}
+                  >
+                    <span
+                      className={`font-arcade block text-[8px] uppercase leading-relaxed ${gameMode === "ENDLESS" ? "text-[#ff9ab9]" : "text-white/55"}`}
+                    >
+                      MODO INFINITO
+                    </span>
+                    <span className="mt-2 block text-[9px] leading-4 text-white/45">
+                      Supervivencia extrema sin límite. Práctica pura: no otorga créditos ni
+                      progreso.
+                    </span>
+                  </button>
+                </div>
                 <Button
                   onClick={startMission}
                   className="font-arcade mt-6 h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] shadow-[0_0_25px_#00f0ff25] hover:bg-cyan-200"
@@ -708,7 +759,9 @@ function Index() {
                   <Play /> Iniciar misión
                 </Button>
                 <p className="mt-3 text-center text-[9px] uppercase tracking-[0.18em] text-white/35">
-                  15 MIN · PILOTAJE AUTOMÁTICO DE ARMAS
+                  {gameMode === "ENDLESS"
+                    ? "PRÁCTICA · OLEADAS Y DIFICULTAD SIN LÍMITE"
+                    : "15 MIN · PILOTAJE AUTOMÁTICO DE ARMAS"}
                 </p>
               </div>
             </div>
@@ -1200,12 +1253,18 @@ function Index() {
                 <Award className="size-4" /> INFORME DE COMBATE
               </p>
               <h1
-                className={`font-arcade text-[clamp(1rem,3vw,2rem)] uppercase leading-relaxed tracking-[0.04em] ${runResult.victory ? "text-[#00f0ff] drop-shadow-[0_0_24px_#00f0ff55]" : "text-[#ff6b95] drop-shadow-[0_0_24px_#ff005533]"}`}
+                className={`font-arcade text-[clamp(1rem,3vw,2rem)] uppercase leading-relaxed tracking-[0.04em] ${gameMode === "ENDLESS" || runResult.victory ? "text-[#00f0ff] drop-shadow-[0_0_24px_#00f0ff55]" : "text-[#ff6b95] drop-shadow-[0_0_24px_#ff005533]"}`}
               >
-                {runResult.victory ? "Misión cumplida" : "Misión fallida"}
+                {gameMode === "ENDLESS"
+                  ? "Simulación finalizada"
+                  : runResult.victory
+                    ? "Misión cumplida"
+                    : "Misión fallida"}
               </h1>
               <p className="mt-3 text-xs uppercase tracking-[0.2em] text-white/45">
-                {selectedStage.name} · {selectedShip.name}
+                {gameMode === "ENDLESS"
+                  ? "MODO INFINITO (PRÁCTICA)"
+                  : `${selectedStage.name} · ${selectedShip.name}`}
               </p>
             </div>
             <div className="mt-9 grid grid-cols-2 border-y border-white/10 sm:grid-cols-4">
@@ -1224,12 +1283,17 @@ function Index() {
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border border-[#ffd700]/25 bg-[#ffd700]/[0.04] px-5 py-4">
               <span className="text-xs uppercase tracking-[0.18em] text-white/65">
-                Créditos recuperados
+                {gameMode === "ENDLESS" ? "Créditos obtenidos" : "Créditos recuperados"}
               </span>
               <span className="font-arcade text-xs tabular-nums text-[#ffd700] sm:text-sm">
-                +{runCredits.toLocaleString()} CR
+                {gameMode === "ENDLESS" ? "0 CR" : `+${runCredits.toLocaleString()} CR`}
               </span>
             </div>
+            {gameMode === "ENDLESS" ? (
+              <p className="mt-4 border border-[#ff0055]/35 bg-[#ff0055]/[0.06] px-4 py-3 text-center text-[9px] uppercase leading-5 tracking-wider text-[#ffb0c5]">
+                MODO PRÁCTICA: Esta sesión no alteró tus créditos ni el progreso de misiones.
+              </p>
+            ) : null}
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
               <Button
                 onClick={() => setScreen("HANGAR")}
