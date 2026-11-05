@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -7,8 +7,10 @@ import {
   Award,
   ChevronLeft,
   ChevronRight,
+  Check,
   CirclePause,
   Crosshair,
+  Flame,
   Heart,
   LockKeyhole,
   Pause,
@@ -18,6 +20,7 @@ import {
   Shield,
   Skull,
   Sparkles,
+  Target,
   Volume2,
   VolumeX,
   Wrench,
@@ -29,12 +32,16 @@ import { Audio } from "@/game/audio";
 import { SHIPS } from "@/game/data/ships";
 import { STAGES } from "@/game/data/stages";
 import { Engine } from "@/game/engine";
+import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
+import { MISSIONS } from "@/game/meta/missions";
 import {
   ProgressStore,
   applyRun as recordRun,
   buyUpgrade,
+  claimMission,
   defaultProgress,
+  missionValue,
   type Progress,
   type RunSummary,
 } from "@/game/meta/progress";
@@ -77,6 +84,7 @@ function Index() {
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runCredits, setRunCredits] = useState(0);
   const [notice, setNotice] = useState("");
+  const [hangarTab, setHangarTab] = useState<"UPGRADES" | "MISSIONS">("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
@@ -102,6 +110,10 @@ function Index() {
   const selectedShip = SHIPS.find((ship) => ship.id === selectedShipId) ?? SHIPS[0]!;
   const selectedStage = STAGES.find((stage) => stage.id === selectedStageId) ?? STAGES[0]!;
   const latestRun: RunSummary | undefined = progress.history[0];
+  const claimableCount = MISSIONS.filter(
+    (mission) =>
+      !progress.claimed.includes(mission.id) && missionValue(progress, mission.id) >= mission.goal,
+  ).length;
 
   const scrollShipCarousel = (direction: -1 | 1) => {
     shipCarouselRef.current?.scrollBy({ left: direction * 280, behavior: "smooth" });
@@ -186,6 +198,16 @@ function Index() {
     window.setTimeout(() => setNotice(""), 1800);
   };
 
+  const handleClaimMission = (missionId: string) => {
+    const res = claimMission(progress, missionId);
+    if (res.ok && res.progress) {
+      ProgressStore.set(res.progress);
+      Audio.SFX.levelUp?.();
+      setNotice("¡Recompensa de misión reclamada!");
+      window.setTimeout(() => setNotice(""), 1800);
+    }
+  };
+
   const returnToMenu = () => {
     engineRef.current?.stop();
     setPaused(false);
@@ -209,6 +231,7 @@ function Index() {
     return (
       <main className="fixed inset-0 overflow-hidden bg-[#070814] font-mono text-white">
         <canvas ref={canvasRef} className="w-full h-full block" />
+        <TouchControls />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
           <div className="mx-auto flex max-w-[1500px] items-start justify-between gap-4">
             <section className="w-full max-w-sm">
@@ -705,72 +728,178 @@ function Index() {
                 {selectedShip.name}
               </div>
             </div>
+            <div
+              aria-label="Pestañas del hangar"
+              className="mt-5 grid grid-cols-2 gap-2"
+              role="tablist"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={hangarTab === "UPGRADES"}
+                onClick={() => setHangarTab("UPGRADES")}
+                className={`min-h-12 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === "UPGRADES" ? "border-cyan-300/70 bg-cyan-300/10 text-cyan-100 shadow-[0_0_18px_#00f0ff18]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-cyan-300/30 hover:text-cyan-100/75"}`}
+              >
+                MEJORAS DE NAVE
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={hangarTab === "MISSIONS"}
+                onClick={() => setHangarTab("MISSIONS")}
+                className={`relative flex min-h-12 items-center justify-center gap-2 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === "MISSIONS" ? "border-[#ff0055]/70 bg-[#ff0055]/10 text-[#ff9ab9] shadow-[0_0_18px_#ff005518]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-[#ff0055]/35 hover:text-[#ff9ab9]"}`}
+              >
+                MISIONES Y RECOMPENSAS
+                {claimableCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center border border-[#ffd700]/60 bg-[#ffd700]/15 px-1.5 py-0.5 text-[9px] font-black text-[#ffd700] shadow-[0_0_12px_#ffd70055]">
+                    {claimableCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
             {notice ? (
               <p role="status" className="mt-4 text-xs uppercase tracking-widest text-cyan-200">
                 {notice}
               </p>
             ) : null}
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {UPGRADES.map((upgrade, index) => {
-                const level = progress.upgrades[upgrade.id] ?? 0;
-                const maxed = level >= upgrade.max;
-                const cost = upgradeCost(upgrade.id, level);
-                const affordable = progress.credits >= cost;
-                const Icon =
-                  [Shield, Zap, Crosshair, AudioLines, Radio, Heart, Award, Sparkles][index] ??
-                  Wrench;
-                return (
-                  <article
-                    key={upgrade.id}
-                    className="flex min-h-56 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-4 transition hover:border-cyan-400/45"
-                  >
-                    <div className="flex items-start justify-between">
-                      <span className="grid size-10 place-items-center border border-cyan-400/25 bg-cyan-400/[0.07] text-cyan-200">
-                        <Icon className="size-5" />
-                      </span>
-                      <span className="text-[9px] uppercase tracking-widest text-white/40">
-                        NIVEL {level} / {upgrade.max}
-                      </span>
-                    </div>
-                    <h3 className="mt-4 text-xs font-black uppercase tracking-[0.13em]">
-                      {upgrade.name}
-                    </h3>
-                    <p className="mt-2 min-h-8 text-[10px] leading-4 text-white/45">
-                      {upgrade.desc}
-                    </p>
-                    <div
-                      className="mt-4 flex gap-1"
-                      aria-label={`Nivel ${level} de ${upgrade.max}`}
+            {hangarTab === "UPGRADES" ? (
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {UPGRADES.map((upgrade, index) => {
+                  const level = progress.upgrades[upgrade.id] ?? 0;
+                  const maxed = level >= upgrade.max;
+                  const cost = upgradeCost(upgrade.id, level);
+                  const affordable = progress.credits >= cost;
+                  const Icon =
+                    [Shield, Zap, Crosshair, AudioLines, Radio, Heart, Award, Sparkles][index] ??
+                    Wrench;
+                  return (
+                    <article
+                      key={upgrade.id}
+                      className="flex min-h-56 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-4 transition hover:border-cyan-400/45"
                     >
-                      {Array.from({ length: upgrade.max }, (_, step) => (
-                        <span
-                          key={step}
-                          className={`h-1.5 flex-1 ${step < level ? "bg-[#00f0ff] shadow-[0_0_8px_#00f0ff55]" : "bg-white/10"}`}
-                        />
-                      ))}
-                    </div>
-                    <Button
-                      disabled={maxed || !affordable}
-                      onClick={() => purchaseUpgrade(upgrade.id)}
-                      variant="outline"
-                      className={`mt-auto h-10 w-full rounded-none text-[10px] font-bold uppercase tracking-widest ${maxed ? "border-white/10 text-white/35" : affordable ? "border-cyan-400/40 text-cyan-100 hover:bg-cyan-300/10" : "border-white/10 text-white/30"}`}
+                      <div className="flex items-start justify-between">
+                        <span className="grid size-10 place-items-center border border-cyan-400/25 bg-cyan-400/[0.07] text-cyan-200">
+                          <Icon className="size-5" />
+                        </span>
+                        <span className="text-[9px] uppercase tracking-widest text-white/40">
+                          NIVEL {level} / {upgrade.max}
+                        </span>
+                      </div>
+                      <h3 className="mt-4 text-xs font-black uppercase tracking-[0.13em]">
+                        {upgrade.name}
+                      </h3>
+                      <p className="mt-2 min-h-8 text-[10px] leading-4 text-white/45">
+                        {upgrade.desc}
+                      </p>
+                      <div
+                        className="mt-4 flex gap-1"
+                        aria-label={`Nivel ${level} de ${upgrade.max}`}
+                      >
+                        {Array.from({ length: upgrade.max }, (_, step) => (
+                          <span
+                            key={step}
+                            className={`h-1.5 flex-1 ${step < level ? "bg-[#00f0ff] shadow-[0_0_8px_#00f0ff55]" : "bg-white/10"}`}
+                          />
+                        ))}
+                      </div>
+                      <Button
+                        disabled={maxed || !affordable}
+                        onClick={() => purchaseUpgrade(upgrade.id)}
+                        variant="outline"
+                        className={`mt-auto h-10 w-full rounded-none text-[10px] font-bold uppercase tracking-widest ${maxed ? "border-white/10 text-white/35" : affordable ? "border-cyan-400/40 text-cyan-100 hover:bg-cyan-300/10" : "border-white/10 text-white/30"}`}
+                      >
+                        {maxed ? (
+                          "Nivel máximo"
+                        ) : (
+                          <>
+                            <span className="text-[#ffd700]">{cost} CR</span>
+                            <span className="text-white/35">·</span> Instalar
+                          </>
+                        )}
+                      </Button>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {MISSIONS.map((mission) => {
+                  const current = missionValue(progress, mission.id);
+                  const percentage = Math.min(100, Math.round((current / mission.goal) * 100));
+                  const isClaimed = progress.claimed.includes(mission.id);
+                  const canClaim = !isClaimed && current >= mission.goal;
+                  const MissionIcon =
+                    mission.icon === "ic_damage"
+                      ? Flame
+                      : mission.icon === "ic_speed"
+                        ? Zap
+                        : Target;
+                  return (
+                    <article
+                      key={mission.id}
+                      className="flex min-h-60 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-4 transition hover:border-cyan-400/45"
                     >
-                      {maxed ? (
-                        "Nivel máximo"
-                      ) : (
-                        <>
-                          <span className="text-[#ffd700]">{cost} CR</span>
-                          <span className="text-white/35">·</span> Instalar
-                        </>
-                      )}
-                    </Button>
-                  </article>
-                );
-              })}
-            </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="grid size-10 shrink-0 place-items-center border border-cyan-400/25 bg-cyan-400/[0.07] text-cyan-200">
+                          <MissionIcon className="size-5" />
+                        </span>
+                        <span className="flex items-center gap-1 text-[10px] font-black tracking-widest text-[#ffd700]">
+                          <Award className="size-3.5" /> +{mission.reward.toLocaleString()} CR
+                        </span>
+                      </div>
+                      <h3 className="mt-4 text-xs font-black uppercase tracking-[0.13em]">
+                        {mission.name}
+                      </h3>
+                      <p className="mt-2 min-h-8 text-[10px] leading-4 text-white/45">
+                        {mission.desc}
+                      </p>
+                      <div className="mt-4">
+                        <div className="mb-1.5 flex justify-between text-[9px] uppercase tracking-widest text-cyan-100/55">
+                          <span>PROGRESO</span>
+                          <span>
+                            {current.toLocaleString()} / {mission.goal.toLocaleString()}
+                          </span>
+                        </div>
+                        <div
+                          className="h-2 overflow-hidden border border-cyan-400/20 bg-[#151727]"
+                          role="progressbar"
+                          aria-label={`Progreso: ${mission.name}`}
+                          aria-valuenow={percentage}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        >
+                          <div
+                            className={`h-full transition-[width] duration-300 ${isClaimed ? "bg-cyan-300/50" : canClaim ? "bg-[#ffd700] shadow-[0_0_10px_#ffd70099]" : "bg-[#00f0ff] shadow-[0_0_8px_#00f0ff55]"}`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        disabled={!canClaim}
+                        onClick={() => handleClaimMission(mission.id)}
+                        variant="outline"
+                        className={`mt-auto h-10 w-full rounded-none text-[9px] font-black uppercase tracking-[0.1em] ${isClaimed ? "border-white/10 text-cyan-100/35" : canClaim ? "border-[#ffd700]/70 bg-[#ffd700]/10 text-[#ffd700] shadow-[0_0_16px_#ffd70022] hover:bg-[#ffd700]/20" : "border-cyan-400/20 text-cyan-100/45"}`}
+                      >
+                        {isClaimed ? (
+                          <>
+                            <Check /> RECLAMADA
+                          </>
+                        ) : canClaim ? (
+                          "¡RECLAMAR RECOMPENSA!"
+                        ) : (
+                          `EN PROGRESO (${current.toLocaleString()}/${mission.goal.toLocaleString()})`
+                        )}
+                      </Button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
             <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
               <p className="text-[10px] uppercase tracking-[0.15em] text-white/40">
-                Las mejoras son permanentes y se aplican al próximo despliegue.
+                {hangarTab === "UPGRADES"
+                  ? "Las mejoras son permanentes y se aplican al próximo despliegue."
+                  : "Completa objetivos y reclama créditos para financiar tu próxima misión."}
               </p>
               <Button
                 onClick={() => setScreen("SELECT")}
@@ -858,6 +987,78 @@ function Meter({ value, color }: { value: number; color: string }) {
         className={`h-full ${color} transition-[width] duration-200`}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />
+    </div>
+  );
+}
+
+function TouchControls() {
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const pointer = useRef<{ id: number; startX: number; startY: number } | null>(null);
+
+  if (!Input.isTouchDevice()) return null;
+
+  const moveJoystick = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const activePointer = pointer.current;
+    if (!activePointer || activePointer.id !== event.pointerId) return;
+    const dx = event.clientX - activePointer.startX;
+    const dy = event.clientY - activePointer.startY;
+    const distance = Math.hypot(dx, dy);
+    const scale = distance > 45 ? 45 / distance : 1;
+    const x = dx * scale;
+    const y = dy * scale;
+    setKnob({ x, y });
+    Input.setTouch(x / 45, y / 45, true);
+  };
+
+  const releaseJoystick = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointer.current?.id !== event.pointerId) return;
+    pointer.current = null;
+    setKnob({ x: 0, y: 0 });
+    Input.setTouch(0, 0, false);
+  };
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-x-0 bottom-5 z-30 flex items-end justify-between px-5 sm:px-8"
+      style={{ touchAction: "none", userSelect: "none" }}
+    >
+      <div
+        aria-label="Joystick de movimiento"
+        className="pointer-events-auto relative size-[130px] touch-none select-none rounded-full border border-cyan-400/40 bg-cyan-950/40 shadow-[inset_0_0_24px_#00f0ff12,0_0_18px_#00f0ff12]"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          if (pointer.current) return;
+          pointer.current = {
+            id: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={moveJoystick}
+        onPointerUp={releaseJoystick}
+        onPointerCancel={releaseJoystick}
+        onLostPointerCapture={releaseJoystick}
+      >
+        <span
+          className="pointer-events-none absolute left-1/2 top-1/2 size-12 rounded-full border border-cyan-200/60 bg-cyan-400/20 shadow-[0_0_16px_#00f0ff55] transition-transform duration-75"
+          style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+        />
+      </div>
+      <button
+        type="button"
+        aria-label="Turbo"
+        className="pointer-events-auto grid size-[70px] touch-none select-none place-items-center rounded-full border-2 border-[#ff0055] bg-[#ff0055]/20 text-[10px] font-black tracking-[0.14em] text-[#ff9ab9] shadow-[0_0_22px_#ff005544] transition active:scale-95 active:bg-[#ff0055]/35"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          Input.queueBoost();
+        }}
+      >
+        <span className="flex flex-col items-center gap-1">
+          <Flame className="size-5" />
+          TURBO
+        </span>
+      </button>
     </div>
   );
 }
