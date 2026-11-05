@@ -1496,7 +1496,7 @@ function ArsenalCard({
   };
 
   return (
-    <article className="flex min-w-0 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-3">
+    <article className="flex min-w-0 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-2">
       <header className="flex items-start justify-between gap-2">
         <h3
           className="font-arcade min-w-0 text-[8px] uppercase leading-5 tracking-wide"
@@ -1511,10 +1511,10 @@ function ArsenalCard({
           {weapon.kind}
         </span>
       </header>
-      <p className="mt-1 min-h-8 text-[9px] leading-4 text-white/50">{weapon.desc}</p>
+      <p className="mt-0.5 line-clamp-2 text-[8px] leading-3.5 text-white/50">{weapon.desc}</p>
       <div
         ref={previewRef}
-        className="relative mt-2 grid h-28 shrink-0 place-items-center overflow-hidden border border-cyan-500/15 bg-[#070814]/75"
+        className="relative mt-1.5 grid h-24 shrink-0 place-items-center overflow-hidden border border-cyan-500/15 bg-[#070814]/75"
         aria-label={`Vista previa de ${weapon.name}`}
       >
         {weapon.id === "laser" ? (
@@ -1633,29 +1633,29 @@ function ArsenalCard({
           <img
             src={shipSprite}
             alt=""
-            className="relative z-0 h-12 w-12 object-contain [image-rendering:pixelated]"
+            className="relative z-0 h-16 w-16 object-contain [image-rendering:pixelated]"
           />
         ) : null}
       </div>
       <button
         type="button"
         onClick={playAnimation}
-        className="font-arcade mt-2 flex h-9 w-full items-center justify-center gap-2 border border-cyan-400/30 text-[7px] uppercase tracking-widest text-cyan-100 transition hover:bg-cyan-300/10"
+        className="font-arcade mt-1.5 flex h-8 w-full items-center justify-center gap-2 border border-cyan-400/30 text-[7px] uppercase tracking-widest text-cyan-100 transition hover:bg-cyan-300/10"
         aria-label={`Ver animación: ${weapon.name}`}
       >
         <Play className="size-3" /> VER ANIMACIÓN
       </button>
-      <div className="mt-2 border-t border-[#8a2be2]/30 pt-2">
+      <div className="mt-1.5 border-t border-[#8a2be2]/30 pt-1.5">
         <p className="text-[7px] font-black uppercase tracking-[0.16em] text-[#c7a1ff]">
           EVOLUCIÓN SUPREMA
         </p>
         <h4 className="mt-1 truncate text-[9px] font-black uppercase tracking-wide text-white">
           {weapon.evo.name}
         </h4>
-        <p className="mt-1 line-clamp-2 min-h-7 text-[8px] leading-3.5 text-white/45">
+        <p className="mt-0.5 line-clamp-2 min-h-6 text-[8px] leading-3 text-white/45">
           {weapon.evo.desc}
         </p>
-        <p className="mt-1 border-t border-white/10 pt-1.5 text-[7px] uppercase leading-3.5 text-[#ff9ab9]">
+        <p className="mt-1 border-t border-white/10 pt-1 text-[7px] uppercase leading-3 text-[#ff9ab9]">
           Nivel 5 + {passiveName}
         </p>
       </div>
