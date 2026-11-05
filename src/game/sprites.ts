@@ -201,9 +201,10 @@ function buildPillar(r: number): Sprite {
 
 /** Large background planet with bands, dithered terminator and ring */
 function buildPlanet(r: number, bands: string[], ring: string): Sprite {
-  const pad = Math.round(r * 0.7);
-  const W = r * 2 + pad * 2,
-    H = r * 2 + 8;
+  const padX = Math.round(r * 1.35);
+  const padY = Math.round(r * 0.35);
+  const W = r * 2 + padX * 2,
+    H = r * 2 + padY * 2;
   const grid: (string | null)[][] = [];
   const cx = W / 2, cy = H / 2;
   for (let y = 0; y < H; y++) {

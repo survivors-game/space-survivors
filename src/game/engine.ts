@@ -1747,9 +1747,14 @@ export class Engine {
     // damage numbers
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    let damageFont = "";
     this.dmgNums.forEachAlive((n) => {
       ctx.globalAlpha = Math.min(1, n.life / 0.3);
-      ctx.font = `${n.crit ? 14 : 10}px "Press Start 2P", monospace`;
+      const font = `${n.crit ? 14 : 10}px "Press Start 2P", monospace`;
+      if (font !== damageFont) {
+        ctx.font = font;
+        damageFont = font;
+      }
       ctx.fillStyle = "#0a0618";
       ctx.fillText(String(n.value), n.x + 2, n.y + 2);
       ctx.fillStyle = n.color;
