@@ -150,6 +150,7 @@ export class Engine {
   evolutions = 0;
   creditsRaw = 0;
   maxPhase = 0;
+  lastHorde = 0;
   finalBossDead = false;
   private raf = 0;
   private last = 0;
@@ -1490,6 +1491,13 @@ export class Engine {
       this.minute = this.isEndless
         ? this.elapsed / 60
         : toMissionMinute(this.elapsed, this.duration);
+      if (!this.isEndless && this.stage.id === WORLD1_ID) {
+        const horde = hordeIndexAt(this.elapsed);
+        if (horde > this.lastHorde) {
+          this.lastHorde = horde;
+          this.hordeTransition();
+        }
+      }
       if (!this.isEndless && this.elapsed >= this.duration) {
         this.banner("¡MISIÓN COMPLETADA!", "Has sobrevivido", "good");
         this.state = "WINNING";
@@ -1631,6 +1639,33 @@ export class Engine {
     o.x = ob.x + (dx / d) * rr;
     o.y = ob.y + (dy / d) * rr;
     return true;
+  }
+
+  /** Transición entre hordas (mundo 1, campaña): limpia el campo y recoge lo pendiente. */
+  private hordeTransition() {
+    // 1. Eliminar enemigos vivos, sin generar recompensas.
+    this.enemies.forEachAlive((e) => {
+      e.alive = false;
+    });
+    // 2. Recoger gemas pendientes y sumar su XP.
+    this.gems.forEachAlive((g) => {
+      this.giveXP(g.value);
+      g.alive = false;
+    });
+    // 3. Recoger objetos especiales pendientes y aplicar sus efectos.
+    this.pickups.forEachAlive((k) => {
+      k.alive = false;
+      if (k.kind === "repair") {
+        this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.35);
+      } else if (k.kind === "magnet") {
+        this.gems.forEachAlive((g) => {
+          g.pulled = true;
+        });
+      }
+      // EMP: no queda ningún enemigo vivo que dañar en este punto.
+    });
+    // 4. Eliminar proyectiles enemigos.
+    this.eProj.killAll();
   }
 
   private updateDirector(dt: number) {
