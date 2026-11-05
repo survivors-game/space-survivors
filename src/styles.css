@@ -19,6 +19,8 @@
  */
 
 @theme inline {
+  --font-arcade: "Press Start 2P", monospace;
+  --font-pixel: "Silkscreen", monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -141,4 +143,12 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+}
+
+.font-arcade {
+  font-family: "Press Start 2P", monospace;
+}
+
+.font-pixel {
+  font-family: "Silkscreen", monospace;
 }

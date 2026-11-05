@@ -235,7 +235,7 @@ function Index() {
     const remaining = hud ? Math.max(0, Math.ceil(hud.duration - hud.time)) : 900;
 
     return (
-      <main className="fixed inset-0 overflow-hidden bg-[#070814] font-mono text-white">
+      <main className="fixed inset-0 overflow-hidden bg-[#070814] font-pixel text-white">
         <canvas ref={canvasRef} className="w-full h-full block" />
         <TouchControls />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
@@ -245,7 +245,9 @@ function Index() {
                 <span className="flex items-center gap-2 text-cyan-100">
                   <Heart className="size-4 text-[#ff0055]" /> INTEGRIDAD
                 </span>
-                <span>{hud ? `${Math.ceil(hud.hp)} / ${Math.ceil(hud.maxHp)}` : "-- / --"}</span>
+                <span className="font-arcade text-[8px]">
+                  {hud ? `${Math.ceil(hud.hp)} / ${Math.ceil(hud.maxHp)}` : "-- / --"}
+                </span>
               </div>
               <Meter value={healthPercent} color="bg-[#ff0055]" />
               {hud?.shieldMax ? (
@@ -254,7 +256,7 @@ function Index() {
                     <span className="flex items-center gap-1">
                       <Shield className="size-3" /> ESCUDO
                     </span>
-                    <span>
+                    <span className="font-arcade text-[8px]">
                       {Math.ceil(hud.shield)} / {Math.ceil(hud.shieldMax)}
                     </span>
                   </div>
@@ -262,7 +264,8 @@ function Index() {
                 </div>
               ) : null}
               <div className="mt-3 flex items-center gap-2 text-xs uppercase tracking-widest text-cyan-100">
-                <Zap className="size-4 text-[#ffd700]" /> NIVEL {hud?.level ?? 1}
+                <Zap className="size-4 text-[#ffd700]" />
+                <span className="font-arcade text-[8px]">NIVEL {hud?.level ?? 1}</span>
               </div>
               <div className="mt-1.5">
                 <Meter value={xpPercent} color="bg-[#8a2be2]" />
@@ -274,11 +277,12 @@ function Index() {
                 <p className="text-[10px] uppercase tracking-[0.22em] text-cyan-100/65">
                   TIEMPO RESTANTE
                 </p>
-                <p className="text-2xl font-black tabular-nums text-white drop-shadow-[0_0_12px_#00f0ff99] sm:text-4xl">
+                <p className="font-arcade text-sm tabular-nums text-white drop-shadow-[0_0_12px_#00f0ff99] sm:text-xl">
                   {formatTime(remaining)}
                 </p>
                 <p className="mt-1 flex items-center justify-end gap-1 text-[10px] uppercase tracking-widest text-[#ff7fa6]">
-                  <Skull className="size-3" /> {hud?.kills ?? 0} BAJAS
+                  <Skull className="size-3" />
+                  <span className="font-arcade text-[8px]">{hud?.kills ?? 0} BAJAS</span>
                 </p>
               </div>
               <Button
@@ -297,7 +301,7 @@ function Index() {
             <div className="mx-auto mt-5 max-w-3xl">
               <div className="mb-1 flex justify-between text-[10px] uppercase tracking-[0.2em] text-[#ff9ab9]">
                 <span>OBJETIVO PRIORITARIO · {hud.boss.name}</span>
-                <span>{Math.ceil(hud.boss.hp)} PS</span>
+                <span className="font-arcade text-[8px]">{Math.ceil(hud.boss.hp)} PS</span>
               </div>
               <Meter value={(hud.boss.hp / hud.boss.maxHp) * 100} color="bg-[#ff0055]" />
             </div>
@@ -323,8 +327,8 @@ function Index() {
                   <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-cyan-300">
                     <Sparkles className="size-4" /> SINCRONIZACIÓN COMPLETA
                   </p>
-                  <h1 className="text-3xl font-black uppercase tracking-widest text-white sm:text-4xl">
-                    Subida de nivel
+                  <h1 className="font-arcade text-sm uppercase leading-relaxed tracking-wider text-white sm:text-base">
+                    Subir de nivel
                   </h1>
                   <p className="mt-2 text-xs uppercase tracking-widest text-white/55">
                     Elige una mejora para tu nave
@@ -375,7 +379,7 @@ function Index() {
 
         {paused ? (
           <Overlay
-            title="Misión en pausa"
+            title="Pausa táctica"
             eyebrow="CONTROL DE VUELO"
             icon={<CirclePause className="size-5" />}
           >
@@ -383,17 +387,17 @@ function Index() {
               La flota enemiga espera tu siguiente movimiento.
             </p>
             <Button
-              className="h-12 w-full rounded-none bg-[#00f0ff] font-black uppercase tracking-[0.16em] text-[#070814] hover:bg-cyan-200"
+              className="font-arcade h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] hover:bg-cyan-200"
               onClick={() => engineRef.current?.resume()}
             >
-              <Play /> Reanudar misión
+              <Play /> Continuar
             </Button>
             <Button
               variant="outline"
-              className="mt-3 h-12 w-full rounded-none border-white/20 bg-transparent font-bold uppercase tracking-[0.14em] text-white hover:bg-white/10"
+              className="font-arcade mt-3 h-12 w-full rounded-none border-white/20 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white hover:bg-white/10"
               onClick={returnToMenu}
             >
-              <ArrowLeft /> Salir al menú
+              <ArrowLeft /> Volver al menú
             </Button>
           </Overlay>
         ) : null}
@@ -402,7 +406,7 @@ function Index() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#070814] font-mono text-white selection:bg-[#00f0ff]/30">
+    <main className="relative min-h-screen overflow-hidden bg-[#070814] font-pixel text-white selection:bg-[#00f0ff]/30">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_75%_5%,#8a2be21c,transparent_38%),radial-gradient(ellipse_at_12%_82%,#00f0ff12,transparent_32%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.1] [background-image:linear-gradient(#00f0ff_1px,transparent_1px),linear-gradient(90deg,#00f0ff_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]" />
       <div className="relative mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-12">
@@ -416,7 +420,7 @@ function Index() {
               <Crosshair className="size-5" />
             </span>
             <span>
-              <span className="block text-xs font-black tracking-[0.2em] text-white">
+              <span className="font-arcade block text-[8px] tracking-[0.06em] text-white">
                 SPACE SURVIVORS
               </span>
               <span className="mt-1 block text-[9px] uppercase tracking-[0.24em] text-cyan-100/45">
@@ -425,7 +429,7 @@ function Index() {
             </span>
           </button>
           <div className="flex items-center gap-2 sm:gap-5">
-            <span className="hidden items-center gap-2 text-xs uppercase tracking-widest text-[#ffd700] sm:flex">
+            <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
               <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
               {progress.credits.toLocaleString()} CR
             </span>
@@ -448,7 +452,7 @@ function Index() {
               <div className="mb-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] text-cyan-300">
                 <span className="h-px w-9 bg-cyan-400" /> ALERTA DE SECTOR · NOVA-01
               </div>
-              <h1 className="max-w-3xl text-[clamp(3rem,9vw,7.5rem)] font-black uppercase leading-[0.82] tracking-[0.04em] text-white [text-shadow:0_0_34px_#00f0ff45]">
+              <h1 className="font-arcade max-w-3xl text-[clamp(1.8rem,5vw,4.2rem)] uppercase leading-[1.65] tracking-[0.04em] text-white [text-shadow:0_0_34px_#00f0ff45]">
                 SPACE
                 <br />
                 <span className="text-[#00f0ff]">SURVIVORS</span>
@@ -463,7 +467,7 @@ function Index() {
               <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
                 <Button
                   onClick={() => setScreen("SELECT")}
-                  className="h-12 flex-1 rounded-none border border-cyan-200 bg-[#00f0ff] text-sm font-black uppercase tracking-[0.18em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200"
+                  className="font-arcade h-12 flex-1 rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[8px] uppercase tracking-[0.04em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200"
                 >
                   <Rocket /> Desplegar
                 </Button>
@@ -699,7 +703,7 @@ function Index() {
                 </div>
                 <Button
                   onClick={startMission}
-                  className="mt-6 h-12 w-full rounded-none bg-[#00f0ff] text-sm font-black uppercase tracking-[0.2em] text-[#070814] shadow-[0_0_25px_#00f0ff25] hover:bg-cyan-200"
+                  className="font-arcade mt-6 h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] shadow-[0_0_25px_#00f0ff25] hover:bg-cyan-200"
                 >
                   <Play /> Iniciar misión
                 </Button>
@@ -715,7 +719,7 @@ function Index() {
           <section className="flex-1 py-8 sm:py-12">
             <SectionHeading
               eyebrow="MANTENIMIENTO DE FLOTA"
-              title="Hangar de mejoras"
+              title="Centro de mando / hangar"
               onBack={() => setScreen("MENU")}
             />
             <div className="mt-7 flex flex-wrap items-end justify-between gap-4 border-y border-cyan-500/20 py-5">
@@ -723,7 +727,7 @@ function Index() {
                 <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">
                   CRÉDITOS DISPONIBLES
                 </p>
-                <p className="mt-1 text-3xl font-black tabular-nums text-[#ffd700] drop-shadow-[0_0_12px_#ffd70030]">
+                <p className="font-arcade mt-1 text-base tabular-nums text-[#ffd700] drop-shadow-[0_0_12px_#ffd70030] sm:text-xl">
                   {progress.credits.toLocaleString()}{" "}
                   <span className="text-sm tracking-widest">CR</span>
                 </p>
@@ -902,7 +906,7 @@ function Index() {
                         disabled={!canClaim}
                         onClick={() => handleClaimMission(mission.id)}
                         variant="outline"
-                        className={`mt-auto h-10 w-full rounded-none text-[9px] font-black uppercase tracking-[0.1em] ${isClaimed ? "border-white/10 text-cyan-100/35" : canClaim ? "border-[#ffd700]/70 bg-[#ffd700]/10 text-[#ffd700] shadow-[0_0_16px_#ffd70022] hover:bg-[#ffd700]/20" : "border-cyan-400/20 text-cyan-100/45"}`}
+                        className={`font-arcade mt-auto h-10 w-full rounded-none px-1 text-[7px] uppercase tracking-normal ${isClaimed ? "border-white/10 text-cyan-100/35" : canClaim ? "border-[#ffd700]/70 bg-[#ffd700]/10 text-[#ffd700] shadow-[0_0_16px_#ffd70022] hover:bg-[#ffd700]/20" : "border-cyan-400/20 text-cyan-100/45"}`}
                       >
                         {isClaimed ? (
                           <>
@@ -1181,7 +1185,7 @@ function Index() {
               </p>
               <Button
                 onClick={() => setScreen("SELECT")}
-                className="rounded-none bg-[#00f0ff] font-bold uppercase tracking-widest text-[#070814] hover:bg-cyan-200"
+                className="font-arcade rounded-none bg-[#00f0ff] px-3 text-[8px] uppercase tracking-[0.06em] text-[#070814] hover:bg-cyan-200"
               >
                 <Rocket /> Preparar nave
               </Button>
@@ -1196,9 +1200,9 @@ function Index() {
                 <Award className="size-4" /> INFORME DE COMBATE
               </p>
               <h1
-                className={`text-4xl font-black uppercase tracking-[0.08em] sm:text-6xl ${runResult.victory ? "text-[#00f0ff] drop-shadow-[0_0_24px_#00f0ff55]" : "text-[#ff6b95] drop-shadow-[0_0_24px_#ff005533]"}`}
+                className={`font-arcade text-[clamp(1rem,3vw,2rem)] uppercase leading-relaxed tracking-[0.04em] ${runResult.victory ? "text-[#00f0ff] drop-shadow-[0_0_24px_#00f0ff55]" : "text-[#ff6b95] drop-shadow-[0_0_24px_#ff005533]"}`}
               >
-                {runResult.victory ? "Sector asegurado" : "Nave perdida"}
+                {runResult.victory ? "Misión cumplida" : "Misión fallida"}
               </h1>
               <p className="mt-3 text-xs uppercase tracking-[0.2em] text-white/45">
                 {selectedStage.name} · {selectedShip.name}
@@ -1222,21 +1226,21 @@ function Index() {
               <span className="text-xs uppercase tracking-[0.18em] text-white/65">
                 Créditos recuperados
               </span>
-              <span className="text-2xl font-black tabular-nums text-[#ffd700]">
+              <span className="font-arcade text-xs tabular-nums text-[#ffd700] sm:text-sm">
                 +{runCredits.toLocaleString()} CR
               </span>
             </div>
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
               <Button
                 onClick={() => setScreen("HANGAR")}
-                className="h-12 rounded-none bg-[#00f0ff] px-8 font-black uppercase tracking-[0.15em] text-[#070814] hover:bg-cyan-200"
+                className="font-arcade h-12 rounded-none bg-[#00f0ff] px-4 text-[8px] uppercase tracking-[0.04em] text-[#070814] hover:bg-cyan-200"
               >
                 <Wrench /> Volver al hangar
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setScreen("SELECT")}
-                className="h-12 rounded-none border-white/20 bg-transparent px-8 font-bold uppercase tracking-[0.15em] text-white hover:bg-white/10"
+                className="font-arcade h-12 rounded-none border-white/20 bg-transparent px-4 text-[8px] uppercase tracking-[0.04em] text-white hover:bg-white/10"
               >
                 <Rocket /> Nuevo despliegue
               </Button>
@@ -1250,7 +1254,9 @@ function Index() {
           </span>
           <span>
             CRÉDITOS{" "}
-            <span className="text-[#ffd700]/80">{progress.credits.toLocaleString()} CR</span>
+            <span className="font-arcade text-[8px] text-[#ffd700]/80">
+              {progress.credits.toLocaleString()} CR
+            </span>
           </span>
         </footer>
       </div>
@@ -1363,7 +1369,7 @@ function SectionHeading({
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
         <p className="text-[10px] uppercase tracking-[0.26em] text-cyan-300">{eyebrow}</p>
-        <h1 className="mt-2 text-3xl font-black uppercase tracking-[0.06em] sm:text-4xl">
+        <h1 className="font-arcade mt-2 text-[10px] uppercase leading-relaxed tracking-[0.04em] sm:text-xs">
           {title}
         </h1>
       </div>
@@ -1391,7 +1397,7 @@ function ResultStat({
     <div className="border-r border-white/10 px-4 py-5 text-center last:border-r-0">
       <span className="mx-auto grid size-8 place-items-center text-cyan-300">{icon}</span>
       <p className="mt-2 text-[9px] uppercase tracking-[0.18em] text-white/40">{label}</p>
-      <p className="mt-1 text-lg font-bold tabular-nums">{value}</p>
+      <p className="font-arcade mt-1 text-[9px] tabular-nums">{value}</p>
     </div>
   );
 }
@@ -1414,7 +1420,7 @@ function Overlay({
           {icon}
           {eyebrow}
         </p>
-        <h2 className="mb-4 text-center text-2xl font-black uppercase tracking-[0.08em]">
+        <h2 className="font-arcade mb-4 text-center text-[10px] uppercase leading-relaxed tracking-[0.04em] sm:text-xs">
           {title}
         </h2>
         {children}
