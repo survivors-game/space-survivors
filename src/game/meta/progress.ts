@@ -1,4 +1,4 @@
-// Permanent progression, persisted in localStorage (the storage the original
+ // Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
@@ -105,12 +105,15 @@ export function sanitize(raw: unknown): Progress {
   return p;
 }
 
+/** Porcentaje de créditos que realmente se entrega (20% = recompensas reducidas un 80%). */
+export const CREDIT_REWARD_MULT = 0.2;
+
 /** Credits awarded for a run. */
 export function computeRunCredits(r: Pick<RunResult, "credits" | "time" | "level" | "victory" | "stageId" | "duration">, salvageLevel: number) {
   const stage = stageById(r.stageId);
   const base = r.credits + Math.floor(r.time / 60) * 15 * (900 / Math.max(300, r.duration)) + r.level * 4;
   const mult = stage.rewardMult * (1 + salvageLevel * 0.1) * (r.victory ? 1.5 : 1);
-  return Math.max(0, Math.round(base * mult));
+  return Math.max(0, Math.round(base * mult * CREDIT_REWARD_MULT));
 }
 
 export interface ApplyOutcome {

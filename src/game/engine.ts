@@ -1,7 +1,8 @@
-// SPACE SURVIVORS combat engine. Evolved from the template's Game class
+ // SPACE SURVIVORS combat engine. Evolved from the template's Game class
 // (section 12): same pools, state machine, update order and render loop,
 // extended with pixel-art ships, families, bosses, stages and hazards.
 import { CONFIG } from "./config";
+import { CREDIT_REWARD_MULT } from "./meta/progress";
 import { Audio } from "./audio";
 import { Input } from "./input";
 import { Pool } from "./pool";
@@ -1159,7 +1160,7 @@ export class Engine {
         kind: "credits",
         id: "credits",
         name: "BOTÍN",
-        desc: "+60 créditos al terminar la misión",
+        desc: `+${Math.round(60 * CREDIT_REWARD_MULT)} créditos al terminar la misión`,
         icon: "ic_credits",
         level: 1,
         maxLevel: 1,
@@ -1323,7 +1324,7 @@ export class Engine {
       this.endTimer = 1.2;
       Audio.SFX.win();
     } else {
-      this.banner(`${def.name} DESTRUIDO`, `+${def.credits} créditos`, "good");
+      this.banner(`${def.name} DESTRUIDO`, `+${Math.round(def.credits * CREDIT_REWARD_MULT)} créditos`, "good");
     }
   }
 
