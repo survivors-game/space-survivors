@@ -1,0 +1,45 @@
+// Master tuning panel (ported & extended from the template's CONFIG block).
+export const CONFIG = {
+  run: { minutes: 15 },
+  player: { radius: 13, invulnAfterHit: 0.55, shieldInvuln: 0.25, maxWeapons: 6, maxPassives: 6 },
+  world: { arenaRadius: 2600, artPixel: 3 },
+  camera: {
+    followSmoothness: 0.0008,
+    shakeIntensity: 20,
+    shakeDecayPerSec: 1.6,
+    hurtShake: 0.22,
+    bossSpawnShake: 0.6,
+    bossKillShake: 0.9,
+  },
+  difficulty: {
+    hpScalePerMin: 0.24,
+    dmgScalePerMin: 0.05,
+    contactKnockback: 220,
+  },
+  xp: { base: 5, growth: 1.34 },
+  spawn: {
+    initialDelay: 0.8,
+    intervalStart: 0.95,
+    intervalMin: 0.14,
+    ringMargin: 70,
+    maxAlive: 270,
+  },
+  boost: { duration: 0.3, cooldown: 2.4, mult: 2.7 },
+  gems: {
+    drag: 0.9,
+    magnetPullMin: 160,
+    magnetPullMax: 900,
+    pickupBuffer: 10,
+  },
+  pools: {
+    enemies: 360,
+    projectiles: 460,
+    enemyProjectiles: 320,
+    particles: 900,
+    gems: 520,
+    dmgNumbers: 90,
+    pickups: 24,
+  },
+  visuals: { dprCap: 2 },
+  frame: { maxDt: 0.05 },
+} as const;
