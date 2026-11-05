@@ -1661,6 +1661,8 @@ export class Engine {
     ) {
       this.nextBoss = 0;
     }
+    // Campaña: no aparecen jefes antes de terminar la partida (se implementarán en otra fase).
+    if (!this.isEndless && this.elapsed < this.duration) return;
     const next = BOSS_SCHEDULE[this.nextBoss];
     if (next && this.minute >= next.minute && !this.boss) {
       if (this.bossWarnAt < 0) {

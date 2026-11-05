@@ -1,6 +1,15 @@
-// Survival timeline. Everything is expressed in "mission minutes" (0..15) so
+ // Survival timeline. Everything is expressed in "mission minutes" (0..15) so
 // shorter run lengths compress the same five phases proportionally.
 export const MISSION_MINUTES = 15;
+
+/* Hordas: la partida dura 20 minutos, dividida en 10 intervalos de 2 minutos. */
+export const HORDE_COUNT = 10;
+export const HORDE_INTERVAL_SEC = 120;
+
+/** Índice (0..9) del intervalo de horda en el que se encuentra el tiempo transcurrido. */
+export function hordeIndexAt(elapsedSec: number) {
+  return Math.min(HORDE_COUNT - 1, Math.floor(elapsedSec / HORDE_INTERVAL_SEC));
+}
 
 export interface PhaseDef {
   id: number;

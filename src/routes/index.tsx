@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -138,7 +138,7 @@ function Index() {
       ship: selectedShip,
       stage: selectedStage,
       hangar: calcHangarBonuses(progress.upgrades),
-      durationSec: 900,
+      durationSec: 1200,
       isEndless: gameMode === "ENDLESS",
       callbacks: {
         onLevelUp: (nextChoices, nextRerolls) => {
@@ -245,7 +245,7 @@ function Index() {
         ? (hud?.time ?? 0)
         : hud
           ? Math.max(0, Math.ceil(hud.duration - hud.time))
-          : 900;
+          : 1200;
 
     return (
       <main className="fixed inset-0 overflow-hidden bg-[#070814] font-pixel text-white">
@@ -729,7 +729,7 @@ function Index() {
                     <span
                       className={`font-arcade block text-[8px] uppercase leading-relaxed ${gameMode === "CAMPAIGN" ? "text-cyan-100" : "text-white/55"}`}
                     >
-                      CAMPAÑA (15 MIN)
+                      CAMPAÑA (20 MIN)
                     </span>
                     <span className="mt-2 block text-[9px] leading-4 text-white/45">
                       Sobrevive hasta derrotar al jefe supremo. Otorga créditos y progreso de
@@ -762,7 +762,7 @@ function Index() {
                 <p className="mt-3 text-center text-[9px] uppercase tracking-[0.18em] text-white/35">
                   {gameMode === "ENDLESS"
                     ? "PRÁCTICA · OLEADAS Y DIFICULTAD SIN LÍMITE"
-                    : "15 MIN · PILOTAJE AUTOMÁTICO DE ARMAS"}
+                    : "20 MIN · PILOTAJE AUTOMÁTICO DE ARMAS"}
                 </p>
               </div>
             </div>
