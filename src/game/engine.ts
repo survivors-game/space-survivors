@@ -334,7 +334,7 @@ export class Engine {
   addHazard(h: Partial<Hazard> & { kind: Hazard["kind"]; x: number; y: number }) {
     if (this.hazards.length > 70) return;
     this.hazards.push({
-      x2: 0, y2: 0, r: 60, w: 30, warn: 1, dur: 0, t: 0, dmg: 20, color: "#ff3df2", hitsEnemies: false, hitPlayer: false, tick: 0, meteor: false,
+      x2: 0, y2: 0, r: 60, w: 30, warn: 1, dur: 0, t: 0, color: "#ff3df2", hitsEnemies: false, hitPlayer: false, tick: 0, meteor: false,
       ...h,
       dmg: (h.dmg ?? 20) * (h.meteor ? this.stage.dmgMult : enemyDmgScale(this.minute, this.stage.dmgMult) * 0.75),
     });
