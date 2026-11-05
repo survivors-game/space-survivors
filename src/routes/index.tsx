@@ -40,6 +40,7 @@ import { WEAPONS } from "@/game/data/weapons";
 import { Engine } from "@/game/engine";
 import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
+import { spriteUrl } from "@/game/sprites";
 import { MISSIONS } from "@/game/meta/missions";
 import {
   ProgressStore,
@@ -947,56 +948,57 @@ function Index() {
                     </h2>
                     <span className="h-px flex-1 bg-cyan-400/20" />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {ENEMIES.filter((enemy) => enemy.hidden !== true).map((enemy) => {
                       const kills = progress.bestiary[enemy.id] || 0;
                       return (
                         <article
                           key={enemy.id}
-                          className="border border-cyan-500/25 bg-[#0b0d1c]/85 p-4 shadow-[inset_0_0_24px_#00f0ff08]"
+                          className="border border-cyan-500/20 bg-[#0b0d1c]/85 p-2.5 shadow-[inset_0_0_18px_#00f0ff06]"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <h3
-                                className="text-sm font-black tracking-[0.12em]"
-                                style={{ color: enemy.color }}
-                              >
-                                {enemy.name}
-                              </h3>
-                              <p className="mt-1 text-[9px] uppercase tracking-[0.18em] text-white/40">
+                          <div className="flex items-center gap-2.5">
+                            <BestiarySprite spriteId={enemy.sprite} name={enemy.name} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <h3
+                                  className="truncate text-xs font-black tracking-[0.1em]"
+                                  style={{ color: enemy.color }}
+                                >
+                                  {enemy.name}
+                                </h3>
+                                <span
+                                  className="shrink-0 text-[8px] font-bold text-[#ffd700]"
+                                  aria-label={`Amenaza ${enemy.threat} de 5`}
+                                >
+                                  {enemy.threat}/5 ★
+                                </span>
+                              </div>
+                              <p className="mt-0.5 truncate text-[8px] uppercase tracking-[0.12em] text-white/40">
                                 {enemy.family}
                               </p>
+                              <p className="mt-1 line-clamp-2 text-[9px] leading-4 text-white/45">
+                                {enemy.desc}
+                              </p>
                             </div>
-                            <span
-                              className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[#ffd700]"
-                              aria-label={`Amenaza ${enemy.threat} de 5`}
-                            >
-                              {"★".repeat(enemy.threat)}
-                              <span className="text-white/20">{"★".repeat(5 - enemy.threat)}</span>
-                              <span className="ml-1">{enemy.threat}/5</span>
-                            </span>
                           </div>
-                          <p className="mt-3 min-h-8 text-[10px] leading-4 text-white/45">
-                            {enemy.desc}
-                          </p>
-                          <div className="mt-4 grid grid-cols-3 gap-2 border-y border-white/10 py-3 text-center">
+                          <div className="mt-2 grid grid-cols-3 gap-1 border-y border-white/10 py-1.5 text-center">
                             {[
                               ["VIDA", enemy.hp],
                               ["DAÑO", enemy.dmg],
                               ["VEL.", enemy.speed],
                             ].map(([label, value]) => (
                               <div key={label}>
-                                <p className="text-[8px] uppercase tracking-widest text-white/35">
+                                <p className="text-[7px] uppercase tracking-widest text-white/35">
                                   {label}
                                 </p>
-                                <p className="mt-1 text-xs font-bold tabular-nums text-cyan-100">
+                                <p className="mt-0.5 text-[10px] font-bold tabular-nums text-cyan-100">
                                   {value}
                                 </p>
                               </div>
                             ))}
                           </div>
                           <p
-                            className={`mt-3 flex items-center justify-between text-[9px] font-bold uppercase tracking-[0.16em] ${kills ? "text-[#ff9ab9]" : "text-white/25"}`}
+                            className={`mt-1.5 flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.14em] ${kills ? "text-[#ff9ab9]" : "text-white/25"}`}
                           >
                             <span>{kills ? "ELIMINACIONES" : "NO AVISTADO"}</span>
                             <span>{kills ? kills.toLocaleString() : ""}</span>
@@ -1014,27 +1016,36 @@ function Index() {
                     </h2>
                     <span className="h-px flex-1 bg-[#ff0055]/25" />
                   </div>
-                  <div className="grid gap-3 lg:grid-cols-3">
+                  <div className="grid gap-2 lg:grid-cols-3">
                     {BOSSES.map((boss) => {
                       const victories = progress.stats.bossKills[boss.id] || 0;
                       return (
                         <article
                           key={boss.id}
-                          className="border border-[#8a2be2]/35 bg-[#0b0d1c]/85 p-4 shadow-[inset_0_0_24px_#8a2be208]"
+                          className="border border-[#8a2be2]/30 bg-[#0b0d1c]/85 p-3 shadow-[inset_0_0_18px_#8a2be206]"
                         >
-                          <p className="text-[9px] uppercase tracking-[0.2em] text-[#c7a1ff]">
-                            {boss.title}
-                          </p>
-                          <h3
-                            className="mt-2 text-base font-black tracking-[0.12em]"
-                            style={{ color: boss.color }}
-                          >
-                            {boss.name}
-                          </h3>
-                          <p className="mt-3 min-h-12 text-[10px] leading-5 text-white/45">
-                            {boss.desc}
-                          </p>
-                          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-[9px] uppercase tracking-widest">
+                          <div className="flex items-center gap-3">
+                            <BestiarySprite
+                              spriteId={boss.sprite}
+                              name={boss.name}
+                              className="size-14"
+                            />
+                            <div className="min-w-0">
+                              <p className="truncate text-[8px] uppercase tracking-[0.16em] text-[#c7a1ff]">
+                                {boss.title}
+                              </p>
+                              <h3
+                                className="mt-1 truncate text-sm font-black tracking-[0.1em]"
+                                style={{ color: boss.color }}
+                              >
+                                {boss.name}
+                              </h3>
+                              <p className="mt-1 line-clamp-2 text-[9px] leading-4 text-white/45">
+                                {boss.desc}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2 text-[8px] uppercase tracking-widest">
                             <span className="text-white/50">
                               VIDA BASE{" "}
                               <strong className="ml-1 text-cyan-100">
@@ -1045,11 +1056,11 @@ function Index() {
                               {boss.phases.length + 1} FASES DE COMBATE
                             </span>
                           </div>
-                          <p className="mt-2 text-[9px] text-white/35">
+                          <p className="mt-1 text-[8px] text-white/35">
                             Umbrales de fase:{" "}
                             {boss.phases.map((phase) => `${Math.round(phase * 100)}%`).join(" · ")}
                           </p>
-                          <p className="mt-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#ff9ab9]">
+                          <p className="mt-1.5 text-[8px] font-bold uppercase tracking-[0.16em] text-[#ff9ab9]">
                             VICTORIAS: {victories.toLocaleString()}
                           </p>
                         </article>
@@ -1376,6 +1387,36 @@ function TouchControls() {
         </span>
       </button>
     </div>
+  );
+}
+
+function BestiarySprite({
+  spriteId,
+  name,
+  className = "size-14",
+}: {
+  spriteId: string;
+  name: string;
+  className?: string;
+}) {
+  const [src, setSrc] = useState<string>();
+
+  useEffect(() => {
+    setSrc(spriteUrl(spriteId));
+  }, [spriteId]);
+
+  return (
+    <span
+      className={`grid shrink-0 place-items-center border border-cyan-400/25 bg-[#070814]/75 p-1 ${className}`}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={`${name} sprite`}
+          className="max-h-full max-w-full object-contain [image-rendering:pixelated]"
+        />
+      ) : null}
+    </span>
   );
 }
 
