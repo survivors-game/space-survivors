@@ -63,7 +63,7 @@ export function spawnInterval(minute: number, stageDifficulty: number) {
 
 /** Enemy HP multiplier at a given mission minute. */
 export function enemyHpScale(minute: number, stageDifficulty: number) {
-  return (1 + minute * 0.24 + Math.pow(minute / 15, 2) * 1.2) * stageDifficulty;
+  return (1 + minute * 0.38 + Math.pow(minute / 15, 2) * 1.8) * stageDifficulty;
 }
 
 export function enemyDmgScale(minute: number, stageDmg: number) {
