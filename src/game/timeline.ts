@@ -6,6 +6,21 @@ export const MISSION_MINUTES = 15;
 export const HORDE_COUNT = 10;
 export const HORDE_INTERVAL_SEC = 120;
 
+/* Mundo 1 (ÓRBITA NOVA): probabilidades de aparición por horda (en %, cada fila suma 100 o menos según la horda). */
+export const WORLD1_ID = "nova";
+export const WORLD1_HORDES: Record<string, number>[] = [
+  { interceptor: 100 },
+  { interceptor: 50, hunter: 50 },
+  { hunter: 50, destroyer: 30, bomber: 20 },
+  { hunter: 40, destroyer: 35, bomber: 25 },
+  { hunter: 20, destroyer: 40, bomber: 30, parasite: 10 },
+  { hunter: 15, destroyer: 35, bomber: 30, parasite: 20 },
+  { hunter: 10, destroyer: 35, bomber: 30, parasite: 25 },
+  { hunter: 5, destroyer: 35, bomber: 30, parasite: 30 },
+  { destroyer: 35, bomber: 30, parasite: 35 },
+  { destroyer: 30, bomber: 30, parasite: 40 },
+];
+
 /** Índice (0..9) del intervalo de horda en el que se encuentra el tiempo transcurrido. */
 export function hordeIndexAt(elapsedSec: number) {
   return Math.min(HORDE_COUNT - 1, Math.floor(elapsedSec / HORDE_INTERVAL_SEC));

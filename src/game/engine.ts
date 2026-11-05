@@ -48,6 +48,9 @@ import {
   spawnInterval,
   toMissionMinute,
   xpForLevel,
+  WORLD1_HORDES,
+  WORLD1_ID,
+  hordeIndexAt,
 } from "./timeline";
 
 export type EngineState = "PLAYING" | "LEVEL_UP" | "PAUSED" | "DYING" | "WINNING" | "ENDED";
@@ -884,7 +887,10 @@ export class Engine {
 
   private spawnRegular() {
     const ph = phaseAt(this.minute);
-    let id = pickWeighted(ph.weights);
+    const world1 = this.stage.id === WORLD1_ID && !this.isEndless;
+    let id = world1
+      ? pickWeighted(WORLD1_HORDES[hordeIndexAt(this.elapsed)]!)
+      : pickWeighted(ph.weights);
     if (id === "hunter" && this.minute < 1) id = "interceptor";
     const pos = this.spawnRing();
     const elite = Math.random() < ph.eliteChance;
@@ -1645,7 +1651,8 @@ export class Engine {
       }
       this.spawnTimer = spawnInterval(this.minute, this.stage.difficulty) * (this.boss ? 1.8 : 1);
     }
-    if (ph.formationEvery > 0) {
+    // En el mundo 1 la tabla por horda define todos los enemigos; no hay formaciones.
+    if (ph.formationEvery > 0 && !(this.stage.id === WORLD1_ID && !this.isEndless)) {
       this.formationTimer -= this.isEndless ? dt : dt * (900 / this.duration);
       if (this.formationTimer <= 0 && alive < CONFIG.spawn.maxAlive - 30) {
         this.spawnFormation();
