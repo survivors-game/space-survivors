@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HangarSidebar, type HangarTab } from "@/components/hangar/HangarSidebar";
+import { MarketSection } from "@/components/hangar/MarketSection";
 import { Audio } from "@/game/audio";
 import { BOSSES } from "@/game/data/bosses";
 import { ENEMIES } from "@/game/data/enemies";
@@ -90,9 +92,7 @@ function Index() {
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runCredits, setRunCredits] = useState(0);
   const [notice, setNotice] = useState("");
-  const [hangarTab, setHangarTab] = useState<
-    "UPGRADES" | "MISSIONS" | "BESTIARY" | "ARSENAL" | "LOGS"
-  >("UPGRADES");
+  const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
@@ -769,13 +769,20 @@ function Index() {
         ) : null}
 
         {screen === "HANGAR" ? (
-          <section className="min-w-0 flex-1 py-8 sm:py-12">
-            <SectionHeading
-              eyebrow="MANTENIMIENTO DE FLOTA"
-              title="Centro de mando / hangar"
-              onBack={() => setScreen("MENU")}
+          <section className="min-w-0 flex-1 py-8 sm:py-12 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-x-8">
+            <div className="lg:col-span-2">
+              <SectionHeading
+                eyebrow="MANTENIMIENTO DE FLOTA"
+                title="Centro de mando / hangar"
+                onBack={() => setScreen("MENU")}
+              />
+            </div>
+            <HangarSidebar
+              activeTab={hangarTab}
+              claimableCount={claimableCount}
+              onTabChange={setHangarTab}
             />
-            <div className="mt-7 flex flex-wrap items-end justify-between gap-4 border-y border-cyan-500/20 py-5">
+            <div className="mt-7 flex flex-wrap items-end justify-between gap-4 border-y border-cyan-500/20 py-5 lg:col-start-2">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">
                   CRÉDITOS DISPONIBLES
@@ -791,60 +798,15 @@ function Index() {
                 {selectedShip.name}
               </div>
             </div>
-            <div
-              aria-label="Pestañas del hangar"
-              className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5"
-              role="tablist"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={hangarTab === "UPGRADES"}
-                onClick={() => setHangarTab("UPGRADES")}
-                className={`min-h-12 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === "UPGRADES" ? "border-cyan-300/70 bg-cyan-300/10 text-cyan-100 shadow-[0_0_18px_#00f0ff18]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-cyan-300/30 hover:text-cyan-100/75"}`}
-              >
-                MEJORAS
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={hangarTab === "MISSIONS"}
-                onClick={() => setHangarTab("MISSIONS")}
-                className={`relative flex min-h-12 items-center justify-center gap-2 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === "MISSIONS" ? "border-[#ff0055]/70 bg-[#ff0055]/10 text-[#ff9ab9] shadow-[0_0_18px_#ff005518]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-[#ff0055]/35 hover:text-[#ff9ab9]"}`}
-              >
-                MISIONES
-                {claimableCount > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center border border-[#ffd700]/60 bg-[#ffd700]/15 px-1.5 py-0.5 text-[9px] font-black text-[#ffd700] shadow-[0_0_12px_#ffd70055]">
-                    {claimableCount}
-                  </span>
-                ) : null}
-              </button>
-              {(
-                [
-                  ["BESTIARY", "BESTIARIO"],
-                  ["ARSENAL", "ARSENAL"],
-                  ["LOGS", "REGISTRO"],
-                ] as const
-              ).map(([tab, label]) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={hangarTab === tab}
-                  onClick={() => setHangarTab(tab)}
-                  className={`min-h-12 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === tab ? "border-cyan-300/70 bg-cyan-300/10 text-cyan-100 shadow-[0_0_18px_#00f0ff18]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-cyan-300/30 hover:text-cyan-100/75"}`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="lg:col-start-2">
+              {notice ? (
+                <p role="status" className="mt-4 text-xs uppercase tracking-widest text-cyan-200">
+                  {notice}
+                </p>
+              ) : null}
             </div>
-            {notice ? (
-              <p role="status" className="mt-4 text-xs uppercase tracking-widest text-cyan-200">
-                {notice}
-              </p>
-            ) : null}
             {hangarTab === "UPGRADES" ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:col-start-2">
                 {UPGRADES.map((upgrade, index) => {
                   const level = progress.upgrades[upgrade.id] ?? 0;
                   const maxed = level >= upgrade.max;
@@ -903,7 +865,7 @@ function Index() {
                 })}
               </div>
             ) : hangarTab === "MISSIONS" ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:col-start-2">
                 {MISSIONS.map((mission) => {
                   const current = missionValue(progress, mission.id);
                   const percentage = Math.min(100, Math.round((current / mission.goal) * 100));
@@ -976,7 +938,7 @@ function Index() {
                 })}
               </div>
             ) : hangarTab === "BESTIARY" ? (
-              <div className="mt-7 space-y-10">
+              <div className="mt-7 space-y-10 lg:col-start-2">
                 <section>
                   <div className="mb-4 flex items-center gap-3">
                     <span className="h-px flex-1 bg-cyan-400/20" />
@@ -1097,7 +1059,7 @@ function Index() {
                 </section>
               </div>
             ) : hangarTab === "ARSENAL" ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:col-start-2">
                 {WEAPONS.map((weapon) => {
                   const passive =
                     PASSIVES.find((candidate) => candidate.id === weapon.evo.passive) ??
@@ -1140,8 +1102,12 @@ function Index() {
                   );
                 })}
               </div>
+            ) : hangarTab === "MARKET" ? (
+              <div className="lg:col-start-2">
+                <MarketSection />
+              </div>
             ) : (
-              <div className="mt-6 space-y-8">
+              <div className="mt-6 space-y-8 lg:col-start-2">
                 <section>
                   <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
                     ESTADÍSTICAS HISTÓRICAS
@@ -1224,7 +1190,7 @@ function Index() {
                 </section>
               </div>
             )}
-            <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5 lg:col-start-2">
               <p className="text-[10px] uppercase tracking-[0.15em] text-white/40">
                 {hangarTab === "UPGRADES"
                   ? "Las mejoras son permanentes y se aplican al próximo despliegue."
@@ -1234,7 +1200,9 @@ function Index() {
                       ? "Intel de combate recopilada en todos los sectores conocidos."
                       : hangarTab === "ARSENAL"
                         ? "Domina cada arma y su sinergia pasiva para desbloquear su evolución."
-                        : "Historial permanente de despliegues y rendimiento de la flota."}
+                        : hangarTab === "MARKET"
+                          ? "Explora objetos mock del mercado; compras y listados no están disponibles todavía."
+                          : "Historial permanente de despliegues y rendimiento de la flota."}
               </p>
               <Button
                 onClick={() => setScreen("SELECT")}
