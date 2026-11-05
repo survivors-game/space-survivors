@@ -56,6 +56,7 @@ export interface Projectile extends Poolable {
   color: string;
   pierce: number;
   hits: Set<number>;
+  target: Enemy | null;
   targetUid: number;
   aoe: number;
   turn: number;

@@ -192,11 +192,8 @@ const nemesis: BossDef = {
         // lock target and telegraph
         e.vx *= 0.85;
         e.vy *= 0.85;
-        if (e.shootCD === 0.4 || e.tx === 0) {
-          /* noop */
-        }
         e.shootCD -= dt;
-        if (e.aiT > 0 && e.shootCD <= 0) {
+        if (e.shootCD <= 0) {
           const a = Math.atan2(dy, dx);
           e.tx = Math.cos(a);
           e.ty = Math.sin(a);
