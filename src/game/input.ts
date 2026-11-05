@@ -1,6 +1,5 @@
 // Unified input layer (template section 5): keyboard + gamepad + touch joystick.
 // The touch joystick UI lives in React (TouchControls) and writes into setTouch().
-import { CONFIG } from "./config";
 
 const keys = new Set<string>();
 const justPressed = new Set<string>();
@@ -92,7 +91,7 @@ export const Input = {
     if (gp.connected && (Math.abs(gp.lx) > 0 || Math.abs(gp.ly) > 0)) { x = gp.lx; y = gp.ly; }
     const m = Math.hypot(x, y);
     if (m > 1) { x /= m; y /= m; }
-    return { x, y, mag: Math.min(1, m), threshold: 0.05 + 0 * CONFIG.frame.maxDt };
+    return { x, y, mag: Math.min(1, m) };
   },
   endFrame() {
     justPressed.clear();
