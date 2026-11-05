@@ -423,10 +423,10 @@ function Index() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#070814] font-pixel text-white selection:bg-[#00f0ff]/30">
+    <main className="relative min-h-dvh overflow-x-clip bg-[#070814] font-pixel text-white selection:bg-[#00f0ff]/30">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_75%_5%,#8a2be21c,transparent_38%),radial-gradient(ellipse_at_12%_82%,#00f0ff12,transparent_32%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.1] [background-image:linear-gradient(#00f0ff_1px,transparent_1px),linear-gradient(90deg,#00f0ff_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]" />
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-12">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] min-w-0 flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-12">
         <header className="flex items-center justify-between border-b border-cyan-500/20 pb-4">
           <button
             type="button"
@@ -464,7 +464,7 @@ function Index() {
         </header>
 
         {screen === "MENU" ? (
-          <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
+          <section className="grid min-w-0 flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
             <div className="relative">
               <div className="mb-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] text-cyan-300">
                 <span className="h-px w-9 bg-cyan-400" /> ALERTA DE SECTOR · NOVA-01
@@ -560,16 +560,16 @@ function Index() {
         ) : null}
 
         {screen === "SELECT" ? (
-          <section className="flex-1 py-8 sm:py-12">
+          <section className="min-w-0 flex-1 py-8 sm:py-12">
             <SectionHeading
               eyebrow="PREPARACIÓN DE COMBATE"
               title="Configura el despliegue"
               onBack={() => setScreen("MENU")}
             />
-            <div className="mt-9 grid gap-10 xl:grid-cols-[1.1fr_0.9fr]">
-              <div>
+            <div className="mt-9 grid min-w-0 gap-10 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="min-w-0">
                 <div className="mb-4 flex items-end justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] uppercase tracking-[0.25em] text-cyan-300">
                       01 / HANGAR DE VUELO
                     </p>
@@ -666,7 +666,7 @@ function Index() {
                 </div>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <div className="mb-4">
                   <p className="text-[10px] uppercase tracking-[0.25em] text-[#ff6b95]">
                     02 / CARTOGRAFÍA
@@ -769,7 +769,7 @@ function Index() {
         ) : null}
 
         {screen === "HANGAR" ? (
-          <section className="flex-1 py-8 sm:py-12">
+          <section className="min-w-0 flex-1 py-8 sm:py-12">
             <SectionHeading
               eyebrow="MANTENIMIENTO DE FLOTA"
               title="Centro de mando / hangar"
