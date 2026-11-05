@@ -29,8 +29,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Audio } from "@/game/audio";
-import { SHIPS } from "@/game/data/ships";
-import { STAGES } from "@/game/data/stages";
+import { BOSSES } from "@/game/data/bosses";
+import { ENEMIES } from "@/game/data/enemies";
+import { PASSIVES, passiveById } from "@/game/data/passives";
+import { SHIPS, shipById } from "@/game/data/ships";
+import { STAGES, stageById } from "@/game/data/stages";
+import { WEAPONS } from "@/game/data/weapons";
 import { Engine } from "@/game/engine";
 import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
@@ -84,7 +88,9 @@ function Index() {
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runCredits, setRunCredits] = useState(0);
   const [notice, setNotice] = useState("");
-  const [hangarTab, setHangarTab] = useState<"UPGRADES" | "MISSIONS">("UPGRADES");
+  const [hangarTab, setHangarTab] = useState<
+    "UPGRADES" | "MISSIONS" | "BESTIARY" | "ARSENAL" | "LOGS"
+  >("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
@@ -730,7 +736,7 @@ function Index() {
             </div>
             <div
               aria-label="Pestañas del hangar"
-              className="mt-5 grid grid-cols-2 gap-2"
+              className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5"
               role="tablist"
             >
               <button
@@ -740,7 +746,7 @@ function Index() {
                 onClick={() => setHangarTab("UPGRADES")}
                 className={`min-h-12 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === "UPGRADES" ? "border-cyan-300/70 bg-cyan-300/10 text-cyan-100 shadow-[0_0_18px_#00f0ff18]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-cyan-300/30 hover:text-cyan-100/75"}`}
               >
-                MEJORAS DE NAVE
+                MEJORAS
               </button>
               <button
                 type="button"
@@ -749,13 +755,31 @@ function Index() {
                 onClick={() => setHangarTab("MISSIONS")}
                 className={`relative flex min-h-12 items-center justify-center gap-2 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === "MISSIONS" ? "border-[#ff0055]/70 bg-[#ff0055]/10 text-[#ff9ab9] shadow-[0_0_18px_#ff005518]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-[#ff0055]/35 hover:text-[#ff9ab9]"}`}
               >
-                MISIONES Y RECOMPENSAS
+                MISIONES
                 {claimableCount > 0 ? (
                   <span className="inline-flex min-w-5 items-center justify-center border border-[#ffd700]/60 bg-[#ffd700]/15 px-1.5 py-0.5 text-[9px] font-black text-[#ffd700] shadow-[0_0_12px_#ffd70055]">
                     {claimableCount}
                   </span>
                 ) : null}
               </button>
+              {(
+                [
+                  ["BESTIARY", "BESTIARIO"],
+                  ["ARSENAL", "ARSENAL"],
+                  ["LOGS", "REGISTRO"],
+                ] as const
+              ).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  aria-selected={hangarTab === tab}
+                  onClick={() => setHangarTab(tab)}
+                  className={`min-h-12 border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] transition sm:text-xs ${hangarTab === tab ? "border-cyan-300/70 bg-cyan-300/10 text-cyan-100 shadow-[0_0_18px_#00f0ff18]" : "border-white/10 bg-[#0b0d1c]/60 text-white/45 hover:border-cyan-300/30 hover:text-cyan-100/75"}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             {notice ? (
               <p role="status" className="mt-4 text-xs uppercase tracking-widest text-cyan-200">
@@ -821,7 +845,7 @@ function Index() {
                   );
                 })}
               </div>
-            ) : (
+            ) : hangarTab === "MISSIONS" ? (
               <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {MISSIONS.map((mission) => {
                   const current = missionValue(progress, mission.id);
@@ -894,12 +918,266 @@ function Index() {
                   );
                 })}
               </div>
+            ) : hangarTab === "BESTIARY" ? (
+              <div className="mt-7 space-y-10">
+                <section>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-cyan-400/20" />
+                    <h2 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+                      ENEMIGOS COMUNES
+                    </h2>
+                    <span className="h-px flex-1 bg-cyan-400/20" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {ENEMIES.filter((enemy) => enemy.hidden !== true).map((enemy) => {
+                      const kills = progress.bestiary[enemy.id] || 0;
+                      return (
+                        <article
+                          key={enemy.id}
+                          className="border border-cyan-500/25 bg-[#0b0d1c]/85 p-4 shadow-[inset_0_0_24px_#00f0ff08]"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h3
+                                className="text-sm font-black tracking-[0.12em]"
+                                style={{ color: enemy.color }}
+                              >
+                                {enemy.name}
+                              </h3>
+                              <p className="mt-1 text-[9px] uppercase tracking-[0.18em] text-white/40">
+                                {enemy.family}
+                              </p>
+                            </div>
+                            <span
+                              className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[#ffd700]"
+                              aria-label={`Amenaza ${enemy.threat} de 5`}
+                            >
+                              {"★".repeat(enemy.threat)}
+                              <span className="text-white/20">{"★".repeat(5 - enemy.threat)}</span>
+                              <span className="ml-1">{enemy.threat}/5</span>
+                            </span>
+                          </div>
+                          <p className="mt-3 min-h-8 text-[10px] leading-4 text-white/45">
+                            {enemy.desc}
+                          </p>
+                          <div className="mt-4 grid grid-cols-3 gap-2 border-y border-white/10 py-3 text-center">
+                            {[
+                              ["VIDA", enemy.hp],
+                              ["DAÑO", enemy.dmg],
+                              ["VEL.", enemy.speed],
+                            ].map(([label, value]) => (
+                              <div key={label}>
+                                <p className="text-[8px] uppercase tracking-widest text-white/35">
+                                  {label}
+                                </p>
+                                <p className="mt-1 text-xs font-bold tabular-nums text-cyan-100">
+                                  {value}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          <p
+                            className={`mt-3 flex items-center justify-between text-[9px] font-bold uppercase tracking-[0.16em] ${kills ? "text-[#ff9ab9]" : "text-white/25"}`}
+                          >
+                            <span>{kills ? "ELIMINACIONES" : "NO AVISTADO"}</span>
+                            <span>{kills ? kills.toLocaleString() : ""}</span>
+                          </p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+                <section>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-[#ff0055]/25" />
+                    <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#ff9ab9]">
+                      JEFES SUPREMOS
+                    </h2>
+                    <span className="h-px flex-1 bg-[#ff0055]/25" />
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    {BOSSES.map((boss) => {
+                      const victories = progress.stats.bossKills[boss.id] || 0;
+                      return (
+                        <article
+                          key={boss.id}
+                          className="border border-[#8a2be2]/35 bg-[#0b0d1c]/85 p-4 shadow-[inset_0_0_24px_#8a2be208]"
+                        >
+                          <p className="text-[9px] uppercase tracking-[0.2em] text-[#c7a1ff]">
+                            {boss.title}
+                          </p>
+                          <h3
+                            className="mt-2 text-base font-black tracking-[0.12em]"
+                            style={{ color: boss.color }}
+                          >
+                            {boss.name}
+                          </h3>
+                          <p className="mt-3 min-h-12 text-[10px] leading-5 text-white/45">
+                            {boss.desc}
+                          </p>
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-[9px] uppercase tracking-widest">
+                            <span className="text-white/50">
+                              VIDA BASE{" "}
+                              <strong className="ml-1 text-cyan-100">
+                                {boss.hp.toLocaleString()}
+                              </strong>
+                            </span>
+                            <span className="text-[#ffd700]">
+                              {boss.phases.length + 1} FASES DE COMBATE
+                            </span>
+                          </div>
+                          <p className="mt-2 text-[9px] text-white/35">
+                            Umbrales de fase:{" "}
+                            {boss.phases.map((phase) => `${Math.round(phase * 100)}%`).join(" · ")}
+                          </p>
+                          <p className="mt-3 text-[9px] font-bold uppercase tracking-[0.16em] text-[#ff9ab9]">
+                            VICTORIAS: {victories.toLocaleString()}
+                          </p>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              </div>
+            ) : hangarTab === "ARSENAL" ? (
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {WEAPONS.map((weapon) => {
+                  const passive =
+                    PASSIVES.find((candidate) => candidate.id === weapon.evo.passive) ??
+                    passiveById(weapon.evo.passive);
+                  return (
+                    <article
+                      key={weapon.id}
+                      className="flex min-h-64 flex-col border border-cyan-500/25 bg-[#0b0d1c]/85 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <h3
+                          className="text-sm font-black uppercase tracking-[0.1em]"
+                          style={{ color: weapon.color }}
+                        >
+                          {weapon.name}
+                        </h3>
+                        <span
+                          className="border px-2 py-1 text-[8px] font-bold tracking-[0.16em]"
+                          style={{ borderColor: `${weapon.color}66`, color: weapon.color }}
+                        >
+                          {weapon.kind}
+                        </span>
+                      </div>
+                      <p className="mt-3 min-h-10 text-[10px] leading-5 text-white/50">
+                        {weapon.desc}
+                      </p>
+                      <div className="mt-4 flex-1 border border-[#8a2be2]/40 bg-[#8a2be2]/[0.07] p-3">
+                        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#c7a1ff]">
+                          EVOLUCIÓN SUPREMA
+                        </p>
+                        <h4 className="mt-2 text-xs font-black uppercase tracking-wider text-white">
+                          {weapon.evo.name}
+                        </h4>
+                        <p className="mt-2 text-[9px] leading-4 text-white/50">{weapon.evo.desc}</p>
+                        <p className="mt-3 border-t border-white/10 pt-2 text-[8px] uppercase leading-4 tracking-wider text-[#ff9ab9]">
+                          Requiere nivel 5 de arma + {passive?.name ?? "pasiva desconocida"}
+                        </p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-6 space-y-8">
+                <section>
+                  <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+                    ESTADÍSTICAS HISTÓRICAS
+                  </h2>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {[
+                      ["PARTIDAS JUGADAS", progress.stats.runs.toLocaleString(), "text-cyan-200"],
+                      ["VICTORIAS", progress.stats.wins.toLocaleString(), "text-[#7dff4f]"],
+                      ["BAJAS TOTALES", progress.stats.kills.toLocaleString(), "text-[#ff9ab9]"],
+                      [
+                        "RÉCORD DE BAJAS",
+                        progress.stats.bestKills.toLocaleString(),
+                        "text-[#ffd700]",
+                      ],
+                      ["DAÑO TOTAL", progress.stats.damageDealt.toLocaleString(), "text-[#ff9ab9]"],
+                      ["NIVEL MÁXIMO", progress.stats.maxLevel.toLocaleString(), "text-[#c7a1ff]"],
+                      ["EVOLUCIONES", progress.stats.evolutions.toLocaleString(), "text-[#c7a1ff]"],
+                      [
+                        "TIEMPO DE VUELO",
+                        `${Math.floor(progress.stats.timePlayed / 60)} min ${Math.floor(progress.stats.timePlayed % 60)} s`,
+                        "text-cyan-200",
+                      ],
+                    ].map(([label, value, color]) => (
+                      <article
+                        key={label}
+                        className="border border-cyan-500/20 bg-[#0b0d1c]/85 p-4"
+                      >
+                        <p className="text-[8px] uppercase tracking-[0.16em] text-white/40">
+                          {label}
+                        </p>
+                        <p className={`mt-2 text-lg font-black tabular-nums ${color}`}>{value}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+                <section>
+                  <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-[#ff9ab9]">
+                    ÚLTIMAS MISIONES
+                  </h2>
+                  {progress.history.length ? (
+                    <div className="space-y-2">
+                      {progress.history.slice(0, 10).map((run, index) => (
+                        <article
+                          key={`${run.date}-${run.stageId}-${index}`}
+                          className="grid gap-3 border border-white/10 bg-[#0b0d1c]/75 p-3 text-[9px] sm:grid-cols-[1fr_1.2fr_auto] sm:items-center"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`font-black tracking-widest ${run.victory ? "text-[#7dff4f]" : "text-[#ff6b95]"}`}
+                            >
+                              {run.victory ? "VICTORIA" : "CAÍDO"}
+                            </span>
+                            <span className="text-white/35">{formatTime(run.time)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 uppercase tracking-wider text-white/55">
+                            <span>{shipById(run.shipId)?.name}</span>
+                            <span className="text-cyan-200/70">{stageById(run.stageId)?.name}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 uppercase tracking-wider text-white/45 sm:justify-end">
+                            <span>{run.kills.toLocaleString()} BAJAS</span>
+                            <span>NIVEL {run.level}</span>
+                            <span className="text-[#ffd700]">
+                              +{run.credits.toLocaleString()} CR
+                            </span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-cyan-400/20 bg-[#0b0d1c]/50 px-5 py-10 text-center">
+                      <Rocket className="mx-auto size-7 text-cyan-200/50" />
+                      <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-white/45">
+                        Aún no hay misiones registradas.
+                      </p>
+                      <p className="mt-2 text-[9px] uppercase tracking-wider text-cyan-100/35">
+                        Realiza tu primer despliegue para iniciar el registro de vuelo.
+                      </p>
+                    </div>
+                  )}
+                </section>
+              </div>
             )}
             <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5">
               <p className="text-[10px] uppercase tracking-[0.15em] text-white/40">
                 {hangarTab === "UPGRADES"
                   ? "Las mejoras son permanentes y se aplican al próximo despliegue."
-                  : "Completa objetivos y reclama créditos para financiar tu próxima misión."}
+                  : hangarTab === "MISSIONS"
+                    ? "Completa objetivos y reclama créditos para financiar tu próxima misión."
+                    : hangarTab === "BESTIARY"
+                      ? "Intel de combate recopilada en todos los sectores conocidos."
+                      : hangarTab === "ARSENAL"
+                        ? "Domina cada arma y su sinergia pasiva para desbloquear su evolución."
+                        : "Historial permanente de despliegues y rendimiento de la flota."}
               </p>
               <Button
                 onClick={() => setScreen("SELECT")}
