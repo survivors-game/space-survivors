@@ -1070,46 +1070,17 @@ function Index() {
                 </section>
               </div>
             ) : hangarTab === "ARSENAL" ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:col-start-2">
+              <div className="mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 lg:col-start-2">
                 {WEAPONS.map((weapon) => {
                   const passive =
                     PASSIVES.find((candidate) => candidate.id === weapon.evo.passive) ??
                     passiveById(weapon.evo.passive);
                   return (
-                    <article
+                    <ArsenalCard
                       key={weapon.id}
-                      className="flex min-h-64 flex-col border border-cyan-500/25 bg-[#0b0d1c]/85 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <h3
-                          className="text-sm font-black uppercase tracking-[0.1em]"
-                          style={{ color: weapon.color }}
-                        >
-                          {weapon.name}
-                        </h3>
-                        <span
-                          className="border px-2 py-1 text-[8px] font-bold tracking-[0.16em]"
-                          style={{ borderColor: `${weapon.color}66`, color: weapon.color }}
-                        >
-                          {weapon.kind}
-                        </span>
-                      </div>
-                      <p className="mt-3 min-h-10 text-[10px] leading-5 text-white/50">
-                        {weapon.desc}
-                      </p>
-                      <div className="mt-4 flex-1 border border-[#8a2be2]/40 bg-[#8a2be2]/[0.07] p-3">
-                        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#c7a1ff]">
-                          EVOLUCIÓN SUPREMA
-                        </p>
-                        <h4 className="mt-2 text-xs font-black uppercase tracking-wider text-white">
-                          {weapon.evo.name}
-                        </h4>
-                        <p className="mt-2 text-[9px] leading-4 text-white/50">{weapon.evo.desc}</p>
-                        <p className="mt-3 border-t border-white/10 pt-2 text-[8px] uppercase leading-4 tracking-wider text-[#ff9ab9]">
-                          Requiere nivel 5 de arma + {passive?.name ?? "pasiva desconocida"}
-                        </p>
-                      </div>
-                    </article>
+                      weapon={weapon}
+                      passiveName={passive?.name ?? "pasiva desconocida"}
+                    />
                   );
                 })}
               </div>
@@ -1387,6 +1358,308 @@ function TouchControls() {
         </span>
       </button>
     </div>
+  );
+}
+
+function ArsenalCard({
+  weapon,
+  passiveName,
+}: {
+  weapon: (typeof WEAPONS)[number];
+  passiveName: string;
+}) {
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [shipSprite, setShipSprite] = useState<string>();
+
+  useEffect(() => {
+    setShipSprite(spriteUrl("ship_falcon"));
+  }, []);
+
+  const playAnimation = () => {
+    const effects = previewRef.current?.querySelectorAll<HTMLElement | SVGElement>(
+      "[data-weapon-effect]",
+    );
+    if (!effects?.length) return;
+
+    effects.forEach((effect, index) => {
+      effect.getAnimations().forEach((animation) => animation.cancel());
+      let frames: Keyframe[];
+      let duration = 650;
+      let delay = 0;
+
+      switch (weapon.id) {
+        case "laser":
+          frames = [
+            { height: "0px", opacity: 1 },
+            { height: "56px", opacity: 0 },
+          ];
+          duration = 430;
+          break;
+        case "spread": {
+          const spread = index - 2;
+          frames = [
+            { left: "50%", top: "60%", opacity: 1 },
+            { left: `${50 + spread * 10}%`, top: `${28 + Math.abs(spread) * 5}%`, opacity: 0 },
+          ];
+          duration = 500;
+          break;
+        }
+        case "missile":
+          frames = [
+            {
+              left: index === 0 ? "43%" : "57%",
+              top: "58%",
+              transform: "rotate(0deg)",
+              opacity: 1,
+            },
+            {
+              left: index === 0 ? "66%" : "34%",
+              top: "25%",
+              transform: index === 0 ? "rotate(40deg)" : "rotate(-40deg)",
+              opacity: 0,
+            },
+          ];
+          duration = 720;
+          break;
+        case "drones":
+          frames = [
+            { transform: "translate(0, 0) scale(1)", opacity: 0.6 },
+            {
+              transform:
+                index === 0
+                  ? "translate(-18px, -20px) scale(1.2)"
+                  : "translate(18px, 20px) scale(1.2)",
+              opacity: 1,
+            },
+            { transform: "translate(0, 0) scale(1)", opacity: 0.6 },
+          ];
+          duration = 850;
+          break;
+        case "plasma":
+          frames = [
+            { left: "50%", top: "55%", transform: "scale(0.7)", opacity: 1 },
+            { left: "78%", top: "25%", transform: "scale(1.2)", opacity: 0.9 },
+          ];
+          duration = 680;
+          if (effect.getAttribute("data-weapon-effect") === "plasma-burst") {
+            frames = [
+              { transform: "translate(-50%, -50%) scale(0.2)", opacity: 0 },
+              { transform: "translate(-50%, -50%) scale(2.4)", opacity: 0 },
+            ];
+            duration = 300;
+            delay = 520;
+          }
+          break;
+        case "field":
+          frames = [
+            { transform: "translate(-50%, -50%) scale(0.35)", opacity: 0.1 },
+            { transform: "translate(-50%, -50%) scale(2.2)", opacity: 0.9 },
+            { transform: "translate(-50%, -50%) scale(2.6)", opacity: 0 },
+          ];
+          duration = 720;
+          break;
+        case "shield":
+          frames = [
+            { transform: "translate(-50%, -50%) scale(0.8)", opacity: 0.25 },
+            { transform: "translate(-50%, -50%) scale(1.25)", opacity: 0.9 },
+            { transform: "translate(-50%, -50%) scale(0.8)", opacity: 0.25 },
+          ];
+          duration = 850;
+          break;
+        case "nova":
+          frames = [
+            { transform: "translate(-50%, -50%) scale(0.2)", opacity: 0.9 },
+            { transform: "translate(-50%, -50%) scale(2.8)", opacity: 0 },
+          ];
+          duration = 700;
+          delay = index * 120;
+          break;
+        case "arc":
+          frames = [
+            { strokeDashoffset: "100", opacity: 0.2 },
+            { strokeDashoffset: "0", opacity: 1 },
+            { strokeDashoffset: "-100", opacity: 0 },
+          ];
+          duration = 600;
+          break;
+        default:
+          frames = [{ opacity: 0.4 }, { opacity: 1 }, { opacity: 0.4 }];
+      }
+
+      effect.animate(frames, {
+        duration,
+        delay,
+        easing: "ease-out",
+        fill: "none",
+      });
+    });
+  };
+
+  return (
+    <article className="flex min-w-0 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-3">
+      <header className="flex items-start justify-between gap-2">
+        <h3
+          className="font-arcade min-w-0 text-[8px] uppercase leading-5 tracking-wide"
+          style={{ color: weapon.color }}
+        >
+          {weapon.name}
+        </h3>
+        <span
+          className="shrink-0 border px-1.5 py-1 text-[7px] font-bold tracking-widest"
+          style={{ borderColor: `${weapon.color}66`, color: weapon.color }}
+        >
+          {weapon.kind}
+        </span>
+      </header>
+      <p className="mt-1 min-h-8 text-[9px] leading-4 text-white/50">{weapon.desc}</p>
+      <div
+        ref={previewRef}
+        className="relative mt-2 grid h-28 shrink-0 place-items-center overflow-hidden border border-cyan-500/15 bg-[#070814]/75"
+        aria-label={`Vista previa de ${weapon.name}`}
+      >
+        {weapon.id === "laser" ? (
+          <span
+            data-weapon-effect
+            className="absolute bottom-[52%] z-10 block w-[3px] shadow-[0_0_8px_currentColor]"
+            style={{
+              left: "50%",
+              height: 0,
+              transform: "translateX(-50%)",
+              backgroundColor: weapon.color,
+              color: weapon.color,
+            }}
+          />
+        ) : null}
+        {weapon.id === "spread"
+          ? Array.from({ length: 5 }, (_, index) => (
+              <span
+                key={index}
+                data-weapon-effect
+                className="absolute z-10 size-1 rounded-full"
+                style={{
+                  left: "50%",
+                  top: "60%",
+                  backgroundColor: weapon.color,
+                  boxShadow: `0 0 7px ${weapon.color}`,
+                }}
+              />
+            ))
+          : null}
+        {weapon.id === "missile"
+          ? [0, 1].map((index) => (
+              <span
+                key={index}
+                data-weapon-effect
+                className="absolute z-10 h-3 w-1.5 rounded-t-full"
+                style={{
+                  left: index === 0 ? "43%" : "57%",
+                  top: "58%",
+                  backgroundColor: weapon.color,
+                  boxShadow: `0 0 8px ${weapon.color}`,
+                }}
+              />
+            ))
+          : null}
+        {weapon.id === "drones"
+          ? [0, 1].map((index) => (
+              <span
+                key={index}
+                data-weapon-effect
+                className="absolute z-10 size-2 rounded-sm border border-cyan-100"
+                style={{
+                  left: index === 0 ? "38%" : "62%",
+                  top: "48%",
+                  backgroundColor: weapon.color,
+                  boxShadow: `0 0 8px ${weapon.color}`,
+                }}
+              />
+            ))
+          : null}
+        {weapon.id === "plasma" ? (
+          <>
+            <span
+              data-weapon-effect="plasma-orb"
+              className="absolute z-10 size-3 rounded-full"
+              style={{
+                left: "50%",
+                top: "55%",
+                backgroundColor: weapon.color,
+                boxShadow: `0 0 12px ${weapon.color}`,
+              }}
+            />
+            <span
+              data-weapon-effect="plasma-burst"
+              className="absolute left-[78%] top-[25%] z-10 size-5 rounded-full border-2"
+              style={{ borderColor: weapon.color, boxShadow: `0 0 12px ${weapon.color}` }}
+            />
+          </>
+        ) : null}
+        {weapon.id === "field" || weapon.id === "shield" ? (
+          <span
+            data-weapon-effect
+            className={`absolute left-1/2 top-1/2 z-10 rounded-full border-2 ${weapon.id === "shield" ? "h-20 w-16" : "size-12"}`}
+            style={{ borderColor: weapon.color, boxShadow: `0 0 12px ${weapon.color}` }}
+          />
+        ) : null}
+        {weapon.id === "nova"
+          ? [0, 1].map((index) => (
+              <span
+                key={index}
+                data-weapon-effect
+                className="absolute left-1/2 top-1/2 z-10 size-8 rounded-full border-2"
+                style={{ borderColor: weapon.color, boxShadow: `0 0 10px ${weapon.color}` }}
+              />
+            ))
+          : null}
+        {weapon.id === "arc" ? (
+          <svg
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-10 size-full"
+            viewBox="0 0 100 80"
+          >
+            <path
+              data-weapon-effect
+              d="M50 52 L43 42 L54 35 L46 25 L58 17"
+              fill="none"
+              stroke={weapon.color}
+              strokeDasharray="100"
+              strokeDashoffset="100"
+              strokeWidth="2"
+              style={{ filter: `drop-shadow(0 0 4px ${weapon.color})` }}
+            />
+          </svg>
+        ) : null}
+        {shipSprite ? (
+          <img
+            src={shipSprite}
+            alt=""
+            className="relative z-0 h-12 w-12 object-contain [image-rendering:pixelated]"
+          />
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={playAnimation}
+        className="font-arcade mt-2 flex h-9 w-full items-center justify-center gap-2 border border-cyan-400/30 text-[7px] uppercase tracking-widest text-cyan-100 transition hover:bg-cyan-300/10"
+        aria-label={`Ver animación: ${weapon.name}`}
+      >
+        <Play className="size-3" /> VER ANIMACIÓN
+      </button>
+      <div className="mt-2 border-t border-[#8a2be2]/30 pt-2">
+        <p className="text-[7px] font-black uppercase tracking-[0.16em] text-[#c7a1ff]">
+          EVOLUCIÓN SUPREMA
+        </p>
+        <h4 className="mt-1 truncate text-[9px] font-black uppercase tracking-wide text-white">
+          {weapon.evo.name}
+        </h4>
+        <p className="mt-1 line-clamp-2 min-h-7 text-[8px] leading-3.5 text-white/45">
+          {weapon.evo.desc}
+        </p>
+        <p className="mt-1 border-t border-white/10 pt-1.5 text-[7px] uppercase leading-3.5 text-[#ff9ab9]">
+          Nivel 5 + {passiveName}
+        </p>
+      </div>
+    </article>
   );
 }
 
