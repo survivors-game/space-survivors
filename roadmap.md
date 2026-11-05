@@ -7,6 +7,8 @@
 - [x] 15-min timeline (5 phases), formations, XP/energy, level-up, victory/defeat
 - [x] 4 stages with backgrounds, obstacles and hazards
 - [x] Hangar: ships, upgrades, weapons, stats, bestiary, missions — persisted
-- [x] UI: menu, launch (ship + stage), HUD, pause, level-up, results, settings, touch controls
-- [x] Tests for progress / timeline rules
-- [ ] Visual verification pass in browser
+- [ ] UI (React): main menu, hangar tabs, launch (ship + stage), combat HUD, pause, level-up, results, settings, touch joystick + boost button — NEXT
+- [ ] Replace placeholder index route with the game app; head metadata
+- [ ] Fonts (Press Start 2P / VT323) + neon design tokens in styles.css
+- [ ] Tests for progress / timeline rules
+- [ ] Visual verification pass in browser (sprites, bosses, balance)
