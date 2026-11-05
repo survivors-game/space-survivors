@@ -1,0 +1,7 @@
+[
+  {"capability":"code","source":"survivors-game-main/index.html (single-file canvas game)","outcome":"ported to TypeScript modules under src/game and React screens under src/components/space","status":"migrated","next_action":"none"},
+  {"capability":"schema/records","source":"none (no database)","outcome":"not applicable","status":"verified","next_action":"none"},
+  {"capability":"auth","source":"none","outcome":"not applicable","status":"verified","next_action":"none"},
+  {"capability":"persistence","source":"localStorage settings (survivors_settings_v1)","outcome":"localStorage settings + permanent progress (space_survivors_*_v1)","status":"migrated","next_action":"none"},
+  {"capability":"external providers / endpoints / secrets","source":"none","outcome":"not applicable","status":"verified","next_action":"none"}
+]
