@@ -321,8 +321,10 @@ export default {
     } catch (error) {
       console.error(error);
       if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+        const detail = error instanceof Error ? error.message : String(error);
+        console.error("Fallo en endpoint de autenticación:", detail);
         return json(
-          { error: "Error interno de autenticación. Revisa los registros del Worker para identificar la operación que falló." },
+          { error: `Falló una operación del servidor de autenticación: ${detail || "error desconocido"}` },
           500,
         );
       }
