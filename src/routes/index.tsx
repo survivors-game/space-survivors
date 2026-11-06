@@ -104,6 +104,7 @@ function Index() {
   const [notice, setNotice] = useState("");
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletConnecting, setWalletConnecting] = useState(false);
+  const walletConnectionLockRef = useRef(false);
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -142,7 +143,9 @@ function Index() {
   };
 
   const handleWalletConnection = async () => {
-    if (walletConnecting) return;
+    // A ref blocks duplicate clicks before React has time to render the disabled button.
+    if (walletConnectionLockRef.current) return;
+    walletConnectionLockRef.current = true;
     setWalletConnecting(true);
     try {
       if (walletAddress) {
@@ -158,6 +161,7 @@ function Index() {
       const message = error instanceof Error ? error.message : "No se pudo conectar la wallet.";
       setNotice(message);
     } finally {
+      walletConnectionLockRef.current = false;
       setWalletConnecting(false);
       window.setTimeout(() => setNotice(""), 3500);
     }
