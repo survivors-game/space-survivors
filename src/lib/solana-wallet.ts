@@ -6,16 +6,11 @@ type SolanaAccount = {
 
 type SolanaWallet = {
   name: string;
-  accounts: SolanaAccount[];
   features: Record<string, unknown>;
 };
 
-type WalletRegister = (wallet: SolanaWallet) => void;
-type WalletRegistryApi = { register: WalletRegister };
-type RegisterWallet = (api: WalletRegistryApi) => void;
-
 type ConnectFeature = {
-  connect: (options?: { silent?: boolean }) => Promise<{ accounts: SolanaAccount[] }>;
+  connect: () => Promise<{ accounts: SolanaAccount[] }>;
 };
 
 type SignMessageFeature = {
@@ -25,52 +20,39 @@ type SignMessageFeature = {
   }) => Promise<Array<{ signature: Uint8Array }>>;
 };
 
-const wallets = new Map<string, SolanaWallet>();
-let registryReady = false;
+type MetaMaskSolanaClient = {
+  getWallet: () => SolanaWallet;
+  disconnect: () => Promise<void>;
+};
 
-function initializeWalletStandard() {
-  if (registryReady || typeof window === "undefined") return;
-  registryReady = true;
+type MetaMaskSolanaSdk = {
+  createSolanaClient: (options: {
+    dapp: { name: string; url: string };
+  }) => Promise<MetaMaskSolanaClient>;
+};
 
-  window.addEventListener("wallet-standard:register-wallet", (event: Event) => {
-    const registerWallet = (event as CustomEvent<RegisterWallet>).detail;
-    registerWallet?.({ register: (wallet) => wallets.set(wallet.name, wallet) });
-  });
+let clientPromise: Promise<MetaMaskSolanaClient> | undefined;
 
-  window.dispatchEvent(
-    new CustomEvent<WalletRegistryApi>("wallet-standard:app-ready", {
-      detail: { register: (wallet) => wallets.set(wallet.name, wallet) },
-    }),
-  );
-}
+// Pinned SDK release. It registers MetaMask as a Solana Wallet Standard wallet.
+const METAMASK_SOLANA_SDK_URL =
+  "https://esm.sh/@metamask/connect-solana@2.1.1?bundle";
 
-function getMetaMaskWallet(): Promise<SolanaWallet> {
-  initializeWalletStandard();
-  const existing = [...wallets.values()].find((wallet) =>
-    wallet.name.toLowerCase().includes("metamask"),
-  );
-  if (existing) return Promise.resolve(existing);
-
-  return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      window.removeEventListener("wallet-standard:register-wallet", onRegister);
-      reject(new Error("No se detectó MetaMask. Instala o actualiza MetaMask y vuelve a intentarlo."));
-    }, 1800);
-
-    const onRegister = (event: Event) => {
-      const registerWallet = (event as CustomEvent<RegisterWallet>).detail;
-      registerWallet?.({ register: (wallet) => {
-        wallets.set(wallet.name, wallet);
-        if (wallet.name.toLowerCase().includes("metamask")) {
-          window.clearTimeout(timeout);
-          window.removeEventListener("wallet-standard:register-wallet", onRegister);
-          resolve(wallet);
-        }
-      } });
-    };
-
-    window.addEventListener("wallet-standard:register-wallet", onRegister);
-  });
+async function getMetaMaskClient(): Promise<MetaMaskSolanaClient> {
+  if (!clientPromise) {
+    clientPromise = (async () => {
+      const sdk = (await import(/* @vite-ignore */ METAMASK_SOLANA_SDK_URL)) as MetaMaskSolanaSdk;
+      return sdk.createSolanaClient({
+        dapp: {
+          name: "SPACE SURVIVORS",
+          url: window.location.origin,
+        },
+      });
+    })().catch((error) => {
+      clientPromise = undefined;
+      throw error;
+    });
+  }
+  return clientPromise;
 }
 
 function bytesToHex(bytes: Uint8Array): string {
@@ -88,16 +70,19 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
     throw new Error("La conexión de wallet requiere un navegador compatible.");
   }
 
-  const wallet = await getMetaMaskWallet();
+  const client = await getMetaMaskClient();
+  const wallet = client.getWallet();
   const connect = wallet.features["standard:connect"] as ConnectFeature | undefined;
   const signMessage = wallet.features["solana:signMessage"] as SignMessageFeature | undefined;
 
   if (!connect?.connect || !signMessage?.signMessage) {
-    throw new Error("Esta versión de MetaMask no ofrece conexión y firma de mensajes Solana.");
+    throw new Error("MetaMask no ofrece las funciones necesarias para conectar y firmar en Solana.");
   }
 
   const { accounts } = await connect.connect();
-  const account = accounts.find((item) => item.chains.some((chain) => chain.startsWith("solana:")));
+  const account = accounts.find((item) =>
+    item.chains.some((chain) => chain.startsWith("solana:")),
+  );
   if (!account || account.publicKey.length !== 32) {
     throw new Error("MetaMask no devolvió una cuenta Solana válida.");
   }
@@ -132,7 +117,7 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
     messageBytes,
   );
 
-  if (!valid) throw new Error("MetaMask devolvió una firma que no pudo verificarse.");
+  if (!valid) throw new Error("La firma de MetaMask no pudo verificarse.");
 
   return {
     address: account.address,
@@ -142,11 +127,6 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
 }
 
 export async function disconnectMetaMaskSolana(): Promise<void> {
-  const wallet = [...wallets.values()].find((item) =>
-    item.name.toLowerCase().includes("metamask"),
-  );
-  const disconnect = wallet?.features["standard:disconnect"] as
-    | { disconnect: () => Promise<void> }
-    | undefined;
-  await disconnect?.disconnect();
+  const client = await getMetaMaskClient();
+  await client.disconnect();
 }
