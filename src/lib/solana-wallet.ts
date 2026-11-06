@@ -51,9 +51,21 @@ async function getMetaMaskClient(): Promise<MetaMaskSolanaClient> {
 }
 
 async function readApiResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  const responseText = await response.text();
+  let payload: (T & { error?: string }) | null = null;
+  try {
+    payload = JSON.parse(responseText) as T & { error?: string };
+  } catch {
+    payload = null;
+  }
+
   if (!response.ok) {
-    throw new Error(payload.error || "No se pudo completar la autenticación.");
+    throw new Error(
+      payload?.error || `El servidor de autenticación respondió con error HTTP ${response.status}.`,
+    );
+  }
+  if (!payload) {
+    throw new Error("El servidor de autenticación devolvió una respuesta no válida.");
   }
   return payload;
 }
