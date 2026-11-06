@@ -8,3 +8,4 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Inventory items are defined once in src/game/data/items.ts (sprite, color); the in-world pickup and the 10-slot hotbar both read it so their art always matches.

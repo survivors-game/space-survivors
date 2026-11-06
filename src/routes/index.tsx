@@ -42,6 +42,7 @@ import { Engine } from "@/game/engine";
 import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
 import { spriteUrl } from "@/game/sprites";
+import { Hotbar } from "@/components/game/Hotbar";
 import { MISSIONS } from "@/game/meta/missions";
 import {
   ProgressStore,
@@ -254,36 +255,7 @@ function Index() {
       <main className="fixed inset-0 overflow-hidden bg-[#070814] font-pixel text-white">
         <canvas ref={canvasRef} className="w-full h-full block" />
         <TouchControls />
-        <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 gap-2" aria-label="Barra rápida de objetos">
-          {([
-            ["repair", "REPARACIÓN", "+", "#ff0055"],
-            ["magnet", "MAGNETISMO", "U", "#8a2be2"],
-            ["emp", "EMP", "⚡", "#00f0ff"],
-          ] as const).map(([kind, label, icon, color]) => {
-            const qty = hud?.inventory?.[kind] ?? 0;
-            return (
-              <button
-                key={kind}
-                type="button"
-                title={`${label} (${qty})`}
-                aria-label={`Activar ${label}, quedan ${qty}`}
-                disabled={qty <= 0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  engineRef.current?.useItem(kind);
-                }}
-                className="relative flex h-16 w-16 flex-col items-center justify-center border-2 bg-[#070814]/85 transition hover:brightness-125 disabled:cursor-not-allowed disabled:opacity-35"
-                style={{ borderColor: color, boxShadow: qty > 0 ? `0 0 14px ${color}66` : "none" }}
-              >
-                <span className="font-arcade text-lg" style={{ color }}>{icon}</span>
-                <span className="mt-1 text-[7px] uppercase tracking-widest text-cyan-100">{label}</span>
-                <span className="absolute -right-2 -top-2 border bg-[#070814] px-1 font-arcade text-[8px] text-white" style={{ borderColor: color }}>
-                  {qty}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <Hotbar inventory={hud?.inventory} onUse={(kind) => engineRef.current?.useItem(kind)} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
           <div className="mx-auto flex max-w-[1500px] items-start justify-between gap-4">
             <section className="w-full max-w-sm">
