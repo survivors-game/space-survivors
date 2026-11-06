@@ -4,8 +4,8 @@ import { spriteUrl } from "@/game/sprites";
 import type { PickupKind } from "@/game/types";
 
 interface Props {
-  inventory?: Record<PickupKind, number>;
-  onUse: (kind: PickupKind) => void;
+  inventory: Record<PickupKind, number> | undefined;
+  onUse: (kind: PickupKind) => unknown;
 }
 
 export function Hotbar({ inventory, onUse }: Props) {
