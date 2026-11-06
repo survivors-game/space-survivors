@@ -65,6 +65,20 @@ export const CAMPAIGN_FINAL_BOSSES: BossEvent[] = [{ minute: 15, boss: "leviatha
 export const WORLD1_MAX_ENEMIES = 60; // enemigos normales simultáneos (antes: 90)
 export const WORLD1_PICKUP_CHANCE = 0.015; // probabilidad de objeto por enemigo eliminado (antes: 0,6 %)
 
+// Presión adicional exclusiva de las hordas 7, 8 y 9 del mundo 1.
+export const WORLD1_HORDE_PRESSURE = [
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1.35, damage: 1.25, speed: 1.08, spawn: 0.9 },
+  { hp: 1.65, damage: 1.5, speed: 1.14, spawn: 0.82 },
+  { hp: 2, damage: 1.8, speed: 1.2, spawn: 0.75 },
+  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+] as const;
+
 export type FormationKind = "vee" | "ring" | "wall" | "squad" | "swarm" | "pincer";
 
 /** Formations available per phase (combined attacks mix several families). */
