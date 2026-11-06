@@ -386,7 +386,10 @@ function Index() {
                   <button
                     key={`${choice.id}-${choice.kind}-${index}`}
                     type="button"
-                    onClick={() => chooseUpgrade(index)}
+                    onClick={(event) => {
+                      chooseUpgrade(index);
+                      event.currentTarget.blur();
+                    }}
                     className="group flex min-h-52 flex-col border border-white/10 bg-white/[0.035] p-5 text-left transition hover:border-cyan-300/70 hover:bg-cyan-300/[0.07] hover:shadow-[0_0_28px_#00f0ff1c]"
                   >
                     <div className="mb-5 flex w-full items-center justify-between">

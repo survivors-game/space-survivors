@@ -311,18 +311,67 @@ export class Engine {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, CONFIG.visuals.dprCap);
+    const rawDpr = window.devicePixelRatio;
+    const dpr =
+      Number.isFinite(rawDpr) && rawDpr > 0
+        ? Math.min(rawDpr, CONFIG.visuals.dprCap)
+        : 1;
     const rect = this.canvas.parentElement?.getBoundingClientRect();
-    const w = Math.max(320, Math.floor(rect?.width ?? window.innerWidth));
-    const h = Math.max(320, Math.floor(rect?.height ?? window.innerHeight));
-    this.canvas.width = Math.floor(w * dpr);
-    this.canvas.height = Math.floor(h * dpr);
+    const viewportWidth =
+      Number.isFinite(window.innerWidth) && window.innerWidth > 0 ? window.innerWidth : 320;
+    const viewportHeight =
+      Number.isFinite(window.innerHeight) && window.innerHeight > 0 ? window.innerHeight : 320;
+    const rawWidth = rect?.width;
+    const rawHeight = rect?.height;
+    const w = Math.max(
+      320,
+      Math.floor(Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : viewportWidth),
+    );
+    const h = Math.max(
+      320,
+      Math.floor(Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : viewportHeight),
+    );
+    this.canvas.width = Math.max(1, Math.floor(w * dpr));
+    this.canvas.height = Math.max(1, Math.floor(h * dpr));
     this.canvas.style.width = w + "px";
     this.canvas.style.height = h + "px";
     this.W = w;
     this.H = h;
     this.dpr = dpr;
     this.zoom = clamp(Math.min(w, h) / 780, 0.62, 1.1);
+    this.ensureFiniteWorldState();
+  }
+
+  private ensureFiniteWorldState() {
+    const p = this.player;
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+      p.x = 0;
+      p.y = 0;
+      p.vx = 0;
+      p.vy = 0;
+    } else {
+      const distance = Math.hypot(p.x, p.y);
+      if (!Number.isFinite(distance)) {
+        p.x = 0;
+        p.y = 0;
+        p.vx = 0;
+        p.vy = 0;
+      } else if (distance > CONFIG.world.arenaRadius) {
+        p.x = (p.x / distance) * CONFIG.world.arenaRadius;
+        p.y = (p.y / distance) * CONFIG.world.arenaRadius;
+      }
+    }
+    if (!Number.isFinite(p.vx)) p.vx = 0;
+    if (!Number.isFinite(p.vy)) p.vy = 0;
+    if (!Number.isFinite(p.angle)) p.angle = -Math.PI / 2;
+    if (!Number.isFinite(p.facingX) || !Number.isFinite(p.facingY)) {
+      p.facingX = 0;
+      p.facingY = -1;
+    }
+    if (!Number.isFinite(this.cam.x)) this.cam.x = p.x;
+    if (!Number.isFinite(this.cam.y)) this.cam.y = p.y;
+    if (!Number.isFinite(this.cam.shake)) this.cam.shake = 0;
+    if (!Number.isFinite(this.zoom) || this.zoom <= 0) this.zoom = 1;
   }
 
   pause() {
@@ -1556,6 +1605,7 @@ export class Engine {
     const k = 1 - Math.pow(CONFIG.camera.followSmoothness, dt);
     this.cam.x = lerp(this.cam.x, tx, k);
     this.cam.y = lerp(this.cam.y, ty, k);
+    this.ensureFiniteWorldState();
   }
 
   private updatePlayer(dt: number) {
@@ -1687,6 +1737,7 @@ export class Engine {
     // Recuperación de vida al comenzar cada horda (no durante el combate con LEVIATÁN).
     if (this.elapsed < this.duration) this.player.hp = this.player.maxHp;
     this.hordeNotice = { horde: this.lastHorde, elapsed: 0 };
+    this.ensureFiniteWorldState();
   }
 
   private updateDirector(dt: number) {

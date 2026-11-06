@@ -19,7 +19,14 @@ const onKeyDown = (e: KeyboardEvent) => {
 const onKeyUp = (e: KeyboardEvent) => {
   keys.delete(e.code);
 };
-const onBlur = () => keys.clear();
+const onBlur = () => {
+  keys.clear();
+  justPressed.clear();
+  touch.x = 0;
+  touch.y = 0;
+  touch.active = false;
+  boostQueued = false;
+};
 
 function pollGamepad() {
   const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
@@ -28,7 +35,9 @@ function pollGamepad() {
   if (!pad) { gp.connected = false; gp.lx = gp.ly = 0; return; }
   gp.connected = true;
   const dz = 0.18;
-  const lx = pad.axes[0] ?? 0, ly = pad.axes[1] ?? 0;
+  const rawLx = pad.axes[0] ?? 0, rawLy = pad.axes[1] ?? 0;
+  const lx = Number.isFinite(rawLx) ? rawLx : 0;
+  const ly = Number.isFinite(rawLy) ? rawLy : 0;
   gp.lx = Math.abs(lx) < dz ? 0 : lx;
   gp.ly = Math.abs(ly) < dz ? 0 : ly;
   pad.buttons.forEach((b, i) => {
@@ -52,12 +61,12 @@ export const Input = {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("blur", onBlur);
-    keys.clear();
+    onBlur();
   },
   pollGamepad,
   setTouch(x: number, y: number, active: boolean) {
-    touch.x = x;
-    touch.y = y;
+    touch.x = Number.isFinite(x) ? x : 0;
+    touch.y = Number.isFinite(y) ? y : 0;
     touch.active = active;
   },
   queueBoost() {
@@ -89,6 +98,8 @@ export const Input = {
     if (keys.has("KeyD") || keys.has("ArrowRight")) x += 1;
     if (touch.active) { x = touch.x; y = touch.y; }
     if (gp.connected && (Math.abs(gp.lx) > 0 || Math.abs(gp.ly) > 0)) { x = gp.lx; y = gp.ly; }
+    if (!Number.isFinite(x)) x = 0;
+    if (!Number.isFinite(y)) y = 0;
     const m = Math.hypot(x, y);
     if (m > 1) { x /= m; y /= m; }
     return { x, y, mag: Math.min(1, m) };
