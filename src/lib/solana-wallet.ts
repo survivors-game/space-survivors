@@ -11,7 +11,8 @@ type SolanaWallet = {
 };
 
 type WalletRegister = (wallet: SolanaWallet) => void;
-type RegisterWallet = (register: WalletRegister) => void;
+type WalletRegistryApi = { register: WalletRegister };
+type RegisterWallet = (api: WalletRegistryApi) => void;
 
 type ConnectFeature = {
   connect: (options?: { silent?: boolean }) => Promise<{ accounts: SolanaAccount[] }>;
@@ -33,12 +34,12 @@ function initializeWalletStandard() {
 
   window.addEventListener("wallet-standard:register-wallet", (event: Event) => {
     const registerWallet = (event as CustomEvent<RegisterWallet>).detail;
-    registerWallet?.((wallet) => wallets.set(wallet.name, wallet));
+    registerWallet?.({ register: (wallet) => wallets.set(wallet.name, wallet) });
   });
 
   window.dispatchEvent(
     new CustomEvent<WalletRegister>("wallet-standard:app-ready", {
-      detail: (wallet) => wallets.set(wallet.name, wallet),
+      detail: { register: (wallet) => wallets.set(wallet.name, wallet) },
     }),
   );
 }
@@ -58,14 +59,14 @@ function getMetaMaskWallet(): Promise<SolanaWallet> {
 
     const onRegister = (event: Event) => {
       const registerWallet = (event as CustomEvent<RegisterWallet>).detail;
-      registerWallet?.((wallet) => {
+      registerWallet?.({ register: (wallet) => {
         wallets.set(wallet.name, wallet);
         if (wallet.name.toLowerCase().includes("metamask")) {
           window.clearTimeout(timeout);
           window.removeEventListener("wallet-standard:register-wallet", onRegister);
           resolve(wallet);
         }
-      });
+      } });
     };
 
     window.addEventListener("wallet-standard:register-wallet", onRegister);
