@@ -16,7 +16,15 @@ const urlCache = new Map<string, string>();
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
-  const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+  const n = parseInt(
+    h.length === 3
+      ? h
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : h,
+    16,
+  );
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
@@ -47,7 +55,8 @@ function buildFromGrid(grid: (string | null)[][], shadeMask: boolean[][] | null)
   const c = makeCanvas(W, H);
   const ctx = c.getContext("2d")!;
   const img = ctx.createImageData(W, H);
-  const filled = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && grid[y]![x] !== null;
+  const filled = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < w && y < h && grid[y]![x] !== null;
   const cx = (w - 1) / 2;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -97,8 +106,13 @@ function buildFromGrid(grid: (string | null)[][], shadeMask: boolean[][] | null)
 function buildArt(def: ArtDef): Sprite {
   const rows = expandRows(def);
   const pal = { ...BASE_PAL, ...(def.pal ?? {}) };
-  const grid: (string | null)[][] = rows.map((r) => r.split("").map((ch) => (ch === "." ? null : (pal[ch] ?? "#ff00ff"))));
-  const mask = def.shade === false ? rows.map((r) => r.split("").map(() => false)) : rows.map((r) => r.split("").map((ch) => !EMISSIVE.has(ch)));
+  const grid: (string | null)[][] = rows.map((r) =>
+    r.split("").map((ch) => (ch === "." ? null : (pal[ch] ?? "#ff00ff"))),
+  );
+  const mask =
+    def.shade === false
+      ? rows.map((r) => r.split("").map(() => false))
+      : rows.map((r) => r.split("").map((ch) => !EMISSIVE.has(ch)));
   return buildFromGrid(grid, mask);
 }
 
@@ -126,11 +140,18 @@ function buildRock(seed: number, r: number, pal: Palette4, crackColor: string | 
       const a = Math.atan2(dy, dx);
       const rr =
         r *
-        (1 - amp[0]! * (1 + Math.sin(a * 3 + harm[0]!)) - amp[1]! * (1 + Math.sin(a * 5 + harm[1]!)) - amp[2]! * Math.sin(a * 9 + harm[2]!));
+        (1 -
+          amp[0]! * (1 + Math.sin(a * 3 + harm[0]!)) -
+          amp[1]! * (1 + Math.sin(a * 5 + harm[1]!)) -
+          amp[2]! * Math.sin(a * 9 + harm[2]!));
       const d = Math.hypot(dx, dy);
-      if (d > rr) { row.push(null); continue; }
+      if (d > rr) {
+        row.push(null);
+        continue;
+      }
       // light from top-left
-      const nx = dx / (rr || 1), ny = dy / (rr || 1);
+      const nx = dx / (rr || 1),
+        ny = dy / (rr || 1);
       let l = 0.55 - nx * 0.35 - ny * 0.45 + (rnd() - 0.5) * 0.12;
       for (const c of craters) {
         const cd = Math.hypot(dx - c.x, dy - c.y);
@@ -139,7 +160,8 @@ function buildRock(seed: number, r: number, pal: Palette4, crackColor: string | 
       }
       const idx = l > 0.75 ? 0 : l > 0.45 ? 1 : l > 0.15 ? 2 : 3;
       let col = pal[idx]!;
-      if (crackColor && Math.abs(Math.sin(dx * 0.7 + harm[0]!) * 3 + dy * 0.4) < 0.18 && d < rr - 1) col = crackColor;
+      if (crackColor && Math.abs(Math.sin(dx * 0.7 + harm[0]!) * 3 + dy * 0.4) < 0.18 && d < rr - 1)
+        col = crackColor;
       row.push(col);
     }
     grid.push(row);
@@ -157,11 +179,15 @@ function buildSpire(seed: number, r: number): Sprite {
   for (let y = 0; y < size; y++) {
     const row: (string | null)[] = [];
     for (let x = 0; x < size; x++) {
-      const dx = x - r, dy = y - r;
+      const dx = x - r,
+        dy = y - r;
       const a = Math.atan2(dy, dx);
       const d = Math.hypot(dx, dy);
       const edge = r * (0.62 + 0.38 * Math.pow(Math.abs(Math.cos((a * spikes + ph) / 2)), 3));
-      if (d > edge) { row.push(null); continue; }
+      if (d > edge) {
+        row.push(null);
+        continue;
+      }
       let col = "#3a1460";
       if (d < r * 0.55) col = "#5a1f86";
       if (d < r * 0.4) col = "#7b2fb0";
@@ -182,12 +208,16 @@ function buildPillar(r: number): Sprite {
   for (let y = 0; y < size; y++) {
     const row: (string | null)[] = [];
     for (let x = 0; x < size; x++) {
-      const dx = Math.abs(x - r), dy = Math.abs(y - r);
+      const dx = Math.abs(x - r),
+        dy = Math.abs(y - r);
       const oct = Math.max(dx, dy, (dx + dy) * 0.72);
-      if (oct > r) { row.push(null); continue; }
+      if (oct > r) {
+        row.push(null);
+        continue;
+      }
       let col = "#2a3550";
       if (oct < r - 1) col = "#4a5a80";
-      if (oct < r - 2 && (x - r) + (y - r) < 0) col = "#6b7fae";
+      if (oct < r - 2 && x - r + (y - r) < 0) col = "#6b7fae";
       if (Math.abs(oct - r * 0.62) < 0.8) col = "#25f4ff";
       if (oct < r * 0.45) col = "#1a2240";
       if (oct < r * 0.25) col = "#ff3df2";
@@ -206,18 +236,24 @@ function buildPlanet(r: number, bands: string[], ring: string): Sprite {
   const W = r * 2 + padX * 2,
     H = r * 2 + padY * 2;
   const grid: (string | null)[][] = [];
-  const cx = W / 2, cy = H / 2;
+  const cx = W / 2,
+    cy = H / 2;
   for (let y = 0; y < H; y++) {
     const row: (string | null)[] = [];
     for (let x = 0; x < W; x++) {
-      const dx = x - cx, dy = y - cy;
+      const dx = x - cx,
+        dy = y - cy;
       const d = Math.hypot(dx, dy);
       // ring (ellipse)
       const re = Math.hypot(dx / 1.9, dy / 0.42);
       const onRing = re > r * 0.98 && re < r * 1.12 && !(d < r && dy < 0);
       if (d < r) {
-        const band = bands[Math.floor(((dy / r + 1) * 0.5 + Math.sin(dx * 0.08) * 0.03) * bands.length) % bands.length]!;
-        const light = -dx / r * 0.6 - dy / r * 0.4;
+        const band =
+          bands[
+            Math.floor(((dy / r + 1) * 0.5 + Math.sin(dx * 0.08) * 0.03) * bands.length) %
+              bands.length
+          ]!;
+        const light = (-dx / r) * 0.6 - (dy / r) * 0.4;
         const dither = (x + y) % 2 === 0;
         if (light < -0.35 || (light < -0.15 && dither)) row.push("#0c0720");
         else row.push(band);
@@ -233,16 +269,26 @@ function buildPlanet(r: number, bands: string[], ring: string): Sprite {
 const PROCEDURAL: Record<string, () => Sprite> = {};
 for (let i = 0; i < 6; i++) {
   PROCEDURAL[`rock_ash_${i}`] = () =>
-    buildRock(101 + i * 17, 9 + (i % 3) * 5, ["#b8a08a", "#7d6656", "#4a3a36", "#24191e"], i % 2 ? "#ff6a1f" : null);
-  PROCEDURAL[`rock_nova_${i}`] = () => buildRock(301 + i * 13, 5 + (i % 3) * 2, ["#9fb4e0", "#5a6a9e", "#323a66", "#161a36"], null);
+    buildRock(
+      101 + i * 17,
+      9 + (i % 3) * 5,
+      ["#b8a08a", "#7d6656", "#4a3a36", "#24191e"],
+      i % 2 ? "#ff6a1f" : null,
+    );
+  PROCEDURAL[`rock_nova_${i}`] = () =>
+    buildRock(301 + i * 13, 5 + (i % 3) * 2, ["#9fb4e0", "#5a6a9e", "#323a66", "#161a36"], null);
   PROCEDURAL[`spire_${i}`] = () => buildSpire(501 + i * 7, 10 + (i % 3) * 4);
 }
 PROCEDURAL["pillar_s"] = () => buildPillar(9);
 PROCEDURAL["pillar_l"] = () => buildPillar(14);
-PROCEDURAL["planet_nova"] = () => buildPlanet(60, ["#3d7bff", "#2d5ad0", "#5a92ff", "#24409a", "#3d7bff"], "#a35cff");
-PROCEDURAL["planet_ash"] = () => buildPlanet(46, ["#ff8a1f", "#c4541a", "#ffb347", "#8a3010"], "#ffd23f");
-PROCEDURAL["planet_abyss"] = () => buildPlanet(52, ["#2be8c8", "#1a8f7e", "#7b2fb0", "#3a1460", "#2be8c8"], "#ff3df2");
-PROCEDURAL["planet_omega"] = () => buildPlanet(40, ["#ff2d55", "#8a1030", "#ff3df2", "#5e0a1e"], "#25f4ff");
+PROCEDURAL["planet_nova"] = () =>
+  buildPlanet(60, ["#3d7bff", "#2d5ad0", "#5a92ff", "#24409a", "#3d7bff"], "#a35cff");
+PROCEDURAL["planet_ash"] = () =>
+  buildPlanet(46, ["#ff8a1f", "#c4541a", "#ffb347", "#8a3010"], "#ffd23f");
+PROCEDURAL["planet_abyss"] = () =>
+  buildPlanet(52, ["#2be8c8", "#1a8f7e", "#7b2fb0", "#3a1460", "#2be8c8"], "#ff3df2");
+PROCEDURAL["planet_omega"] = () =>
+  buildPlanet(40, ["#ff2d55", "#8a1030", "#ff3df2", "#5e0a1e"], "#25f4ff");
 
 export function getSprite(id: string): Sprite {
   let s = cache.get(id);

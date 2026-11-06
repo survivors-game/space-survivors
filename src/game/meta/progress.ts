@@ -1,4 +1,4 @@
- // Permanent progression, persisted in localStorage (the storage the original
+// Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
@@ -55,8 +55,18 @@ export function defaultProgress(): Progress {
     selectedStage: "nova",
     upgrades: {},
     stats: {
-      runs: 0, wins: 0, deaths: 0, kills: 0, timePlayed: 0, creditsEarned: 0,
-      maxLevel: 0, evolutions: 0, bestKills: 0, damageDealt: 0, bestTime: {}, bossKills: {},
+      runs: 0,
+      wins: 0,
+      deaths: 0,
+      kills: 0,
+      timePlayed: 0,
+      creditsEarned: 0,
+      maxLevel: 0,
+      evolutions: 0,
+      bestKills: 0,
+      damageDealt: 0,
+      bestTime: {},
+      bossKills: {},
     },
     bestiary: {},
     weaponsUsed: [],
@@ -73,29 +83,44 @@ export function sanitize(raw: unknown): Progress {
   if (!raw || typeof raw !== "object") return d;
   const r = raw as Partial<Progress>;
   const num = (v: unknown, f: number) => (typeof v === "number" && Number.isFinite(v) ? v : f);
-  const arr = (v: unknown, f: string[]) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : f);
+  const arr = (v: unknown, f: string[]) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : f;
   const rec = (v: unknown) => {
     const out: Record<string, number> = {};
-    if (v && typeof v === "object") for (const [k, n] of Object.entries(v)) if (typeof n === "number" && Number.isFinite(n)) out[k] = n;
+    if (v && typeof v === "object")
+      for (const [k, n] of Object.entries(v))
+        if (typeof n === "number" && Number.isFinite(n)) out[k] = n;
     return out;
   };
   const s = (r.stats ?? {}) as Partial<Progress["stats"]>;
   const p: Progress = {
     v: 1,
     credits: Math.max(0, num(r.credits, 0)),
-    ships: Array.from(new Set(["falcon", ...arr(r.ships, [])])).filter((id) => SHIPS.some((x) => x.id === id)),
+    ships: Array.from(new Set(["falcon", ...arr(r.ships, [])])).filter((id) =>
+      SHIPS.some((x) => x.id === id),
+    ),
     selectedShip: typeof r.selectedShip === "string" ? r.selectedShip : "falcon",
     selectedStage: typeof r.selectedStage === "string" ? r.selectedStage : "nova",
     upgrades: rec(r.upgrades),
     stats: {
-      runs: num(s.runs, 0), wins: num(s.wins, 0), deaths: num(s.deaths, 0), kills: num(s.kills, 0),
-      timePlayed: num(s.timePlayed, 0), creditsEarned: num(s.creditsEarned, 0), maxLevel: num(s.maxLevel, 0),
-      evolutions: num(s.evolutions, 0), bestKills: num(s.bestKills, 0), damageDealt: num(s.damageDealt, 0),
-      bestTime: rec(s.bestTime), bossKills: rec(s.bossKills),
+      runs: num(s.runs, 0),
+      wins: num(s.wins, 0),
+      deaths: num(s.deaths, 0),
+      kills: num(s.kills, 0),
+      timePlayed: num(s.timePlayed, 0),
+      creditsEarned: num(s.creditsEarned, 0),
+      maxLevel: num(s.maxLevel, 0),
+      evolutions: num(s.evolutions, 0),
+      bestKills: num(s.bestKills, 0),
+      damageDealt: num(s.damageDealt, 0),
+      bestTime: rec(s.bestTime),
+      bossKills: rec(s.bossKills),
     },
     bestiary: rec(r.bestiary),
     weaponsUsed: arr(r.weaponsUsed, []),
-    stages: Array.from(new Set(["nova", ...arr(r.stages, [])])).filter((id) => STAGES.some((x) => x.id === id)),
+    stages: Array.from(new Set(["nova", ...arr(r.stages, [])])).filter((id) =>
+      STAGES.some((x) => x.id === id),
+    ),
     stagesCleared: arr(r.stagesCleared, []),
     claimed: arr(r.claimed, []),
     history: Array.isArray(r.history) ? (r.history as RunSummary[]).slice(0, 10) : [],
@@ -109,9 +134,13 @@ export function sanitize(raw: unknown): Progress {
 export const CREDIT_REWARD_MULT = 0.2;
 
 /** Credits awarded for a run. */
-export function computeRunCredits(r: Pick<RunResult, "credits" | "time" | "level" | "victory" | "stageId" | "duration">, salvageLevel: number) {
+export function computeRunCredits(
+  r: Pick<RunResult, "credits" | "time" | "level" | "victory" | "stageId" | "duration">,
+  salvageLevel: number,
+) {
   const stage = stageById(r.stageId);
-  const base = r.credits + Math.floor(r.time / 60) * 15 * (900 / Math.max(300, r.duration)) + r.level * 4;
+  const base =
+    r.credits + Math.floor(r.time / 60) * 15 * (900 / Math.max(300, r.duration)) + r.level * 4;
   const mult = stage.rewardMult * (1 + salvageLevel * 0.1) * (r.victory ? 1.5 : 1);
   return Math.max(0, Math.round(base * mult * CREDIT_REWARD_MULT));
 }
@@ -137,11 +166,20 @@ export function applyRun(prev: Progress, r: RunResult): ApplyOutcome {
   st.evolutions += r.evolutions;
   st.damageDealt += Math.round(r.damageDealt);
   const newBests: string[] = [];
-  if (r.level > st.maxLevel) { st.maxLevel = r.level; newBests.push("level"); }
-  if (r.kills > st.bestKills) { st.bestKills = r.kills; newBests.push("kills"); }
+  if (r.level > st.maxLevel) {
+    st.maxLevel = r.level;
+    newBests.push("level");
+  }
+  if (r.kills > st.bestKills) {
+    st.bestKills = r.kills;
+    newBests.push("kills");
+  }
   // best time is stored in mission-minute equivalent seconds (normalised to 15 min)
   const norm = (r.time / Math.max(1, r.duration)) * 900;
-  if (norm > (st.bestTime[r.stageId] ?? 0)) { st.bestTime[r.stageId] = Math.round(norm); newBests.push("time"); }
+  if (norm > (st.bestTime[r.stageId] ?? 0)) {
+    st.bestTime[r.stageId] = Math.round(norm);
+    newBests.push("time");
+  }
   for (const [k, n] of Object.entries(r.killsByType)) p.bestiary[k] = (p.bestiary[k] ?? 0) + n;
   for (const b of r.bossesDefeated) {
     st.bossKills[b] = (st.bossKills[b] ?? 0) + 1;
@@ -159,7 +197,16 @@ export function applyRun(prev: Progress, r: RunResult): ApplyOutcome {
     }
   }
   p.history = [
-    { date: Date.now(), stageId: r.stageId, shipId: r.shipId, victory: r.victory, time: r.time, kills: r.kills, level: r.level, credits },
+    {
+      date: Date.now(),
+      stageId: r.stageId,
+      shipId: r.shipId,
+      victory: r.victory,
+      time: r.time,
+      kills: r.kills,
+      level: r.level,
+      credits,
+    },
     ...p.history,
   ].slice(0, 10);
   return { progress: p, credits, newStages, newBests };

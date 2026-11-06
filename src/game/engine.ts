@@ -1,4 +1,4 @@
- // SPACE SURVIVORS combat engine. Evolved from the template's Game class
+// SPACE SURVIVORS combat engine. Evolved from the template's Game class
 // (section 12): same pools, state machine, update order and render loop,
 // extended with pixel-art ships, families, bosses, stages and hazards.
 import { CONFIG } from "./config";
@@ -313,10 +313,7 @@ export class Engine {
 
   resize() {
     const rawDpr = window.devicePixelRatio;
-    const dpr =
-      Number.isFinite(rawDpr) && rawDpr > 0
-        ? Math.min(rawDpr, CONFIG.visuals.dprCap)
-        : 1;
+    const dpr = Number.isFinite(rawDpr) && rawDpr > 0 ? Math.min(rawDpr, CONFIG.visuals.dprCap) : 1;
     const rect = this.canvas.parentElement?.getBoundingClientRect();
     const viewportWidth =
       Number.isFinite(window.innerWidth) && window.innerWidth > 0 ? window.innerWidth : 320;
@@ -326,11 +323,19 @@ export class Engine {
     const rawHeight = rect?.height;
     const w = Math.max(
       320,
-      Math.floor(typeof rawWidth === "number" && Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : viewportWidth),
+      Math.floor(
+        typeof rawWidth === "number" && Number.isFinite(rawWidth) && rawWidth > 0
+          ? rawWidth
+          : viewportWidth,
+      ),
     );
     const h = Math.max(
       320,
-      Math.floor(typeof rawHeight === "number" && Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : viewportHeight),
+      Math.floor(
+        typeof rawHeight === "number" && Number.isFinite(rawHeight) && rawHeight > 0
+          ? rawHeight
+          : viewportHeight,
+      ),
     );
     this.canvas.width = Math.max(1, Math.floor(w * dpr));
     this.canvas.height = Math.max(1, Math.floor(h * dpr));
@@ -1355,8 +1360,13 @@ export class Engine {
     const xp = d.xp * (e.elite ? 4 : 1);
     if (xp > 0) this.dropGem(e.x, e.y, xp);
     else if (Math.random() < 0.3) this.dropGem(e.x, e.y, 1);
-    const pk =
-      e.elite ? 0.15 : d.behavior === "spawnling" ? 0 : this.stage.id === WORLD1_ID && !this.isEndless ? WORLD1_PICKUP_CHANCE : 0.006;
+    const pk = e.elite
+      ? 0.15
+      : d.behavior === "spawnling"
+        ? 0
+        : this.stage.id === WORLD1_ID && !this.isEndless
+          ? WORLD1_PICKUP_CHANCE
+          : 0.006;
     if (Math.random() < pk) this.dropPickup(e.x, e.y);
     if (d.behavior === "parasite")
       for (let i = 0; i < 2; i++)
@@ -1397,7 +1407,11 @@ export class Engine {
       this.endTimer = 1.2;
       Audio.SFX.win();
     } else {
-      this.banner(`${def.name} DESTRUIDO`, `+${Math.round(def.credits * CREDIT_REWARD_MULT)} créditos`, "good");
+      this.banner(
+        `${def.name} DESTRUIDO`,
+        `+${Math.round(def.credits * CREDIT_REWARD_MULT)} créditos`,
+        "good",
+      );
     }
   }
 
@@ -1770,7 +1784,9 @@ export class Engine {
       this.spawnTimer =
         world1 && alive >= cap
           ? 0.5
-          : spawnInterval(this.minute, this.stage.difficulty) * pressure.spawn * (this.boss ? 1.8 : 1);
+          : spawnInterval(this.minute, this.stage.difficulty) *
+            pressure.spawn *
+            (this.boss ? 1.8 : 1);
     }
     // En el mundo 1 la tabla por horda define todos los enemigos; no hay formaciones.
     if (ph.formationEvery > 0 && !(this.stage.id === WORLD1_ID && !this.isEndless)) {

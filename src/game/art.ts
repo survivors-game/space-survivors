@@ -377,7 +377,10 @@ export const ART: Record<string, ArtDef> = {
   /* ======================= PICKUPS ======================= */
   cell_s: { pal: {}, rows: ["..C", ".CW", "CCW", ".cC", "..c"] },
   cell_m: { pal: {}, rows: ["...P", "..PW", ".PPW", "PPPW", ".pPP", "..pP", "...p"] },
-  cell_l: { pal: { p: "#b8560a" }, rows: ["...Y", "..YW", ".YYW", "YYYW", "OYYW", ".OYY", "..pO", "...p"] },
+  cell_l: {
+    pal: { p: "#b8560a" },
+    rows: ["...Y", "..YW", ".YYW", "YYYW", "OYYW", ".OYY", "..pO", "...p"],
+  },
   cell_xl: {
     pal: {},
     rows: ["....W", "...CW", "..CxW", ".CxWW", "CxWWW", ".CxWW", "..CxW", "...CW", "....W"],
@@ -396,35 +399,102 @@ export const ART: Record<string, ArtDef> = {
   },
 
   /* ======================= ICONS (9x9) ======================= */
-  ic_laser: { rows: ["....C", "...CW", "...CW", "..cCW", "..cCW", "...CW", "...CW", "....C", "....."] },
-  ic_spread: { rows: ["Y...Y", ".Y..Y", "..Y.Y", "...YW", "....W", "...OO", "..OOO", "...O.", "....."] },
-  ic_missile: { pal: { S: "#e6ecf8" }, rows: ["....R", "...RW", "...SS", "...SS", "...SS", "..dSS", ".d.ss", "...OY", "....O"] },
-  ic_drones: { rows: [".C...", "CWC..", ".C...", "....L", "...LL", "..MLL", ".....", ".C...", "CWC.."] },
-  ic_plasma: { rows: [".....", "..VVV", ".VPPP", ".VPWW", "VPPWW", ".VPPP", "..VVV", ".....", "....."] },
+  ic_laser: {
+    rows: ["....C", "...CW", "...CW", "..cCW", "..cCW", "...CW", "...CW", "....C", "....."],
+  },
+  ic_spread: {
+    rows: ["Y...Y", ".Y..Y", "..Y.Y", "...YW", "....W", "...OO", "..OOO", "...O.", "....."],
+  },
+  ic_missile: {
+    pal: { S: "#e6ecf8" },
+    rows: ["....R", "...RW", "...SS", "...SS", "...SS", "..dSS", ".d.ss", "...OY", "....O"],
+  },
+  ic_drones: {
+    rows: [".C...", "CWC..", ".C...", "....L", "...LL", "..MLL", ".....", ".C...", "CWC.."],
+  },
+  ic_plasma: {
+    rows: [".....", "..VVV", ".VPPP", ".VPWW", "VPPWW", ".VPPP", "..VVV", ".....", "....."],
+  },
   ic_field: {
     mirror: false,
-    rows: ["..BBBBB..", ".B.....B.", "B..C....B", "B...CC..B", "B..CC...B", "B....C..B", ".B.....B.", "..BBBBB..", "........."],
+    rows: [
+      "..BBBBB..",
+      ".B.....B.",
+      "B..C....B",
+      "B...CC..B",
+      "B..CC...B",
+      "B....C..B",
+      ".B.....B.",
+      "..BBBBB..",
+      ".........",
+    ],
   },
-  ic_shield: { rows: ["..CCC", ".CxxW", "CxCCC", "CxCWC", "CxCWC", ".CxCC", "..CxC", "...CC", "....C"] },
-  ic_nova: { rows: ["..YYY", ".Y...", "Y..OO", "Y.O..", "Y.O.W", "Y.O..", "Y..OO", ".Y...", "..YYY"] },
+  ic_shield: {
+    rows: ["..CCC", ".CxxW", "CxCCC", "CxCWC", "CxCWC", ".CxCC", "..CxC", "...CC", "....C"],
+  },
+  ic_nova: {
+    rows: ["..YYY", ".Y...", "Y..OO", "Y.O..", "Y.O.W", "Y.O..", "Y..OO", ".Y...", "..YYY"],
+  },
   ic_arc: {
     mirror: false,
-    rows: [".V.......", ".VV......", "..VV.....", "...VVVV..", "......VV.", ".....VV..", "....VVVV.", ".......VV", "........V"],
+    rows: [
+      ".V.......",
+      ".VV......",
+      "..VV.....",
+      "...VVVV..",
+      "......VV.",
+      ".....VV..",
+      "....VVVV.",
+      ".......VV",
+      "........V",
+    ],
   },
-  ic_damage: { rows: ["....R", "...RR", "..RYR", ".RYWY", "RRYWW", ".RYWY", "..RYR", "...RR", "....R"] },
-  ic_rate: { rows: ["....C", ".C..C", "..C.C", "...CW", "CCCWW", "...CW", "..C.C", ".C..C", "....C"] },
-  ic_speed: { rows: ["....G", "...GG", "..G.G", ".G..G", "....G", "...GG", "..G.G", ".G..G", "....."] },
-  ic_maxhp: { rows: ["SSSSS", "SsssR", "SssRR", "SsRRR", "SssRR", ".SssR", "..Sss", "...SS", "....S"] },
-  ic_armor: { rows: ["dSSSS", "dSsss", "dSsKK", "dSsKS", "dSsKS", ".dSsK", "..dSs", "...dS", "....d"] },
-  ic_regen: { rows: [".....", "...GG", "...GW", ".GGGW", ".GWWW", ".GGGW", "...GW", "...GG", "....."] },
-  ic_magnet: { rows: ["SS...", "PP...", "PP...", "PP...", "PP...", "PP...", ".PP..", "..PPP", "...PP"] },
-  ic_xp: { rows: ["....Y", "...YY", "YYYYW", ".YYWW", "..YYY", "..YYY", ".YY.Y", ".Y...", "....."] },
-  ic_crit: { rows: ["....R", "..RRR", ".R..R", ".R...", "RRR.W", ".R...", ".R..R", "..RRR", "....R"] },
-  ic_heal: { rows: [".....", "...RR", "...RW", ".RRRW", ".RWWW", ".RRRW", "...RW", "...RR", "....."] },
-  ic_credits: { rows: ["..YYY", ".YOOO", "YOYYY", "YOYOO", "YOYOY", "YOYOO", "YOYYY", ".YOOO", "..YYY"] },
-  ic_evo: { rows: ["....P", "...PW", "P..PW", "PP.PW", ".PPWW", "..PWW", "..PPW", ".PP.P", "PP..."] },
-  ic_engine: { rows: ["..SSS", ".SsKK", ".SsKO", ".SsKY", ".SsKO", "..SKK", "...O.", "..OY.", "...O."] },
-  ic_salvage: { rows: ["....Y", "...YO", "..YOY", ".dSSS", "dSsss", "dSsKK", "dSsss", ".dSSS", "....."] },
-  ic_reroll: { rows: ["..CCC", ".C...", "C....", "C..C.", "C.CCC", "C....", ".C..W", "..CCC", "....."] },
-  ic_lock: { rows: ["..sss", ".s...", ".s...", "SSSSS", "SsssS", "Sss.K", "SsssS", "SSSSS", "....."] },
+  ic_damage: {
+    rows: ["....R", "...RR", "..RYR", ".RYWY", "RRYWW", ".RYWY", "..RYR", "...RR", "....R"],
+  },
+  ic_rate: {
+    rows: ["....C", ".C..C", "..C.C", "...CW", "CCCWW", "...CW", "..C.C", ".C..C", "....C"],
+  },
+  ic_speed: {
+    rows: ["....G", "...GG", "..G.G", ".G..G", "....G", "...GG", "..G.G", ".G..G", "....."],
+  },
+  ic_maxhp: {
+    rows: ["SSSSS", "SsssR", "SssRR", "SsRRR", "SssRR", ".SssR", "..Sss", "...SS", "....S"],
+  },
+  ic_armor: {
+    rows: ["dSSSS", "dSsss", "dSsKK", "dSsKS", "dSsKS", ".dSsK", "..dSs", "...dS", "....d"],
+  },
+  ic_regen: {
+    rows: [".....", "...GG", "...GW", ".GGGW", ".GWWW", ".GGGW", "...GW", "...GG", "....."],
+  },
+  ic_magnet: {
+    rows: ["SS...", "PP...", "PP...", "PP...", "PP...", "PP...", ".PP..", "..PPP", "...PP"],
+  },
+  ic_xp: {
+    rows: ["....Y", "...YY", "YYYYW", ".YYWW", "..YYY", "..YYY", ".YY.Y", ".Y...", "....."],
+  },
+  ic_crit: {
+    rows: ["....R", "..RRR", ".R..R", ".R...", "RRR.W", ".R...", ".R..R", "..RRR", "....R"],
+  },
+  ic_heal: {
+    rows: [".....", "...RR", "...RW", ".RRRW", ".RWWW", ".RRRW", "...RW", "...RR", "....."],
+  },
+  ic_credits: {
+    rows: ["..YYY", ".YOOO", "YOYYY", "YOYOO", "YOYOY", "YOYOO", "YOYYY", ".YOOO", "..YYY"],
+  },
+  ic_evo: {
+    rows: ["....P", "...PW", "P..PW", "PP.PW", ".PPWW", "..PWW", "..PPW", ".PP.P", "PP..."],
+  },
+  ic_engine: {
+    rows: ["..SSS", ".SsKK", ".SsKO", ".SsKY", ".SsKO", "..SKK", "...O.", "..OY.", "...O."],
+  },
+  ic_salvage: {
+    rows: ["....Y", "...YO", "..YOY", ".dSSS", "dSsss", "dSsKK", "dSsss", ".dSSS", "....."],
+  },
+  ic_reroll: {
+    rows: ["..CCC", ".C...", "C....", "C..C.", "C.CCC", "C....", ".C..W", "..CCC", "....."],
+  },
+  ic_lock: {
+    rows: ["..sss", ".s...", ".s...", "SSSSS", "SsssS", "Sss.K", "SsssS", "SSSSS", "....."],
+  },
 };

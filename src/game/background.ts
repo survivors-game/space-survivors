@@ -42,7 +42,9 @@ export class Backdrop {
     this.nebula = canvas(N, N);
     const nctx = this.nebula.getContext("2d")!;
     for (let i = 0; i < 14; i++) {
-      const x = rnd() * N, y = rnd() * N, r = 18 + rnd() * 46;
+      const x = rnd() * N,
+        y = rnd() * N,
+        r = 18 + rnd() * 46;
       const col = stage.nebula[i % 3]!;
       for (const ox of [-N, 0, N])
         for (const oy of [-N, 0, N]) {
@@ -60,25 +62,40 @@ export class Backdrop {
         const step = k === 3 ? 28 : 24;
         img.data[i + k] = Math.round(img.data[i + k]! / step) * step;
       }
-      const px = (i / 4) % N, py = Math.floor(i / 4 / N);
+      const px = (i / 4) % N,
+        py = Math.floor(i / 4 / N);
       if ((px + py) % 2 === 0) img.data[i + 3] = Math.max(0, img.data[i + 3]! - 10);
     }
     nctx.putImageData(img, 0, 0);
 
     this.stars1 = this.makeStars(rnd, 140, 70, stage.star);
     this.stars2 = this.makeStars(rnd, 140, 26, "#ffffff");
-    for (let i = 0; i < 26; i++) this.twinkles.push({ x: rnd() * 1400, y: rnd() * 1400, ph: rnd() * TAU, c: i % 3 === 0 ? stage.accent : "#ffffff" });
+    for (let i = 0; i < 26; i++)
+      this.twinkles.push({
+        x: rnd() * 1400,
+        y: rnd() * 1400,
+        ph: rnd() * TAU,
+        c: i % 3 === 0 ? stage.accent : "#ffffff",
+      });
 
     if (stage.obstacles === "pillars") this.floor = this.makeFloor();
     const nm = stage.id === "ash" ? 90 : stage.id === "abyss" ? 50 : 0;
-    for (let i = 0; i < nm; i++) this.motes.push({ x: rnd(), y: rnd(), v: 0.3 + rnd(), s: 1 + Math.floor(rnd() * 3), ph: rnd() * TAU });
+    for (let i = 0; i < nm; i++)
+      this.motes.push({
+        x: rnd(),
+        y: rnd(),
+        v: 0.3 + rnd(),
+        s: 1 + Math.floor(rnd() * 3),
+        ph: rnd() * TAU,
+      });
   }
 
   private makeStars(rnd: () => number, size: number, n: number, col: string) {
     const c = canvas(size, size);
     const ctx = c.getContext("2d")!;
     for (let i = 0; i < n; i++) {
-      const x = Math.floor(rnd() * size), y = Math.floor(rnd() * size);
+      const x = Math.floor(rnd() * size),
+        y = Math.floor(rnd() * size);
       const b = rnd();
       ctx.fillStyle = b > 0.85 ? "#ffffff" : hexA(col, 0.35 + b * 0.5);
       ctx.fillRect(x, y, 1, 1);
@@ -111,22 +128,52 @@ export class Backdrop {
     ctx.fillRect(0, 16, S, 1);
     ctx.fillRect(16, 0, 1, S);
     ctx.fillStyle = "#3d2e66";
-    for (const [x, y] of [[3, 3], [12, 3], [3, 12], [12, 12], [19, 19], [28, 19], [19, 28], [28, 28]]) ctx.fillRect(x!, y!, 1, 1);
+    for (const [x, y] of [
+      [3, 3],
+      [12, 3],
+      [3, 12],
+      [12, 12],
+      [19, 19],
+      [28, 19],
+      [19, 28],
+      [28, 28],
+    ])
+      ctx.fillRect(x!, y!, 1, 1);
     ctx.fillStyle = "#24183f";
     ctx.fillRect(20, 6, 8, 1);
     ctx.fillRect(4, 22, 8, 1);
     return c;
   }
 
-  private tile(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement, scale: number, ox: number, oy: number, W: number, H: number) {
-    const tw = img.width * scale, th = img.height * scale;
-    const sx = ((-ox % tw) + tw) % tw - tw;
-    const sy = ((-oy % th) + th) % th - th;
-    for (let x = sx; x < W; x += tw) for (let y = sy; y < H; y += th) ctx.drawImage(img, x, y, tw, th);
+  private tile(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLCanvasElement,
+    scale: number,
+    ox: number,
+    oy: number,
+    W: number,
+    H: number,
+  ) {
+    const tw = img.width * scale,
+      th = img.height * scale;
+    const sx = (((-ox % tw) + tw) % tw) - tw;
+    const sy = (((-oy % th) + th) % th) - th;
+    for (let x = sx; x < W; x += tw)
+      for (let y = sy; y < H; y += th) ctx.drawImage(img, x, y, tw, th);
   }
 
   /** Screen-space layers. camX/camY in world units, zoom = world->screen scale */
-  draw(ctx: CanvasRenderingContext2D, W: number, H: number, camX: number, camY: number, zoom: number, t: number, dt: number, fancy: boolean) {
+  draw(
+    ctx: CanvasRenderingContext2D,
+    W: number,
+    H: number,
+    camX: number,
+    camY: number,
+    zoom: number,
+    t: number,
+    dt: number,
+    fancy: boolean,
+  ) {
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = this.stage.bg;
     ctx.fillRect(0, 0, W, H);
@@ -135,7 +182,13 @@ export class Backdrop {
     // planet far away
     const pl = getSprite(this.stage.planet);
     const ps = 3;
-    ctx.drawImage(pl.canvas, W * 0.72 - camX * 0.05 - (pl.w * ps) / 2, H * 0.22 - camY * 0.05 - (pl.h * ps) / 2, pl.w * ps, pl.h * ps);
+    ctx.drawImage(
+      pl.canvas,
+      W * 0.72 - camX * 0.05 - (pl.w * ps) / 2,
+      H * 0.22 - camY * 0.05 - (pl.h * ps) / 2,
+      pl.w * ps,
+      pl.h * ps,
+    );
     this.tile(ctx, this.stars2, 4, camX * 0.55, camY * 0.55, W, H);
     // twinkling stars
     for (const s of this.twinkles) {
@@ -153,7 +206,13 @@ export class Backdrop {
     if (this.stage.id === "nova") {
       this.cometTimer -= dt;
       if (this.cometTimer <= 0 && this.comet.life <= 0) {
-        this.comet = { x: Math.random() * W, y: -20, vx: (Math.random() - 0.5) * 500, vy: 380 + Math.random() * 200, life: 2.5 };
+        this.comet = {
+          x: Math.random() * W,
+          y: -20,
+          vx: (Math.random() - 0.5) * 500,
+          vy: 380 + Math.random() * 200,
+          life: 2.5,
+        };
         this.cometTimer = 5 + Math.random() * 6;
       }
       if (this.comet.life > 0) {
@@ -194,14 +253,22 @@ export class Backdrop {
   }
 
   /** World-space floor (Omega facility) — call inside the world transform */
-  drawFloor(ctx: CanvasRenderingContext2D, camX: number, camY: number, viewW: number, viewH: number, t: number) {
+  drawFloor(
+    ctx: CanvasRenderingContext2D,
+    camX: number,
+    camY: number,
+    viewW: number,
+    viewH: number,
+    t: number,
+  ) {
     if (!this.floor) return;
     const scale = 4;
     const tw = this.floor.width * scale;
     const x0 = Math.floor((camX - viewW / 2) / tw) * tw;
     const y0 = Math.floor((camY - viewH / 2) / tw) * tw;
     ctx.globalAlpha = 0.85;
-    for (let x = x0; x < camX + viewW / 2 + tw; x += tw) for (let y = y0; y < camY + viewH / 2 + tw; y += tw) ctx.drawImage(this.floor, x, y, tw, tw);
+    for (let x = x0; x < camX + viewW / 2 + tw; x += tw)
+      for (let y = y0; y < camY + viewH / 2 + tw; y += tw) ctx.drawImage(this.floor, x, y, tw, tw);
     ctx.globalAlpha = 1;
     // energy conduits pulsing along the main grid lines
     const G = tw * 4;

@@ -52,11 +52,7 @@ export function Hotbar({ inventory, onUse }: Props) {
             }}
           >
             {src ? (
-              <img
-                src={src}
-                alt=""
-                className="size-6 object-contain [image-rendering:pixelated]"
-              />
+              <img src={src} alt="" className="size-6 object-contain [image-rendering:pixelated]" />
             ) : null}
             <span className="absolute bottom-0 right-0.5 font-arcade text-[7px] leading-none text-white drop-shadow-[0_0_2px_#000]">
               {qty}

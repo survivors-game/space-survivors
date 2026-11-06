@@ -17,7 +17,7 @@ let master: GainNode | null = null;
 let sfxBus: GainNode | null = null;
 let musicBus: GainNode | null = null;
 let started = false;
-let lastPlay: Record<string, number> = {};
+const lastPlay: Record<string, number> = {};
 
 function applyVolume() {
   const s = Settings.get();
@@ -53,7 +53,15 @@ function ready() {
 function tone(o: ToneOpts, bus?: GainNode | null, when = 0) {
   if (!ready() || !ctx) return;
   const out = bus ?? sfxBus!;
-  const { freq = 440, dur = 0.1, type = "square", vol = 0.2, attack = 0.005, release = 0.05, slide = 0 } = o;
+  const {
+    freq = 440,
+    dur = 0.1,
+    type = "square",
+    vol = 0.2,
+    attack = 0.005,
+    release = 0.05,
+    slide = 0,
+  } = o;
   const t0 = ctx.currentTime + when;
   const osc = ctx.createOscillator();
   const g = ctx.createGain();
@@ -100,14 +108,27 @@ function throttle(key: string, ms: number) {
 }
 
 export const SFX = {
-  laser: () => throttle("laser", 45) && tone({ freq: 1200, dur: 0.05, type: "square", vol: 0.05, slide: -700 }),
-  spread: () => throttle("spread", 60) && tone({ freq: 700, dur: 0.06, type: "sawtooth", vol: 0.05, slide: -300 }),
-  missile: () => throttle("missile", 70) && noise({ dur: 0.18, vol: 0.08, freq: 1400, type: "bandpass", q: 1 }),
-  plasma: () => throttle("plasma", 90) && tone({ freq: 220, dur: 0.22, type: "sine", vol: 0.14, slide: 420 }),
-  zap: () => throttle("zap", 70) && tone({ freq: 1800, dur: 0.05, type: "sawtooth", vol: 0.05, slide: -1200 }),
-  drone: () => throttle("drone", 70) && tone({ freq: 1600, dur: 0.03, type: "triangle", vol: 0.04, slide: -400 }),
-  hit: () => throttle("hit", 35) && tone({ freq: 240, dur: 0.04, type: "square", vol: 0.04, slide: -100 }),
-  shieldHit: () => throttle("shieldHit", 80) && tone({ freq: 520, dur: 0.12, type: "sine", vol: 0.12, slide: 300 }),
+  laser: () =>
+    throttle("laser", 45) &&
+    tone({ freq: 1200, dur: 0.05, type: "square", vol: 0.05, slide: -700 }),
+  spread: () =>
+    throttle("spread", 60) &&
+    tone({ freq: 700, dur: 0.06, type: "sawtooth", vol: 0.05, slide: -300 }),
+  missile: () =>
+    throttle("missile", 70) && noise({ dur: 0.18, vol: 0.08, freq: 1400, type: "bandpass", q: 1 }),
+  plasma: () =>
+    throttle("plasma", 90) && tone({ freq: 220, dur: 0.22, type: "sine", vol: 0.14, slide: 420 }),
+  zap: () =>
+    throttle("zap", 70) &&
+    tone({ freq: 1800, dur: 0.05, type: "sawtooth", vol: 0.05, slide: -1200 }),
+  drone: () =>
+    throttle("drone", 70) &&
+    tone({ freq: 1600, dur: 0.03, type: "triangle", vol: 0.04, slide: -400 }),
+  hit: () =>
+    throttle("hit", 35) && tone({ freq: 240, dur: 0.04, type: "square", vol: 0.04, slide: -100 }),
+  shieldHit: () =>
+    throttle("shieldHit", 80) &&
+    tone({ freq: 520, dur: 0.12, type: "sine", vol: 0.12, slide: 300 }),
   enemyDie: () => throttle("die", 40) && noise({ dur: 0.14, vol: 0.12, freq: 700 }),
   explode: () => {
     if (!throttle("explode", 70)) return;
@@ -118,7 +139,9 @@ export const SFX = {
     noise({ dur: 0.9, vol: 0.32, freq: 180, q: 2 });
     tone({ freq: 55, dur: 0.7, type: "sawtooth", vol: 0.22, slide: -30 });
   },
-  pickup: () => throttle("pickup", 30) && tone({ freq: 1320, dur: 0.05, type: "triangle", vol: 0.07, slide: 600 }),
+  pickup: () =>
+    throttle("pickup", 30) &&
+    tone({ freq: 1320, dur: 0.05, type: "triangle", vol: 0.07, slide: 600 }),
   power: () => {
     tone({ freq: 520, dur: 0.08, type: "square", vol: 0.12 });
     tone({ freq: 1040, dur: 0.12, type: "square", vol: 0.1 }, null, 0.08);
@@ -148,17 +171,23 @@ export const SFX = {
     noise({ dur: 0.6, vol: 0.22, freq: 120, q: 5 });
     tone({ freq: 60, dur: 0.6, type: "sawtooth", vol: 0.2 });
   },
-  bossShot: () => throttle("bossShot", 90) && tone({ freq: 380, dur: 0.08, type: "square", vol: 0.06, slide: -200 }),
+  bossShot: () =>
+    throttle("bossShot", 90) &&
+    tone({ freq: 380, dur: 0.08, type: "square", vol: 0.06, slide: -200 }),
   warn: () => throttle("warn", 250) && tone({ freq: 1000, dur: 0.06, type: "square", vol: 0.05 }),
   upgrade: () => {
     tone({ freq: 880, dur: 0.06, type: "triangle", vol: 0.12 });
     tone({ freq: 1320, dur: 0.1, type: "triangle", vol: 0.12 }, null, 0.06);
   },
   evolve: () => {
-    [523, 784, 1047, 1568].forEach((f, i) => tone({ freq: f, dur: 0.14, type: "square", vol: 0.12 }, null, i * 0.08));
+    [523, 784, 1047, 1568].forEach((f, i) =>
+      tone({ freq: f, dur: 0.14, type: "square", vol: 0.12 }, null, i * 0.08),
+    );
   },
   win: () => {
-    [523, 659, 784, 1047, 1319].forEach((f, i) => tone({ freq: f, dur: 0.2, type: "square", vol: 0.14 }, null, i * 0.13));
+    [523, 659, 784, 1047, 1319].forEach((f, i) =>
+      tone({ freq: f, dur: 0.2, type: "square", vol: 0.14 }, null, i * 0.13),
+    );
   },
   click: () => tone({ freq: 660, dur: 0.03, type: "square", vol: 0.08 }),
   coin: () => {
@@ -185,7 +214,17 @@ function scheduleStep(t: number) {
   const when = t - ctx.currentTime;
   // bass
   if (s % 2 === 0) {
-    tone({ freq: midi(root - 12 + (s % 8 === 6 ? 12 : 0)), dur: 0.12, type: "sawtooth", vol: 0.18, release: 0.04 }, musicBus, when);
+    tone(
+      {
+        freq: midi(root - 12 + (s % 8 === 6 ? 12 : 0)),
+        dur: 0.12,
+        type: "sawtooth",
+        vol: 0.18,
+        release: 0.04,
+      },
+      musicBus,
+      when,
+    );
   }
   // arpeggio
   if (intensity >= 1 || s % 4 === 0) {

@@ -20,7 +20,14 @@ export const angDiff = (a: number, b: number) => {
   return d;
 };
 /** Squared distance from point to segment */
-export function distToSegSq(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+export function distToSegSq(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+) {
   const dx = x2 - x1,
     dy = y2 - y1;
   const l2 = dx * dx + dy * dy || 1;

@@ -1,4 +1,4 @@
- // Survival timeline. Everything is expressed in "mission minutes" (0..15) so
+// Survival timeline. Everything is expressed in "mission minutes" (0..15) so
 // shorter run lengths compress the same five phases proportionally.
 export const MISSION_MINUTES = 15;
 
@@ -39,11 +39,61 @@ export interface PhaseDef {
 }
 
 export const PHASES: PhaseDef[] = [
-  { id: 0, from: 0, to: 3, name: "CONTACTO", desc: "Enemigos básicos", weights: { interceptor: 72, hunter: 28 }, rate: 1, eliteChance: 0, formationEvery: 0 },
-  { id: 1, from: 3, to: 6, name: "FORMACIONES", desc: "Nuevas formaciones", weights: { interceptor: 45, hunter: 35, destroyer: 20 }, rate: 1.15, eliteChance: 0.02, formationEvery: 22 },
-  { id: 2, from: 6, to: 9, name: "ESPECIALISTAS", desc: "Enemigos especializados", weights: { interceptor: 24, hunter: 24, destroyer: 16, bomber: 20, parasite: 16 }, rate: 1.25, eliteChance: 0.05, formationEvery: 26 },
-  { id: 3, from: 9, to: 12, name: "OFENSIVA COMBINADA", desc: "Ataques combinados", weights: { interceptor: 22, hunter: 24, destroyer: 18, bomber: 18, parasite: 18 }, rate: 1.4, eliteChance: 0.1, formationEvery: 16 },
-  { id: 4, from: 12, to: 15, name: "JEFE FINAL", desc: "Enfrentamiento final", weights: { interceptor: 26, hunter: 26, destroyer: 16, bomber: 16, parasite: 16 }, rate: 0.85, eliteChance: 0.12, formationEvery: 24 },
+  {
+    id: 0,
+    from: 0,
+    to: 3,
+    name: "CONTACTO",
+    desc: "Enemigos básicos",
+    weights: { interceptor: 72, hunter: 28 },
+    rate: 1,
+    eliteChance: 0,
+    formationEvery: 0,
+  },
+  {
+    id: 1,
+    from: 3,
+    to: 6,
+    name: "FORMACIONES",
+    desc: "Nuevas formaciones",
+    weights: { interceptor: 45, hunter: 35, destroyer: 20 },
+    rate: 1.15,
+    eliteChance: 0.02,
+    formationEvery: 22,
+  },
+  {
+    id: 2,
+    from: 6,
+    to: 9,
+    name: "ESPECIALISTAS",
+    desc: "Enemigos especializados",
+    weights: { interceptor: 24, hunter: 24, destroyer: 16, bomber: 20, parasite: 16 },
+    rate: 1.25,
+    eliteChance: 0.05,
+    formationEvery: 26,
+  },
+  {
+    id: 3,
+    from: 9,
+    to: 12,
+    name: "OFENSIVA COMBINADA",
+    desc: "Ataques combinados",
+    weights: { interceptor: 22, hunter: 24, destroyer: 18, bomber: 18, parasite: 18 },
+    rate: 1.4,
+    eliteChance: 0.1,
+    formationEvery: 16,
+  },
+  {
+    id: 4,
+    from: 12,
+    to: 15,
+    name: "JEFE FINAL",
+    desc: "Enfrentamiento final",
+    weights: { interceptor: 26, hunter: 26, destroyer: 16, bomber: 16, parasite: 16 },
+    rate: 0.85,
+    eliteChance: 0.12,
+    formationEvery: 24,
+  },
 ];
 
 export interface BossEvent {

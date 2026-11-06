@@ -1,4 +1,4 @@
- import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -1230,7 +1230,11 @@ function Index() {
           </section>
         ) : null}
 
-        {screen === "GAMEOVER" && runResult && runResult.victory && gameMode !== "ENDLESS" && runResult.stageId === WORLD1_ID ? (
+        {screen === "GAMEOVER" &&
+        runResult &&
+        runResult.victory &&
+        gameMode !== "ENDLESS" &&
+        runResult.stageId === WORLD1_ID ? (
           <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center py-10">
             <div className="text-center">
               <p className="mb-4 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] text-[#ffd700]">
@@ -1244,9 +1248,21 @@ function Index() {
               </p>
             </div>
             <div className="mt-9 grid grid-cols-2 border-y border-white/10 sm:grid-cols-4">
-              <ResultStat icon={<AudioLines />} label="Tiempo de supervivencia" value={formatTime(runResult.time)} />
-              <ResultStat icon={<Skull />} label="Enemigos eliminados" value={runResult.kills.toLocaleString()} />
-              <ResultStat icon={<Zap />} label="Nivel alcanzado" value={runResult.level.toString()} />
+              <ResultStat
+                icon={<AudioLines />}
+                label="Tiempo de supervivencia"
+                value={formatTime(runResult.time)}
+              />
+              <ResultStat
+                icon={<Skull />}
+                label="Enemigos eliminados"
+                value={runResult.kills.toLocaleString()}
+              />
+              <ResultStat
+                icon={<Zap />}
+                label="Nivel alcanzado"
+                value={runResult.level.toString()}
+              />
               <ResultStat
                 icon={<Sparkles />}
                 label="Jefe derrotado"
@@ -1254,14 +1270,17 @@ function Index() {
               />
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border border-[#ffd700]/25 bg-[#ffd700]/[0.04] px-5 py-4">
-              <span className="text-xs uppercase tracking-[0.18em] text-white/65">Créditos recuperados</span>
+              <span className="text-xs uppercase tracking-[0.18em] text-white/65">
+                Créditos recuperados
+              </span>
               <span className="font-arcade text-xs tabular-nums text-[#ffd700] sm:text-sm">
                 +{runCredits.toLocaleString()} CR
               </span>
             </div>
             {unlockedSectors.length > 0 ? (
               <p className="mt-4 border border-[#00f0ff]/35 bg-[#00f0ff]/[0.06] px-4 py-3 text-center text-[9px] uppercase leading-5 tracking-wider text-cyan-100">
-                Nuevo sector desbloqueado: {unlockedSectors.map((id) => stageById(id).name).join(" · ")}
+                Nuevo sector desbloqueado:{" "}
+                {unlockedSectors.map((id) => stageById(id).name).join(" · ")}
               </p>
             ) : null}
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

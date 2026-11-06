@@ -1,4 +1,4 @@
- // The three bosses. Each has phases (HP thresholds) and its own attack loop.
+// The three bosses. Each has phases (HP thresholds) and its own attack loop.
 import type { Engine } from "../engine";
 import type { Enemy } from "../types";
 import { Audio } from "../audio";
@@ -54,20 +54,41 @@ const leviathan: BossDef = {
   xp: 40,
   credits: 180,
   phases: [0.66, 0.33],
-  turrets: [{ x: -13, y: 3 }, { x: 13, y: 3 }, { x: -6, y: -7 }, { x: 6, y: -7 }],
-  engines: [{ x: -9, y: 13 }, { x: 9, y: 13 }, { x: -7.5, y: 18 }, { x: 7.5, y: 18 }, { x: 0, y: 19 }],
-  attacks: ["Andanada de torretas", "Anillo de plasma", "Bombardeo de área", "Escuadrillas de cazadores y bombarderos"],
+  turrets: [
+    { x: -13, y: 3 },
+    { x: 13, y: 3 },
+    { x: -6, y: -7 },
+    { x: 6, y: -7 },
+  ],
+  engines: [
+    { x: -9, y: 13 },
+    { x: 9, y: 13 },
+    { x: -7.5, y: 18 },
+    { x: 7.5, y: 18 },
+    { x: 0, y: 19 },
+  ],
+  attacks: [
+    "Andanada de torretas",
+    "Anillo de plasma",
+    "Bombardeo de área",
+    "Escuadrillas de cazadores y bombarderos",
+  ],
   onSpawn(_g, e) {
     e.turretA = [0, 0, 0, 0];
     e.shootCD = 1.4;
   },
   onPhase(g, e, phase) {
-    g.banner(phase === 1 ? "LEVIATÁN · FASE 2" : "LEVIATÁN · FASE 3", phase === 1 ? "Anillos dobles de plasma" : "Despliegue de escuadrillas", "alert");
+    g.banner(
+      phase === 1 ? "LEVIATÁN · FASE 2" : "LEVIATÁN · FASE 3",
+      phase === 1 ? "Anillos dobles de plasma" : "Despliegue de escuadrillas",
+      "alert",
+    );
     e.shootCD = 0.65;
   },
   update(g, e, dt) {
     const p = g.player;
-    const dx = p.x - e.x, dy = p.y - e.y;
+    const dx = p.x - e.x,
+      dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     const sp = e.speed * (1 + e.phase * 0.2);
     const dir = d > 340 ? 1 : d < 240 ? -0.5 : 0.15;
@@ -88,7 +109,16 @@ const leviathan: BossDef = {
         for (let i = 0; i < 4; i++) {
           if ((e.aiN + i) % 2) continue;
           const tp = g.bossLocal(e, this.turrets[i]!.x, this.turrets[i]!.y);
-          g.spawnEnemyProj(tp.x, tp.y, e.turretA[i] ?? 0, 340 + e.phase * 45, 18 + e.phase * 3, "bolt", "#ff6be8", 6);
+          g.spawnEnemyProj(
+            tp.x,
+            tp.y,
+            e.turretA[i] ?? 0,
+            340 + e.phase * 45,
+            18 + e.phase * 3,
+            "bolt",
+            "#ff6be8",
+            6,
+          );
         }
         Audio.SFX.bossShot();
         e.aiN++;
@@ -100,7 +130,17 @@ const leviathan: BossDef = {
         // plasma ring(s)
         const n = 22 + e.phase * 4;
         const off = e.aiN * 0.13;
-        for (let i = 0; i < n; i++) g.spawnEnemyProj(e.x, e.y, off + (i * TAU) / n, 210 + e.phase * 25, 20 + e.phase * 3, "orb", "#c89bff", 8);
+        for (let i = 0; i < n; i++)
+          g.spawnEnemyProj(
+            e.x,
+            e.y,
+            off + (i * TAU) / n,
+            210 + e.phase * 25,
+            20 + e.phase * 3,
+            "orb",
+            "#c89bff",
+            8,
+          );
         Audio.SFX.boss();
         e.aiN++;
         e.shootCD = 0.55;
@@ -111,8 +151,17 @@ const leviathan: BossDef = {
         // area bombardment around the player
         const n = 5 + e.phase * 2;
         for (let i = 0; i < n; i++) {
-          const a = rand(0, TAU), r = i === 0 ? 0 : rand(40, 230);
-          g.addHazard({ kind: "circle", x: p.x + Math.cos(a) * r + p.vx * 0.5, y: p.y + Math.sin(a) * r + p.vy * 0.5, r: 72, warn: 0.9, dmg: 34 + e.phase * 5, color: "#ff3df2" });
+          const a = rand(0, TAU),
+            r = i === 0 ? 0 : rand(40, 230);
+          g.addHazard({
+            kind: "circle",
+            x: p.x + Math.cos(a) * r + p.vx * 0.5,
+            y: p.y + Math.sin(a) * r + p.vy * 0.5,
+            r: 72,
+            warn: 0.9,
+            dmg: 34 + e.phase * 5,
+            color: "#ff3df2",
+          });
         }
         Audio.SFX.alarm();
         nextAttack(e, nAtt, 2);
@@ -122,7 +171,9 @@ const leviathan: BossDef = {
         // hangar launch
         for (let i = 0; i < 8; i++) {
           const hp = g.bossLocal(e, (i - 3.5) * 4, 8);
-          g.spawnEnemyAt(i % 2 ? "bomber" : "hunter", hp.x, hp.y, { formation: e.angle + rand(-0.6, 0.6) });
+          g.spawnEnemyAt(i % 2 ? "bomber" : "hunter", hp.x, hp.y, {
+            formation: e.angle + rand(-0.6, 0.6),
+          });
         }
         nextAttack(e, nAtt, 1.2);
         break;
@@ -148,21 +199,30 @@ const nemesis: BossDef = {
   credits: 320,
   phases: [0.6, 0.3],
   turrets: [],
-  engines: [{ x: -2, y: 13 }, { x: 2, y: 13 }, { x: 0, y: 14 }],
+  engines: [
+    { x: -2, y: 13 },
+    { x: 2, y: 13 },
+    { x: 0, y: 14 },
+  ],
   attacks: ["Ráfagas dirigidas", "Embestida", "Espiral de proyectiles", "Ecos de caza"],
   onSpawn(_g, e) {
     e.shootCD = 1.5;
     e.aiT = 0;
   },
   onPhase(g, e, phase) {
-    g.banner(phase === 1 ? "NÉMESIS · FASE 2" : "NÉMESIS · FASE 3", phase === 1 ? "Espirales dobles" : "Ecos de caza", "alert");
+    g.banner(
+      phase === 1 ? "NÉMESIS · FASE 2" : "NÉMESIS · FASE 3",
+      phase === 1 ? "Espirales dobles" : "Ecos de caza",
+      "alert",
+    );
     e.aiState = 2;
     e.aiN = 0;
     e.shootCD = 0.6;
   },
   update(g, e, dt) {
     const p = g.player;
-    const dx = p.x - e.x, dy = p.y - e.y;
+    const dx = p.x - e.x,
+      dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     const nAtt = e.phase >= 2 ? 4 : e.phase >= 1 ? 3 : 2;
     e.aiT += dt;
@@ -170,8 +230,11 @@ const nemesis: BossDef = {
       // strafe around the player, aimed triple bursts
       const orbit = Math.atan2(-dy, -dx) + dt * 0.9;
       const R = 280;
-      const tx = p.x + Math.cos(orbit) * R, ty = p.y + Math.sin(orbit) * R;
-      const mx = tx - e.x, my = ty - e.y, md = Math.hypot(mx, my) || 1;
+      const tx = p.x + Math.cos(orbit) * R,
+        ty = p.y + Math.sin(orbit) * R;
+      const mx = tx - e.x,
+        my = ty - e.y,
+        md = Math.hypot(mx, my) || 1;
       const sp = e.speed * (1 + e.phase * 0.15);
       e.vx = (mx / md) * sp;
       e.vy = (my / md) * sp;
@@ -180,7 +243,17 @@ const nemesis: BossDef = {
       if (e.shootCD <= 0) {
         const a = Math.atan2(dy, dx);
         const lead = Math.atan2(dy + p.vy * 0.35, dx + p.vx * 0.35);
-        for (let k = -1; k <= 1; k++) g.spawnEnemyProj(e.x, e.y, (k === 0 ? lead : a) + k * 0.16, 380, 14, "bolt", "#ff7a8a", 6);
+        for (let k = -1; k <= 1; k++)
+          g.spawnEnemyProj(
+            e.x,
+            e.y,
+            (k === 0 ? lead : a) + k * 0.16,
+            380,
+            14,
+            "bolt",
+            "#ff7a8a",
+            6,
+          );
         Audio.SFX.bossShot();
         e.aiN++;
         e.shootCD = 0.55 - e.phase * 0.08;
@@ -198,7 +271,18 @@ const nemesis: BossDef = {
           e.tx = Math.cos(a);
           e.ty = Math.sin(a);
           e.angle = a;
-          g.addHazard({ kind: "line", x: e.x, y: e.y, x2: e.x + e.tx * 760, y2: e.y + e.ty * 760, w: 70, warn: 0.6, dur: 0.0, dmg: 0, color: "#ff2d55" });
+          g.addHazard({
+            kind: "line",
+            x: e.x,
+            y: e.y,
+            x2: e.x + e.tx * 760,
+            y2: e.y + e.ty * 760,
+            w: 70,
+            warn: 0.6,
+            dur: 0.0,
+            dmg: 0,
+            color: "#ff2d55",
+          });
           Audio.SFX.warn();
           e.aiN++;
           e.shootCD = 0.6;
@@ -229,7 +313,8 @@ const nemesis: BossDef = {
         const base = e.aiN * 0.21;
         for (let i = 0; i < arms; i++) {
           g.spawnEnemyProj(e.x, e.y, base + (i * TAU) / arms, 200, 12, "orb", "#ff2d55", 6);
-          if (e.phase >= 1) g.spawnEnemyProj(e.x, e.y, -base + (i * TAU) / arms, 160, 12, "orb", "#ffb3c4", 5);
+          if (e.phase >= 1)
+            g.spawnEnemyProj(e.x, e.y, -base + (i * TAU) / arms, 160, 12, "orb", "#ffb3c4", 5);
         }
         e.aiN++;
         e.shootCD = 0.085;
@@ -239,7 +324,9 @@ const nemesis: BossDef = {
       // echoes: summon hunters around player
       for (let i = 0; i < 5; i++) {
         const a = (i * TAU) / 5;
-        g.spawnEnemyAt("hunter", p.x + Math.cos(a) * 420, p.y + Math.sin(a) * 420, { elite: i === 0 });
+        g.spawnEnemyAt("hunter", p.x + Math.cos(a) * 420, p.y + Math.sin(a) * 420, {
+          elite: i === 0,
+        });
       }
       g.banner("¡ECOS DE NÉMESIS!", "Cazadores de élite rodeándote", "alert");
       nextAttack(e, nAtt, 0.8);
@@ -281,7 +368,8 @@ const colossus: BossDef = {
   },
   update(g, e, dt) {
     const p = g.player;
-    const dx = p.x - e.x, dy = p.y - e.y;
+    const dx = p.x - e.x,
+      dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     const sp = e.speed * (1 + e.phase * 0.35);
     e.vx = (dx / d) * sp * (d > 200 ? 1 : 0);
@@ -294,7 +382,17 @@ const colossus: BossDef = {
     const nAtt = e.phase >= 2 ? 4 : 3;
     switch (e.aiState) {
       case 0:
-        g.addHazard({ kind: "ring", x: e.x, y: e.y, r: 620, w: 30, warn: 0.9, dur: 1.5, dmg: 26, color: "#25f4ff" });
+        g.addHazard({
+          kind: "ring",
+          x: e.x,
+          y: e.y,
+          r: 620,
+          w: 30,
+          warn: 0.9,
+          dur: 1.5,
+          dmg: 26,
+          color: "#25f4ff",
+        });
         Audio.SFX.boss();
         g.shake(0.4);
         nextAttack(e, nAtt, 2.2 - e.phase * 0.3);
@@ -304,7 +402,18 @@ const colossus: BossDef = {
         const base = Math.atan2(dy, dx);
         for (let i = 0; i < n; i++) {
           const a = base + (i - (n - 1) / 2) * 0.42;
-          g.addHazard({ kind: "line", x: e.x, y: e.y, x2: e.x + Math.cos(a) * 1000, y2: e.y + Math.sin(a) * 1000, w: 34, warn: 1.0, dur: 0.6, dmg: 22, color: "#ff3df2" });
+          g.addHazard({
+            kind: "line",
+            x: e.x,
+            y: e.y,
+            x2: e.x + Math.cos(a) * 1000,
+            y2: e.y + Math.sin(a) * 1000,
+            w: 34,
+            warn: 1.0,
+            dur: 0.6,
+            dmg: 22,
+            color: "#ff3df2",
+          });
         }
         Audio.SFX.alarm();
         nextAttack(e, nAtt, 2.0);
@@ -312,7 +421,8 @@ const colossus: BossDef = {
       }
       case 2: {
         const n = 6 + e.phase * 2;
-        for (let i = 0; i < n; i++) g.spawnEnemyProj(e.x, e.y, (i * TAU) / n, 150, 16, "missile", "#ffd23f", 7, { life: 5 });
+        for (let i = 0; i < n; i++)
+          g.spawnEnemyProj(e.x, e.y, (i * TAU) / n, 150, 16, "missile", "#ffd23f", 7, { life: 5 });
         Audio.SFX.missile();
         nextAttack(e, nAtt, 1.6);
         break;
@@ -320,7 +430,8 @@ const colossus: BossDef = {
       case 3: {
         const n = 30;
         const off = e.aiN * 0.1;
-        for (let i = 0; i < n; i++) g.spawnEnemyProj(e.x, e.y, off + (i * TAU) / n, 190, 14, "big", "#9ff6ff", 9);
+        for (let i = 0; i < n; i++)
+          g.spawnEnemyProj(e.x, e.y, off + (i * TAU) / n, 190, 14, "big", "#9ff6ff", 9);
         e.aiN++;
         e.shootCD = 0.4;
         if (e.aiN >= 3) nextAttack(e, nAtt, 1.4);
@@ -333,7 +444,9 @@ const colossus: BossDef = {
 function spawnGenerators(g: Engine, e: Enemy, n: number) {
   for (let i = 0; i < n; i++) {
     const a = (i * TAU) / n;
-    const gen = g.spawnEnemyAt("generator", e.x + Math.cos(a) * 160, e.y + Math.sin(a) * 160, { parentUid: e.uid });
+    const gen = g.spawnEnemyAt("generator", e.x + Math.cos(a) * 160, e.y + Math.sin(a) * 160, {
+      parentUid: e.uid,
+    });
     if (gen) gen.orbitA = a;
   }
 }

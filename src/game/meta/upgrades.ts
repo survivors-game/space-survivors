@@ -9,14 +9,70 @@ export interface HangarUpgrade {
 }
 
 export const UPGRADES: HangarUpgrade[] = [
-  { id: "hull", name: "BLINDAJE DE CASCO", icon: "ic_maxhp", desc: "+10 integridad máxima", max: 5, base: 120 },
-  { id: "engine", name: "MOTORES IÓNICOS", icon: "ic_engine", desc: "+4% velocidad de vuelo", max: 5, base: 120 },
-  { id: "power", name: "AMPLIFICADOR", icon: "ic_damage", desc: "+5% daño de armas", max: 5, base: 160 },
-  { id: "cooling", name: "DISIPADORES", icon: "ic_rate", desc: "-3% tiempo de recarga", max: 5, base: 160 },
-  { id: "magnet", name: "COLECTOR", icon: "ic_magnet", desc: "+10% radio de recolección", max: 5, base: 100 },
-  { id: "repair", name: "AUTORREPARACIÓN", icon: "ic_regen", desc: "+0.2 reparación por segundo", max: 5, base: 140 },
-  { id: "salvage", name: "RECUPERACIÓN", icon: "ic_salvage", desc: "+10% créditos por misión", max: 5, base: 200 },
-  { id: "reroll", name: "RECALIBRADOR", icon: "ic_reroll", desc: "+1 recalibración de mejoras por partida", max: 3, base: 300 },
+  {
+    id: "hull",
+    name: "BLINDAJE DE CASCO",
+    icon: "ic_maxhp",
+    desc: "+10 integridad máxima",
+    max: 5,
+    base: 120,
+  },
+  {
+    id: "engine",
+    name: "MOTORES IÓNICOS",
+    icon: "ic_engine",
+    desc: "+4% velocidad de vuelo",
+    max: 5,
+    base: 120,
+  },
+  {
+    id: "power",
+    name: "AMPLIFICADOR",
+    icon: "ic_damage",
+    desc: "+5% daño de armas",
+    max: 5,
+    base: 160,
+  },
+  {
+    id: "cooling",
+    name: "DISIPADORES",
+    icon: "ic_rate",
+    desc: "-3% tiempo de recarga",
+    max: 5,
+    base: 160,
+  },
+  {
+    id: "magnet",
+    name: "COLECTOR",
+    icon: "ic_magnet",
+    desc: "+10% radio de recolección",
+    max: 5,
+    base: 100,
+  },
+  {
+    id: "repair",
+    name: "AUTORREPARACIÓN",
+    icon: "ic_regen",
+    desc: "+0.2 reparación por segundo",
+    max: 5,
+    base: 140,
+  },
+  {
+    id: "salvage",
+    name: "RECUPERACIÓN",
+    icon: "ic_salvage",
+    desc: "+10% créditos por misión",
+    max: 5,
+    base: 200,
+  },
+  {
+    id: "reroll",
+    name: "RECALIBRADOR",
+    icon: "ic_reroll",
+    desc: "+1 recalibración de mejoras por partida",
+    max: 3,
+    base: 300,
+  },
 ];
 
 export const upgradeById = (id: string) => UPGRADES.find((u) => u.id === id);
