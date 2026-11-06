@@ -31,7 +31,8 @@ import { Button } from "@/components/ui/button";
 import { HangarSidebar, type HangarTab } from "@/components/hangar/HangarSidebar";
 import { MarketSection } from "@/components/hangar/MarketSection";
 import { Audio } from "@/game/audio";
-import { BOSSES } from "@/game/data/bosses";
+import { BOSSES, bossById } from "@/game/data/bosses";
+import { WORLD1_ID } from "@/game/timeline";
 import { ENEMIES } from "@/game/data/enemies";
 import { PASSIVES, passiveById } from "@/game/data/passives";
 import { SHIPS, shipById } from "@/game/data/ships";
@@ -92,6 +93,7 @@ function Index() {
   const [paused, setPaused] = useState(false);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [runCredits, setRunCredits] = useState(0);
+  const [unlockedSectors, setUnlockedSectors] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -152,6 +154,7 @@ function Index() {
             const outcome = recordRun(ProgressStore.get(), result);
             saveProgress(outcome.progress);
             setRunCredits(outcome.credits);
+            setUnlockedSectors(outcome.newStages);
           }
           setRunResult(result);
           setChoices([]);
@@ -1210,7 +1213,57 @@ function Index() {
           </section>
         ) : null}
 
-        {screen === "GAMEOVER" && runResult ? (
+        {screen === "GAMEOVER" && runResult && runResult.victory && gameMode !== "ENDLESS" && runResult.stageId === WORLD1_ID ? (
+          <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center py-10">
+            <div className="text-center">
+              <p className="mb-4 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] text-[#ffd700]">
+                <Award className="size-4" /> SECTOR LIBERADO
+              </p>
+              <h1 className="font-arcade text-[clamp(1.1rem,3.4vw,2.4rem)] uppercase leading-relaxed tracking-[0.04em] text-[#00f0ff] drop-shadow-[0_0_28px_#00f0ff66]">
+                Mundo 1 completado
+              </h1>
+              <p className="mt-3 text-xs uppercase tracking-[0.2em] text-white/55">
+                {selectedStage.name} · {selectedShip.name}
+              </p>
+            </div>
+            <div className="mt-9 grid grid-cols-2 border-y border-white/10 sm:grid-cols-4">
+              <ResultStat icon={<AudioLines />} label="Tiempo de supervivencia" value={formatTime(runResult.time)} />
+              <ResultStat icon={<Skull />} label="Enemigos eliminados" value={runResult.kills.toLocaleString()} />
+              <ResultStat icon={<Zap />} label="Nivel alcanzado" value={runResult.level.toString()} />
+              <ResultStat
+                icon={<Sparkles />}
+                label="Jefe derrotado"
+                value={runResult.bossesDefeated.map((id) => bossById(id).name).join(" · ") || "—"}
+              />
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border border-[#ffd700]/25 bg-[#ffd700]/[0.04] px-5 py-4">
+              <span className="text-xs uppercase tracking-[0.18em] text-white/65">Créditos recuperados</span>
+              <span className="font-arcade text-xs tabular-nums text-[#ffd700] sm:text-sm">
+                +{runCredits.toLocaleString()} CR
+              </span>
+            </div>
+            {unlockedSectors.length > 0 ? (
+              <p className="mt-4 border border-[#00f0ff]/35 bg-[#00f0ff]/[0.06] px-4 py-3 text-center text-[9px] uppercase leading-5 tracking-wider text-cyan-100">
+                Nuevo sector desbloqueado: {unlockedSectors.map((id) => stageById(id).name).join(" · ")}
+              </p>
+            ) : null}
+            <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button
+                onClick={() => setScreen("SELECT")}
+                className="font-arcade h-12 rounded-none bg-[#00f0ff] px-6 text-[8px] uppercase tracking-[0.04em] text-[#070814] hover:bg-cyan-200"
+              >
+                <Rocket /> Continuar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setScreen("HANGAR")}
+                className="font-arcade h-12 rounded-none border-white/20 bg-transparent px-4 text-[8px] uppercase tracking-[0.04em] text-white hover:bg-white/10"
+              >
+                <Wrench /> Volver al hangar
+              </Button>
+            </div>
+          </section>
+        ) : screen === "GAMEOVER" && runResult ? (
           <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center py-10">
             <div className="text-center">
               <p className="mb-4 flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.3em] text-cyan-300">
