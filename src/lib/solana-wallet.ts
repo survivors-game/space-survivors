@@ -38,7 +38,7 @@ function initializeWalletStandard() {
   });
 
   window.dispatchEvent(
-    new CustomEvent<WalletRegister>("wallet-standard:app-ready", {
+    new CustomEvent<WalletRegistryApi>("wallet-standard:app-ready", {
       detail: { register: (wallet) => wallets.set(wallet.name, wallet) },
     }),
   );
