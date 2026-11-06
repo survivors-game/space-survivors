@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -45,6 +45,7 @@ import { Settings } from "@/game/settings";
 import { spriteUrl } from "@/game/sprites";
 import { Hotbar } from "@/components/game/Hotbar";
 import { CombatStatsOverlay } from "@/components/game/CombatStatsOverlay";
+import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
@@ -261,6 +262,7 @@ function Index() {
         <TouchControls />
         <Hotbar inventory={hud?.inventory} onUse={(kind) => engineRef.current?.useItem(kind)} />
         <CombatStatsOverlay stats={hud?.playerStats} />
+        <WeaponHotbar weapons={hud?.weapons} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
           <div className="mx-auto flex max-w-[1500px] items-start justify-between gap-4">
             <section className="w-full max-w-sm">
