@@ -49,7 +49,7 @@ import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
-import { connectAndVerifyMetaMaskSolana, disconnectMetaMaskSolana } from "@/lib/solana-wallet";
+import { connectAndVerifyMetaMaskSolana, disconnectMetaMaskSolana, getAuthenticatedSolanaWallet } from "@/lib/solana-wallet";
 import {
   ProgressStore,
   applyRun as recordRun,
@@ -120,6 +120,20 @@ function Index() {
     const unsubscribe = ProgressStore.subscribe(syncProgress);
     setAudioEnabled(!Settings.get().muted);
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getAuthenticatedSolanaWallet()
+      .then((wallet) => {
+        if (active && wallet) setWalletAddress(wallet.address);
+      })
+      .catch((error) => {
+        console.error("No se pudo recuperar la sesión de wallet:", error);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const saveProgress = (next: Progress) => {
