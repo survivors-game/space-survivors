@@ -320,6 +320,12 @@ export default {
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
+      if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+        return json(
+          { error: "Error interno de autenticación. Revisa los registros del Worker para identificar la operación que falló." },
+          500,
+        );
+      }
       return new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
