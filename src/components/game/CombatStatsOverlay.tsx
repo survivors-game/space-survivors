@@ -1,4 +1,4 @@
-import { Input } from "@/game/input";
+ import { Input } from "@/game/input";
 import type { HudState } from "@/game/types";
 
 interface CombatStatsOverlayProps {
@@ -26,15 +26,13 @@ export function CombatStatsOverlay({ stats }: CombatStatsOverlayProps) {
 
   return (
     <div
-      className={`pointer-events-none absolute right-3 z-20 bg-[#070814]/40 p-2 font-pixel text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] backdrop-blur-[2px] ${position}`}
+      className={`pointer-events-none absolute right-3 z-20 bg-[#070814]/40 p-2.5 font-pixel text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] backdrop-blur-[2px] ${position}`}
     >
-      <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1">
+      <dl className="grid grid-cols-[auto_auto] items-center gap-x-6 gap-y-1.5">
         {rows.map((row) => (
           <div key={row.label} className="contents">
-            <dt className="text-[8px] uppercase tracking-[0.12em] text-white/75">{row.label}</dt>
-            <dd className="text-right font-arcade text-[9px] tabular-nums text-white">
-              {row.value}
-            </dd>
+            <dt className="text-[10px] uppercase tracking-[0.08em] text-white/85">{row.label}</dt>
+            <dd className="text-right font-pixel text-[9px] tabular-nums text-white">{row.value}</dd>
           </div>
         ))}
       </dl>
