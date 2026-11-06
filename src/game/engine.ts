@@ -1479,7 +1479,6 @@ export class Engine {
       weapons: p.weapons.map((w) => ({ id: w.def.id, level: w.level + 1, evolved: w.evolved })),
       maxPhase: this.maxPhase,
       credits: this.creditsRaw,
-      inventory: { ...this.inventory },
     });
   }
 
@@ -2532,7 +2531,7 @@ export class Engine {
     this.inventory[kind] -= 1;
     const p = this.player;
     Audio.SFX.power();
-  if (kind === "repair") {
+    if (kind === "repair") {
       p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35);
       this.banner("REPARACIÓN", "+35% integridad", "good");
     } else if (kind === "magnet") {
