@@ -542,6 +542,11 @@ function Index() {
             </Button>
           </div>
         </header>
+        {notice ? (
+          <p role="status" aria-live="polite" className="mx-auto w-full max-w-[1500px] px-4 pt-2 text-center text-[10px] uppercase tracking-widest text-cyan-200 sm:px-7">
+            {notice}
+          </p>
+        ) : null}
 
         {screen === "MENU" ? (
           <section className="grid min-w-0 flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
