@@ -1,20 +1,10 @@
-import { useEffect, useState } from "react";
+ import { useEffect, useState } from "react";
 import { WEAPONS } from "@/game/data/weapons";
 import { spriteUrl } from "@/game/sprites";
 import type { HudState } from "@/game/types";
 
 /** Orden fijo de las 9 mejoras activas en la barra. */
-const SLOT_IDS = [
-  "laser",
-  "spread",
-  "missile",
-  "drones",
-  "plasma",
-  "field",
-  "shield",
-  "nova",
-  "arc",
-];
+const SLOT_IDS = ["laser", "spread", "missile", "drones", "plasma", "field", "shield", "nova", "arc"];
 
 interface WeaponHotbarProps {
   weapons: HudState["weapons"] | undefined;
@@ -31,7 +21,7 @@ export function WeaponHotbar({ weapons }: WeaponHotbarProps) {
   return (
     <div
       aria-label="Mejoras activas"
-      className="pointer-events-none absolute left-1/2 top-[5.25rem] z-20 flex -translate-x-1/2 gap-1 sm:gap-1.5"
+      className="pointer-events-none absolute left-1/2 top-[5.25rem] xl:top-2 z-20 flex -translate-x-1/2 gap-1 sm:gap-1.5"
     >
       {SLOT_IDS.map((id) => {
         const def = WEAPONS.find((w) => w.id === id);
