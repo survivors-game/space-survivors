@@ -51,6 +51,7 @@ import {
   WORLD1_HORDES,
   WORLD1_ID,
   hordeIndexAt,
+  CAMPAIGN_FINAL_BOSSES,
 } from "./timeline";
 
 export type EngineState = "PLAYING" | "LEVEL_UP" | "PAUSED" | "DYING" | "WINNING" | "ENDED";
@@ -1325,7 +1326,10 @@ export class Engine {
     this.boss = null;
     Audio.setMusic(1);
     const sched = BOSS_SCHEDULE.find((b) => b.boss === def.id);
-    if (sched?.final) {
+    const isFinal = this.isEndless
+      ? sched?.final
+      : CAMPAIGN_FINAL_BOSSES.some((b) => b.boss === def.id && b.final);
+    if (isFinal) {
       this.finalBossDead = true;
       this.banner(`${def.name} DESTRUIDO`, "¡Sector liberado!", "good");
       this.state = "WINNING";
@@ -1499,7 +1503,7 @@ export class Engine {
           this.hordeTransition();
         }
       }
-      if (!this.isEndless && this.elapsed >= this.duration) {
+      if (!this.isEndless && this.elapsed >= this.duration && this.stage.id !== WORLD1_ID) {
         this.banner("¡MISIÓN COMPLETADA!", "Has sobrevivido", "good");
         this.state = "WINNING";
         this.endTimer = 1.2;
@@ -1686,7 +1690,7 @@ export class Engine {
     const alive = this.enemies.countAlive();
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
-      if (alive < CONFIG.spawn.maxAlive) {
+      if (alive < CONFIG.spawn.maxAlive && (this.isEndless || this.elapsed < this.duration)) {
         this.spawnRegular();
         if (this.minute > 2 && Math.random() < 0.25) this.spawnRegular();
         if (this.minute > 6 && Math.random() < 0.3) this.spawnRegular();
@@ -1711,8 +1715,9 @@ export class Engine {
       this.nextBoss = 0;
     }
     // Campaña: no aparecen jefes antes de terminar la partida (se implementarán en otra fase).
-    if (!this.isEndless && this.elapsed < this.duration) return;
-    const next = BOSS_SCHEDULE[this.nextBoss];
+    if (!this.isEndless && (this.elapsed < this.duration || this.stage.id !== WORLD1_ID)) return;
+    const plan = this.isEndless ? BOSS_SCHEDULE : CAMPAIGN_FINAL_BOSSES;
+    const next = plan[this.nextBoss];
     if (next && this.minute >= next.minute && !this.boss) {
       if (this.bossWarnAt < 0) {
         this.bossWarnAt = this.elapsed + 3;

@@ -1,4 +1,4 @@
-// The three bosses. Each has phases (HP thresholds) and its own attack loop.
+ // The three bosses. Each has phases (HP thresholds) and its own attack loop.
 import type { Engine } from "../engine";
 import type { Enemy } from "../types";
 import { Audio } from "../audio";
@@ -56,7 +56,7 @@ const leviathan: BossDef = {
   phases: [0.66, 0.33],
   turrets: [{ x: -13, y: 3 }, { x: 13, y: 3 }, { x: -6, y: -7 }, { x: 6, y: -7 }],
   engines: [{ x: -9, y: 13 }, { x: 9, y: 13 }, { x: -7.5, y: 18 }, { x: 7.5, y: 18 }, { x: 0, y: 19 }],
-  attacks: ["Andanada de torretas", "Anillo de plasma", "Bombardeo de área", "Escuadrillas de interceptores"],
+  attacks: ["Andanada de torretas", "Anillo de plasma", "Bombardeo de área", "Escuadrillas de cazadores y bombarderos"],
   onSpawn(_g, e) {
     e.turretA = [0, 0, 0, 0];
     e.shootCD = 2;
@@ -122,7 +122,7 @@ const leviathan: BossDef = {
         // hangar launch
         for (let i = 0; i < 6; i++) {
           const hp = g.bossLocal(e, (i - 2.5) * 4, 8);
-          g.spawnEnemyAt("interceptor", hp.x, hp.y, { formation: e.angle + rand(-0.6, 0.6) });
+          g.spawnEnemyAt(i % 2 ? "bomber" : "hunter", hp.x, hp.y, { formation: e.angle + rand(-0.6, 0.6) });
         }
         nextAttack(e, nAtt, 1.2);
         break;

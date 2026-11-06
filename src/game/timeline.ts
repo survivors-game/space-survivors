@@ -58,6 +58,9 @@ export const BOSS_SCHEDULE: BossEvent[] = [
   { minute: 12, boss: "colossus", final: true },
 ];
 
+/* Campaña, mundo 1: único jefe, LEVIATÁN, al llegar al minuto 20 (minuto 15 de la escala de misión). */
+export const CAMPAIGN_FINAL_BOSSES: BossEvent[] = [{ minute: 15, boss: "leviathan", final: true }];
+
 export type FormationKind = "vee" | "ring" | "wall" | "squad" | "swarm" | "pincer";
 
 /** Formations available per phase (combined attacks mix several families). */
