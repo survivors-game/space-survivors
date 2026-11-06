@@ -1,4 +1,4 @@
-// SPACE SURVIVORS combat engine. Evolved from the template's Game class
+ // SPACE SURVIVORS combat engine. Evolved from the template's Game class
 // (section 12): same pools, state machine, update order and render loop,
 // extended with pixel-art ships, families, bosses, stages and hazards.
 import { CONFIG } from "./config";
@@ -2688,6 +2688,17 @@ export class Engine {
       banner: this.bannerState ? { ...this.bannerState } : null,
       credits: this.creditsRaw,
       inventory: { ...this.inventory },
+      playerStats: {
+        damage: p.dmgMult,
+        attackSpeed: p.cdMult > 0 ? 1 / p.cdMult : 1,
+        speed: p.speed,
+        maxHp: p.maxHp,
+        armor: p.armor,
+        regen: p.regen,
+        critChance: p.critChance,
+        pickupRadius: p.pickupRadius,
+        xpMult: p.xpMult,
+      },
     };
   }
 
