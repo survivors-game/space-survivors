@@ -44,9 +44,9 @@ const leviathan: BossDef = {
   name: "LEVIATÁN",
   title: "Portanaves de asedio",
   desc: "Nave gigantesca armada con cuatro torretas, anillos de plasma y bombardeos de área. En su última fase despliega escuadrillas.",
-  hp: 5200,
-  dmg: 24,
-  speed: 52,
+  hp: 26000,
+  dmg: 36,
+  speed: 58,
   radius: 72,
   sprite: "boss_leviathan",
   scale: 4.2,
@@ -59,11 +59,11 @@ const leviathan: BossDef = {
   attacks: ["Andanada de torretas", "Anillo de plasma", "Bombardeo de área", "Escuadrillas de cazadores y bombarderos"],
   onSpawn(_g, e) {
     e.turretA = [0, 0, 0, 0];
-    e.shootCD = 2;
+    e.shootCD = 1.4;
   },
   onPhase(g, e, phase) {
     g.banner(phase === 1 ? "LEVIATÁN · FASE 2" : "LEVIATÁN · FASE 3", phase === 1 ? "Anillos dobles de plasma" : "Despliegue de escuadrillas", "alert");
-    e.shootCD = 1;
+    e.shootCD = 0.65;
   },
   update(g, e, dt) {
     const p = g.player;
@@ -88,11 +88,11 @@ const leviathan: BossDef = {
         for (let i = 0; i < 4; i++) {
           if ((e.aiN + i) % 2) continue;
           const tp = g.bossLocal(e, this.turrets[i]!.x, this.turrets[i]!.y);
-          g.spawnEnemyProj(tp.x, tp.y, e.turretA[i] ?? 0, 300 + e.phase * 30, 12, "bolt", "#ff6be8", 6);
+          g.spawnEnemyProj(tp.x, tp.y, e.turretA[i] ?? 0, 340 + e.phase * 45, 18 + e.phase * 3, "bolt", "#ff6be8", 6);
         }
         Audio.SFX.bossShot();
         e.aiN++;
-        e.shootCD = 0.2;
+        e.shootCD = 0.14;
         if (e.aiN >= 8 + e.phase * 2) nextAttack(e, nAtt, 1.1);
         break;
       }
@@ -100,7 +100,7 @@ const leviathan: BossDef = {
         // plasma ring(s)
         const n = 22 + e.phase * 4;
         const off = e.aiN * 0.13;
-        for (let i = 0; i < n; i++) g.spawnEnemyProj(e.x, e.y, off + (i * TAU) / n, 170 + e.phase * 15, 14, "orb", "#c89bff", 8);
+        for (let i = 0; i < n; i++) g.spawnEnemyProj(e.x, e.y, off + (i * TAU) / n, 210 + e.phase * 25, 20 + e.phase * 3, "orb", "#c89bff", 8);
         Audio.SFX.boss();
         e.aiN++;
         e.shootCD = 0.55;
@@ -112,7 +112,7 @@ const leviathan: BossDef = {
         const n = 5 + e.phase * 2;
         for (let i = 0; i < n; i++) {
           const a = rand(0, TAU), r = i === 0 ? 0 : rand(40, 230);
-          g.addHazard({ kind: "circle", x: p.x + Math.cos(a) * r + p.vx * 0.5, y: p.y + Math.sin(a) * r + p.vy * 0.5, r: 72, warn: 1.15, dmg: 24, color: "#ff3df2" });
+          g.addHazard({ kind: "circle", x: p.x + Math.cos(a) * r + p.vx * 0.5, y: p.y + Math.sin(a) * r + p.vy * 0.5, r: 72, warn: 0.9, dmg: 34 + e.phase * 5, color: "#ff3df2" });
         }
         Audio.SFX.alarm();
         nextAttack(e, nAtt, 2);
@@ -120,8 +120,8 @@ const leviathan: BossDef = {
       }
       case 3: {
         // hangar launch
-        for (let i = 0; i < 6; i++) {
-          const hp = g.bossLocal(e, (i - 2.5) * 4, 8);
+        for (let i = 0; i < 8; i++) {
+          const hp = g.bossLocal(e, (i - 3.5) * 4, 8);
           g.spawnEnemyAt(i % 2 ? "bomber" : "hunter", hp.x, hp.y, { formation: e.angle + rand(-0.6, 0.6) });
         }
         nextAttack(e, nAtt, 1.2);
