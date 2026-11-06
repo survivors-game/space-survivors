@@ -1,4 +1,4 @@
- import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,

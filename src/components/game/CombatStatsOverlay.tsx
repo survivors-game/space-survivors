@@ -1,4 +1,4 @@
- import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/game/input";
 import type { HudState } from "@/game/types";
 
@@ -77,11 +77,15 @@ export function CombatStatsOverlay({ stats }: CombatStatsOverlayProps) {
           <div
             key={row.key}
             className={`flex items-center justify-between gap-4 px-1.5 py-0.5 transition-colors duration-300 ${
-              active ? "animate-pulse bg-cyan-300/50 text-cyan-50 shadow-[0_0_18px_#22f7ff,inset_0_0_10px_#22f7ff88]" : ""
+              active
+                ? "animate-pulse bg-cyan-300/50 text-cyan-50 shadow-[0_0_18px_#22f7ff,inset_0_0_10px_#22f7ff88]"
+                : ""
             }`}
           >
             <span className="text-xs uppercase tracking-wide text-white/90">{row.label}</span>
-            <span className="text-right text-[11px] tabular-nums text-white">{row.format(stats)}</span>
+            <span className="text-right text-[11px] tabular-nums text-white">
+              {row.format(stats)}
+            </span>
           </div>
         );
       })}
