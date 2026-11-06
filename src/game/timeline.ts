@@ -12,13 +12,13 @@ export const WORLD1_HORDES: Record<string, number>[] = [
   { interceptor: 100 },
   { interceptor: 50, hunter: 50 },
   { hunter: 50, destroyer: 30, bomber: 20 },
-  { hunter: 40, destroyer: 35, bomber: 25 },
-  { hunter: 20, destroyer: 40, bomber: 30, parasite: 10 },
-  { hunter: 15, destroyer: 35, bomber: 30, parasite: 20 },
-  { hunter: 10, destroyer: 35, bomber: 30, parasite: 25 },
-  { hunter: 5, destroyer: 35, bomber: 30, parasite: 30 },
-  { destroyer: 35, bomber: 30, parasite: 35 },
-  { destroyer: 30, bomber: 30, parasite: 40 },
+  { hunter: 30, destroyer: 40, bomber: 30 },
+  { destroyer: 45, bomber: 35, parasite: 20 },
+  { destroyer: 30, bomber: 35, parasite: 35 },
+  { destroyer: 15, bomber: 40, parasite: 45 },
+  { bomber: 40, parasite: 60 },
+  { bomber: 20, parasite: 80 },
+  { parasite: 100 },
 ];
 
 /** Índice (0..9) del intervalo de horda en el que se encuentra el tiempo transcurrido. */
