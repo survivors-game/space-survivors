@@ -11,8 +11,11 @@ type D1Statement = {
 };
 type D1Database = { prepare(query: string): D1Statement };
 type WorkerEnv = { DB?: D1Database };
+type CloudflareRequest = Request & {
+  runtime?: { cloudflare?: { env?: WorkerEnv } };
+};
 type ServerEntry = {
-  fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
+  fetch: (request: Request) => Promise<Response> | Response;
 };
 
 const SESSION_COOKIE = "__Host-ss_session";
@@ -56,6 +59,12 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
     });
   }
   return schemaPromise;
+}
+
+function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
+  const cloudflareEnv = (request as CloudflareRequest).runtime?.cloudflare?.env;
+  if (cloudflareEnv) return cloudflareEnv;
+  return env && typeof env === "object" ? (env as WorkerEnv) : undefined;
 }
 
 function json(data: unknown, status = 200, headers?: HeadersInit): Response {
@@ -135,10 +144,13 @@ async function readJson(request: Request): Promise<Record<string, unknown> | nul
   }
 }
 
-async function handleAuthRequest(request: Request, env: WorkerEnv): Promise<Response | null> {
+async function handleAuthRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/auth/")) return null;
-  if (!env.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
   const db = env.DB;
   try {
@@ -151,7 +163,7 @@ async function handleAuthRequest(request: Request, env: WorkerEnv): Promise<Resp
   if (url.pathname === "/api/auth/challenge" && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
     const body = await readJson(request);
-    const address = body?.address;
+    const address = body?.["address"];
     if (typeof address !== "string" || base58Decode(address)?.length !== 32) {
       return json({ error: "La dirección Solana no es válida." }, 400);
     }
@@ -182,9 +194,9 @@ async function handleAuthRequest(request: Request, env: WorkerEnv): Promise<Resp
   if (url.pathname === "/api/auth/verify" && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
     const body = await readJson(request);
-    const challengeId = body?.challengeId;
-    const address = body?.address;
-    const signatureText = body?.signature;
+    const challengeId = body?.["challengeId"];
+    const address = body?.["address"];
+    const signatureText = body?.["signature"];
     if (
       typeof challengeId !== "string" ||
       typeof address !== "string" ||
@@ -220,10 +232,13 @@ async function handleAuthRequest(request: Request, env: WorkerEnv): Promise<Resp
     let valid = false;
     try {
       const publicKey = await crypto.subtle.importKey(
-        "raw", publicKeyBytes, { name: "Ed25519" }, false, ["verify"],
+        "raw", new Uint8Array(publicKeyBytes).buffer, { name: "Ed25519" }, false, ["verify"],
       );
       valid = await crypto.subtle.verify(
-        { name: "Ed25519" }, publicKey, signature, new TextEncoder().encode(challenge.message),
+        { name: "Ed25519" },
+        publicKey,
+        new Uint8Array(signature).buffer,
+        new TextEncoder().encode(challenge.message),
       );
     } catch {
       valid = false;
@@ -311,12 +326,12 @@ function isH3SwallowedErrorBody(body: string): boolean {
 }
 
 export default {
-  async fetch(request: Request, env: unknown, ctx: unknown) {
+  async fetch(request: Request, env?: unknown) {
     try {
-      const authResponse = await handleAuthRequest(request, env as WorkerEnv);
+      const authResponse = await handleAuthRequest(request, getWorkerEnv(request, env));
       if (authResponse) return authResponse;
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
+      const response = await handler.fetch(request);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);

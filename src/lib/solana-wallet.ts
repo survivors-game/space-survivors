@@ -124,10 +124,14 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
     message: string;
   }>(challengeResponse);
 
-  const [{ signature }] = await signMessage.signMessage({
+  const signedMessages = await signMessage.signMessage({
     account,
     message: new TextEncoder().encode(challenge.message),
   });
+  const signature = signedMessages[0]?.signature;
+  if (!signature) {
+    throw new Error("MetaMask no devolvió una firma Solana.");
+  }
   const signatureBase64 = btoa(
     Array.from(signature, (byte) => String.fromCharCode(byte)).join(""),
   );
