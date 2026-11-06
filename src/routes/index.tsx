@@ -520,16 +520,18 @@ function Index() {
               <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
               {progress.credits.toLocaleString()} CR
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleWalletConnection}
-              disabled={walletConnecting}
-              className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
-            >
-              <Wallet className="size-3.5" />
-              <span>{walletConnecting ? "CONECTANDO..." : walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "CONECTAR METAMASK"}</span>
-            </Button>
+            {screen === "MENU" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleWalletConnection}
+                disabled={walletConnecting}
+                className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
+              >
+                <Wallet className="size-3.5" />
+                <span>{walletConnecting ? "CONECTANDO..." : walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "CONECTAR METAMASK"}</span>
+              </Button>
+            ) : null}
             <Button
               onClick={toggleAudio}
               variant="outline"
