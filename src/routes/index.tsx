@@ -44,6 +44,8 @@ import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
 import { spriteUrl } from "@/game/sprites";
 import { Hotbar } from "@/components/game/Hotbar";
+import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
+import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
 import {
   ProgressStore,
@@ -450,6 +452,7 @@ function Index() {
     <main className="relative min-h-dvh overflow-x-clip bg-[#070814] font-pixel text-white selection:bg-[#00f0ff]/30">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_75%_5%,#8a2be21c,transparent_38%),radial-gradient(ellipse_at_12%_82%,#00f0ff12,transparent_32%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.1] [background-image:linear-gradient(#00f0ff_1px,transparent_1px),linear-gradient(90deg,#00f0ff_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]" />
+      {screen === "MENU" ? <MenuAttractBackdrop /> : null}
       <div className="relative mx-auto flex min-h-dvh w-full max-w-[1440px] min-w-0 flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-12">
         <header className="flex items-center justify-between border-b border-cyan-500/20 pb-4">
           <button
@@ -549,21 +552,14 @@ function Index() {
                   </span>
                   <span>CANAL 07</span>
                 </div>
-                <div className="relative grid min-h-[260px] place-items-center overflow-hidden sm:min-h-[330px]">
+                <div className="relative grid place-items-center overflow-hidden px-4 pb-14 pt-8 sm:pt-10">
                   <div className="absolute inset-0 opacity-60 [background-image:radial-gradient(#9befff_0.7px,transparent_0.7px)] [background-size:24px_24px]" />
                   <div className="absolute left-[18%] top-[20%] size-2 rounded-full bg-white shadow-[0_0_12px_4px_#00f0ff]" />
                   <div className="absolute right-[20%] top-[32%] size-1.5 rounded-full bg-[#ff0055] shadow-[0_0_12px_4px_#ff0055]" />
                   <div className="absolute bottom-[18%] left-[34%] size-1 rounded-full bg-white shadow-[0_0_10px_3px_#8a2be2]" />
-                  <div className="absolute left-1/2 top-1/2 size-48 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/15 sm:size-64" />
-                  <div className="absolute left-1/2 top-1/2 size-36 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/20 sm:size-48" />
-                  <div className="absolute left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,#00f0ff35,transparent_70%)] sm:size-36" />
-                  <div className="relative grid size-24 place-items-center border border-cyan-300/50 bg-[#080b18]/80 text-cyan-200 shadow-[0_0_45px_#00f0ff35] sm:size-32">
-                    <img
-                      src={spriteUrl(selectedShip.sprite, 4)}
-                      alt={selectedShip.name}
-                      className="size-16 object-contain drop-shadow-[0_0_16px_#00f0ff80] sm:size-20"
-                      style={{ imageRendering: "pixelated" }}
-                    />
+                  <div className="absolute inset-x-0 bottom-8 h-48 bg-[radial-gradient(ellipse_at_center,#8a2be21f,transparent_70%)]" />
+                  <div className="relative z-10 w-full">
+                    <MenuHeroShip ship={selectedShip} />
                   </div>
                   <div className="absolute bottom-4 left-4 text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
                     NAVE ACTIVA
