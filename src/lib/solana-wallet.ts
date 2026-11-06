@@ -146,13 +146,23 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
       signature: signatureBase64,
     }),
   });
-  await readApiResponse<{ authenticated: boolean }>(verifyResponse);
+  try {
+    await readApiResponse<{ authenticated: boolean }>(verifyResponse);
+  } catch (error) {
+    // If the server created the session but the verification response was interrupted,
+    // recover it before asking the player to sign another message.
+    const recovered = await getAuthenticatedSolanaWallet().catch(() => null);
+    if (!recovered || recovered.address !== account.address) throw error;
+    return { ...recovered, walletName: wallet.name };
+  }
 
-  return {
-    address: account.address,
-    walletName: wallet.name,
-    verifiedAt: Date.now(),
-  };
+  // Confirm that the secure session cookie was stored and can be read immediately.
+  const authenticated = await getAuthenticatedSolanaWallet();
+  if (!authenticated || authenticated.address !== account.address) {
+    throw new Error("La firma se completó, pero no se pudo recuperar la sesión. Inténtalo de nuevo.");
+  }
+
+  return { ...authenticated, walletName: wallet.name };
 }
 
 export async function disconnectMetaMaskSolana(): Promise<void> {
