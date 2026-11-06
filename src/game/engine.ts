@@ -8,6 +8,7 @@ import { Input } from "./input";
 import { Pool } from "./pool";
 import { Settings } from "./settings";
 import { Backdrop } from "./background";
+import { ITEM_BY_KIND } from "./data/items";
 import { drawSprite, getSprite, glow } from "./sprites";
 import { TAU, angDiff, clamp, distToSegSq, lerp, mulberry32, rand, choice } from "./utils";
 import type {
@@ -2719,16 +2720,10 @@ export class Engine {
       drawSprite(ctx, getSprite(cells[g.tier]!), g.x, g.y + bob, 0, 2.4);
     });
     // pickups
-    const pkSprites: Record<PickupKind, string> = {
-      repair: "pk_repair",
-      magnet: "pk_magnet",
-      emp: "pk_emp",
-    };
     this.pickups.forEachAlive((k) => {
       if (!inView(k.x, k.y, 30)) return;
       const pulse = 1 + Math.sin(k.t * 5) * 0.1;
-      ctx.strokeStyle =
-        k.kind === "repair" ? "#7dff4f" : k.kind === "magnet" ? "#ff3df2" : "#3d7bff";
+      ctx.strokeStyle = ITEM_BY_KIND[k.kind].color;
       ctx.lineWidth = 2;
       ctx.globalAlpha = 0.6;
       ctx.beginPath();
@@ -2736,7 +2731,7 @@ export class Engine {
       ctx.stroke();
       ctx.globalAlpha = 1;
       if (k.t > 34 && Math.floor(k.t * 8) % 2) return;
-      drawSprite(ctx, getSprite(pkSprites[k.kind]), k.x, k.y, 0, 3 * pulse);
+      drawSprite(ctx, getSprite(ITEM_BY_KIND[k.kind].sprite), k.x, k.y, 0, 3 * pulse);
     });
 
     // enemy projectiles
