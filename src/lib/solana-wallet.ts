@@ -32,8 +32,6 @@ type MetaMaskSolanaSdk = {
 };
 
 let clientPromise: Promise<MetaMaskSolanaClient> | undefined;
-
-// Pinned SDK release. It registers MetaMask as a Solana Wallet Standard wallet.
 const METAMASK_SOLANA_SDK_URL =
   "https://esm.sh/@metamask/connect-solana@2.1.1?bundle";
 
@@ -42,10 +40,7 @@ async function getMetaMaskClient(): Promise<MetaMaskSolanaClient> {
     clientPromise = (async () => {
       const sdk = (await import(/* @vite-ignore */ METAMASK_SOLANA_SDK_URL)) as MetaMaskSolanaSdk;
       return sdk.createSolanaClient({
-        dapp: {
-          name: "SPACE SURVIVORS",
-          url: window.location.origin,
-        },
+        dapp: { name: "SPACE SURVIVORS", url: window.location.origin },
       });
     })().catch((error) => {
       clientPromise = undefined;
@@ -55,8 +50,12 @@ async function getMetaMaskClient(): Promise<MetaMaskSolanaClient> {
   return clientPromise;
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+async function readApiResponse<T>(response: Response): Promise<T> {
+  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error || "No se pudo completar la autenticación.");
+  }
+  return payload;
 }
 
 export type ConnectedSolanaWallet = {
@@ -65,9 +64,24 @@ export type ConnectedSolanaWallet = {
   verifiedAt: number;
 };
 
+export async function getAuthenticatedSolanaWallet(): Promise<ConnectedSolanaWallet | null> {
+  const response = await fetch("/api/auth/session", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const result = await readApiResponse<{
+    authenticated: boolean;
+    address?: string;
+  }>(response);
+  return result.authenticated && result.address
+    ? { address: result.address, walletName: "MetaMask", verifiedAt: Date.now() }
+    : null;
+}
+
 export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaWallet> {
-  if (typeof window === "undefined" || !window.crypto?.subtle) {
-    throw new Error("La conexión de wallet requiere un navegador compatible.");
+  if (typeof window === "undefined") {
+    throw new Error("La conexión de wallet requiere un navegador.");
   }
 
   const client = await getMetaMaskClient();
@@ -87,37 +101,36 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
     throw new Error("MetaMask no devolvió una cuenta Solana válida.");
   }
 
-  const nonce = bytesToHex(crypto.getRandomValues(new Uint8Array(24)));
-  const issuedAt = new Date().toISOString();
-  const message = [
-    "SPACE SURVIVORS — Verificación de wallet",
-    `Dominio: ${window.location.host}`,
-    `Cuenta Solana: ${account.address}`,
-    `Nonce: ${nonce}`,
-    `Fecha: ${issuedAt}`,
-    "Esta firma solo demuestra el control de la cuenta. No autoriza pagos ni transacciones.",
-  ].join("\n");
-  const messageBytes = new TextEncoder().encode(message);
+  const challengeResponse = await fetch("/api/auth/challenge", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ address: account.address }),
+  });
+  const challenge = await readApiResponse<{
+    challengeId: string;
+    message: string;
+  }>(challengeResponse);
+
   const [{ signature }] = await signMessage.signMessage({
     account,
-    message: messageBytes,
+    message: new TextEncoder().encode(challenge.message),
   });
-
-  const publicKey = await crypto.subtle.importKey(
-    "raw",
-    account.publicKey,
-    { name: "Ed25519" },
-    false,
-    ["verify"],
-  );
-  const valid = await crypto.subtle.verify(
-    { name: "Ed25519" },
-    publicKey,
-    signature,
-    messageBytes,
+  const signatureBase64 = btoa(
+    Array.from(signature, (byte) => String.fromCharCode(byte)).join(""),
   );
 
-  if (!valid) throw new Error("La firma de MetaMask no pudo verificarse.");
+  const verifyResponse = await fetch("/api/auth/verify", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      challengeId: challenge.challengeId,
+      address: account.address,
+      signature: signatureBase64,
+    }),
+  });
+  await readApiResponse<{ authenticated: boolean }>(verifyResponse);
 
   return {
     address: account.address,
@@ -127,6 +140,13 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
 }
 
 export async function disconnectMetaMaskSolana(): Promise<void> {
-  const client = await getMetaMaskClient();
-  await client.disconnect();
+  const response = await fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  await readApiResponse<{ authenticated: boolean }>(response);
+  if (clientPromise) {
+    const client = await clientPromise;
+    await client.disconnect();
+  }
 }
