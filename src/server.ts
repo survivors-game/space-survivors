@@ -64,9 +64,15 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
 
 function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   const cloudflareEnv = (request as CloudflareRequest).runtime?.cloudflare?.env;
-  if (cloudflareEnv) return cloudflareEnv;
-  if (env && typeof env === "object") return env as WorkerEnv;
-  return (globalThis as NitroGlobal).__env__;
+  const workerEnv = env && typeof env === "object" ? env as WorkerEnv : undefined;
+  const nitroEnv = (globalThis as NitroGlobal).__env__;
+
+  // Prefer the environment that actually contains the D1 binding.
+  // Nitro may expose a partial Cloudflare runtime env on the Request;
+  // returning it unconditionally can hide the real Worker env argument.
+  const candidates = [workerEnv, cloudflareEnv, nitroEnv];
+  return candidates.find((candidate) => candidate?.DB && typeof candidate.DB.prepare === "function")
+    ?? candidates.find((candidate) => candidate !== undefined);
 }
 
 function json(data: unknown, status = 200, headers?: HeadersInit): Response {
