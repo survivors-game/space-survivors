@@ -262,6 +262,7 @@ export interface RunResult {
   weapons: { id: string; level: number; evolved: boolean }[];
   maxPhase: number;
   credits: number;
+  inventory: Record<PickupKind, number>;
 }
 
 export interface HudState {

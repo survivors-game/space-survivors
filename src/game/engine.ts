@@ -144,6 +144,7 @@ export class Engine {
   hordeNotice: { horde: number; elapsed: number } | null = null;
   lastPhase = 0;
   flash = 0;
+  inventory: Record<PickupKind, number> = { repair: 0, magnet: 0, emp: 0 };
   endTimer = 0;
   kills = 0;
   killsByType: Record<string, number> = {};
@@ -1478,6 +1479,7 @@ export class Engine {
       weapons: p.weapons.map((w) => ({ id: w.def.id, level: w.level + 1, evolved: w.evolved })),
       maxPhase: this.maxPhase,
       credits: this.creditsRaw,
+      inventory: { ...this.inventory },
     });
   }
 
@@ -2519,30 +2521,40 @@ export class Engine {
       }
       if (d > p.radius + 18) return;
       k.alive = false;
-      Audio.SFX.power();
-      if (k.kind === "repair") {
-        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35);
-        this.banner("REPARACIÓN", "+35% integridad", "good");
-      } else if (k.kind === "magnet") {
-        this.gems.forEachAlive((g) => {
-          g.pulled = true;
-        });
-        this.banner("PULSO MAGNÉTICO", "Toda la energía atraída", "good");
-      } else {
-        this.flash = 0.6;
-        this.addRing(p.x, p.y, 900, 0, "#3d7bff", 0);
-        this.enemies.forEachAlive((e) => {
-          if (Math.abs(e.x - p.x) > this.W / this.zoom || Math.abs(e.y - p.y) > this.H / this.zoom)
-            return;
-          this.damageEnemy(
-            e,
-            e.boss || e.def.behavior === "generator" ? e.maxHp * 0.05 : 150 * p.dmgMult,
-          );
-        });
-        Audio.SFX.bigExplode();
-        this.banner("DESCARGA EMP", "Enemigos en pantalla neutralizados", "good");
-      }
+      Audio.SFX.pickup();
+      this.inventory[k.kind] += 1;
     });
+  }
+
+  /** Activa manualmente un objeto del inventario. Devuelve false si no hay unidades. */
+  useItem(kind: PickupKind): boolean {
+    if (this.inventory[kind] <= 0 || !this.player) return false;
+    this.inventory[kind] -= 1;
+    const p = this.player;
+    Audio.SFX.power();
+  if (kind === "repair") {
+      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.35);
+      this.banner("REPARACIÓN", "+35% integridad", "good");
+    } else if (kind === "magnet") {
+      this.gems.forEachAlive((g) => {
+        g.pulled = true;
+      });
+      this.banner("PULSO MAGNÉTICO", "Toda la energía atraída", "good");
+    } else {
+      this.flash = 0.6;
+      this.addRing(p.x, p.y, 900, 0, "#3d7bff", 0);
+      this.enemies.forEachAlive((e) => {
+        if (Math.abs(e.x - p.x) > this.W / this.zoom || Math.abs(e.y - p.y) > this.H / this.zoom)
+          return;
+        this.damageEnemy(
+          e,
+          e.boss || e.def.behavior === "generator" ? e.maxHp * 0.05 : 150 * p.dmgMult,
+        );
+      });
+      Audio.SFX.bigExplode();
+      this.banner("DESCARGA EMP", "Enemigos en pantalla neutralizados", "good");
+    }
+    return true;
   }
 
   /* ------------------------------ HUD ------------------------------ */
@@ -2594,6 +2606,7 @@ export class Engine {
         : null,
       banner: this.bannerState ? { ...this.bannerState } : null,
       credits: this.creditsRaw,
+      inventory: { ...this.inventory },
     };
   }
 
