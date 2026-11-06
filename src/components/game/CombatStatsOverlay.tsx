@@ -10,7 +10,7 @@ interface CombatStatsOverlayProps {
 }
 
 /** Tiempo que la estadística se mantiene iluminada tras una mejora. */
-const HIGHLIGHT_MS = 3000;
+const HIGHLIGHT_MS = 10000;
 
 const ROWS: { key: StatKey; label: string; format: (s: PlayerStats) => string }[] = [
   { key: "damage", label: "DAÑO", format: (s) => `x${s.damage.toFixed(2)}` },
@@ -77,7 +77,7 @@ export function CombatStatsOverlay({ stats }: CombatStatsOverlayProps) {
           <div
             key={row.key}
             className={`flex items-center justify-between gap-4 px-1.5 py-0.5 transition-colors duration-300 ${
-              active ? "animate-pulse bg-cyan-300/25 text-cyan-100 shadow-[0_0_12px_#00f0ffaa]" : ""
+              active ? "animate-pulse bg-cyan-300/50 text-cyan-50 shadow-[0_0_18px_#22f7ff,inset_0_0_10px_#22f7ff88]" : ""
             }`}
           >
             <span className="text-xs uppercase tracking-wide text-white/90">{row.label}</span>
