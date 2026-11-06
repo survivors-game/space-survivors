@@ -337,6 +337,20 @@ function Index() {
           </div>
         ) : null}
 
+        {hud?.hordeNotice ? (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 w-[min(92%,640px)] -translate-x-1/2 -translate-y-1/2 border border-cyan-400/50 bg-[#070814]/85 px-6 py-7 text-center shadow-[0_0_55px_#00f0ff33] backdrop-blur-sm sm:px-10">
+            <h2 className="font-arcade text-base uppercase leading-relaxed tracking-wider text-white drop-shadow-[0_0_18px_#00f0ff] sm:text-xl">
+              HORDA {hud.hordeNotice.horde} SUPERADA
+            </h2>
+            <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[#ff9ab9]">
+              ENEMIGOS MÁS PODEROSOS EN CAMINO
+            </p>
+            <p className="mt-6 font-arcade text-2xl text-[#ffd700] drop-shadow-[0_0_12px_#ffd70099]">
+              {hud.hordeNotice.remaining}
+            </p>
+          </div>
+        ) : null}
+
         {choices.length > 0 ? (
           <div className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-[#070814]/85 px-4 py-8 backdrop-blur-md">
             <section className="w-full max-w-5xl border border-cyan-400/40 bg-[#0b0d1d]/95 p-5 shadow-[0_0_55px_#00f0ff22] sm:p-8">

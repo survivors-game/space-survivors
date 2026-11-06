@@ -1,4 +1,4 @@
-import type { Poolable } from "./pool";
+ import type { Poolable } from "./pool";
 import type { EnemyDef } from "./data/enemies";
 import type { BossDef } from "./data/bosses";
 import type { WeaponDef } from "./data/weapons";
@@ -288,6 +288,7 @@ export interface HudState {
   } | null;
   weapons: { id: string; icon: string; level: number; max: number; evolved: boolean }[];
   passives: { id: string; icon: string; stacks: number }[];
+  hordeNotice: { horde: number; remaining: number } | null;
   banner: {
     title: string;
     sub: string;

@@ -138,6 +138,7 @@ export class Engine {
   pendingLevelUps = 0;
   choices: UpgradeChoice[] = [];
   bannerState: HudState["banner"] = null;
+  hordeNotice: { horde: number; elapsed: number } | null = null;
   lastPhase = 0;
   flash = 0;
   endTimer = 0;
@@ -1511,6 +1512,10 @@ export class Engine {
     }
     this.cam.shake = Math.max(0, this.cam.shake - dt * CONFIG.camera.shakeDecayPerSec);
     this.flash = Math.max(0, this.flash - dt * 2);
+    if (this.hordeNotice) {
+      this.hordeNotice.elapsed += dt;
+      if (this.hordeNotice.elapsed >= 5) this.hordeNotice = null;
+    }
     if (this.bannerState) {
       this.bannerState.t -= dt;
       if (this.bannerState.t <= 0) this.bannerState = null;
@@ -1666,6 +1671,8 @@ export class Engine {
     });
     // 4. Eliminar proyectiles enemigos.
     this.eProj.killAll();
+    // Aviso visual de horda superada (dura 5 segundos).
+    this.hordeNotice = { horde: this.lastHorde, elapsed: 0 };
   }
 
   private updateDirector(dt: number) {
@@ -2561,6 +2568,12 @@ export class Engine {
         icon: passiveById(id)?.icon ?? "ic_xp",
         stacks: n,
       })),
+      hordeNotice: this.hordeNotice
+        ? {
+            horde: this.hordeNotice.horde,
+            remaining: Math.max(0, 5 - Math.floor(this.hordeNotice.elapsed)),
+          }
+        : null,
       banner: this.bannerState ? { ...this.bannerState } : null,
       credits: this.creditsRaw,
     };
