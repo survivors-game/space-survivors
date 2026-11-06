@@ -296,4 +296,5 @@ export interface HudState {
     t: number;
   } | null;
   credits: number;
+  inventory: Record<PickupKind, number>;
 }
