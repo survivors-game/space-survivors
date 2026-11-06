@@ -49,6 +49,7 @@ import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
+import { connectAndVerifyMetaMaskSolana, disconnectMetaMaskSolana } from "@/lib/solana-wallet";
 import {
   ProgressStore,
   applyRun as recordRun,
@@ -101,6 +102,8 @@ function Index() {
   const [runCredits, setRunCredits] = useState(0);
   const [unlockedSectors, setUnlockedSectors] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletConnecting, setWalletConnecting] = useState(false);
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -122,6 +125,28 @@ function Index() {
   const saveProgress = (next: Progress) => {
     ProgressStore.set(next);
     setProgress(next);
+  };
+
+  const handleWalletConnection = async () => {
+    if (walletConnecting) return;
+    setWalletConnecting(true);
+    try {
+      if (walletAddress) {
+        await disconnectMetaMaskSolana();
+        setWalletAddress(null);
+        setNotice("WALLET DESCONECTADA");
+      } else {
+        const connected = await connectAndVerifyMetaMaskSolana();
+        setWalletAddress(connected.address);
+        setNotice("WALLET SOLANA VERIFICADA");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo conectar la wallet.";
+      setNotice(message);
+    } finally {
+      setWalletConnecting(false);
+      window.setTimeout(() => setNotice(""), 3500);
+    }
   };
 
   const selectedShip = SHIPS.find((ship) => ship.id === selectedShipId) ?? SHIPS[0]!;
@@ -484,11 +509,12 @@ function Index() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => alert("Próximamente: Conexión con MetaMask en desarrollo.")}
+              onClick={handleWalletConnection}
+              disabled={walletConnecting}
               className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
             >
               <Wallet className="size-3.5" />
-              <span>Conectar MetaMask</span>
+              <span>{walletConnecting ? "CONECTANDO..." : walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "CONECTAR METAMASK"}</span>
             </Button>
             <Button
               onClick={toggleAudio}
