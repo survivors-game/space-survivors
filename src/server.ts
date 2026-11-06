@@ -14,6 +14,7 @@ type WorkerEnv = { DB?: D1Database };
 type CloudflareRequest = Request & {
   runtime?: { cloudflare?: { env?: WorkerEnv } };
 };
+type NitroGlobal = typeof globalThis & { __env__?: WorkerEnv };
 type ServerEntry = {
   fetch: (request: Request) => Promise<Response> | Response;
 };
@@ -64,7 +65,8 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
 function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   const cloudflareEnv = (request as CloudflareRequest).runtime?.cloudflare?.env;
   if (cloudflareEnv) return cloudflareEnv;
-  return env && typeof env === "object" ? (env as WorkerEnv) : undefined;
+  if (env && typeof env === "object") return env as WorkerEnv;
+  return (globalThis as NitroGlobal).__env__;
 }
 
 function json(data: unknown, status = 200, headers?: HeadersInit): Response {
