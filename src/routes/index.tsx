@@ -23,6 +23,7 @@ import {
   Target,
   Volume2,
   VolumeX,
+  Wallet,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -474,6 +475,15 @@ function Index() {
               {progress.credits.toLocaleString()} CR
             </span>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={() => alert("Próximamente: Conexión con MetaMask en desarrollo.")}
+              className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
+            >
+              <Wallet className="size-3.5" />
+              <span>Conectar MetaMask</span>
+            </Button>
+            <Button
               onClick={toggleAudio}
               variant="outline"
               size="icon"
@@ -501,8 +511,9 @@ function Index() {
                 <span className="h-px w-12 bg-[#ff0055]" /> La última línea de defensa
               </div>
               <p className="mt-5 max-w-lg text-sm leading-7 text-white/55">
-                Quince minutos contra una flota que no deja de crecer. Elige tu nave, rompe el cerco
-                y vuelve con recursos para el siguiente despliegue.
+                Veinte minutos de combate intenso contra una flota que no deja de crecer. Supera las
+                hordas enemigas, recolecta recursos, mejora tu arsenal y sobrevive hasta derrotar al
+                jefe del sector.
               </p>
               <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
                 <Button
@@ -547,7 +558,12 @@ function Index() {
                   <div className="absolute left-1/2 top-1/2 size-36 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/20 sm:size-48" />
                   <div className="absolute left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,#00f0ff35,transparent_70%)] sm:size-36" />
                   <div className="relative grid size-24 place-items-center border border-cyan-300/50 bg-[#080b18]/80 text-cyan-200 shadow-[0_0_45px_#00f0ff35] sm:size-32">
-                    <Rocket className="size-12 sm:size-16" />
+                    <img
+                      src={spriteUrl(selectedShip.sprite, 4)}
+                      alt={selectedShip.name}
+                      className="size-16 object-contain drop-shadow-[0_0_16px_#00f0ff80] sm:size-20"
+                      style={{ imageRendering: "pixelated" }}
+                    />
                   </div>
                   <div className="absolute bottom-4 left-4 text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
                     NAVE ACTIVA
