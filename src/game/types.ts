@@ -1,4 +1,4 @@
- import type { Poolable } from "./pool";
+import type { Poolable } from "./pool";
 import type { EnemyDef } from "./data/enemies";
 import type { BossDef } from "./data/bosses";
 import type { WeaponDef } from "./data/weapons";

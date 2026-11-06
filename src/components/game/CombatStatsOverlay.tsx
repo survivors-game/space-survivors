@@ -32,7 +32,9 @@ export function CombatStatsOverlay({ stats }: CombatStatsOverlayProps) {
         {rows.map((row) => (
           <div key={row.label} className="contents">
             <dt className="text-[8px] uppercase tracking-[0.12em] text-white/75">{row.label}</dt>
-            <dd className="text-right font-arcade text-[9px] tabular-nums text-white">{row.value}</dd>
+            <dd className="text-right font-arcade text-[9px] tabular-nums text-white">
+              {row.value}
+            </dd>
           </div>
         ))}
       </dl>
