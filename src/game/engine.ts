@@ -52,6 +52,8 @@ import {
   WORLD1_ID,
   hordeIndexAt,
   CAMPAIGN_FINAL_BOSSES,
+  WORLD1_MAX_ENEMIES,
+  WORLD1_PICKUP_CHANCE,
 } from "./timeline";
 
 export type EngineState = "PLAYING" | "LEVEL_UP" | "PAUSED" | "DYING" | "WINNING" | "ENDED";
@@ -1295,7 +1297,8 @@ export class Engine {
     const xp = d.xp * (e.elite ? 4 : 1);
     if (xp > 0) this.dropGem(e.x, e.y, xp);
     else if (Math.random() < 0.3) this.dropGem(e.x, e.y, 1);
-    const pk = e.elite ? 0.15 : d.behavior === "spawnling" ? 0 : 0.006;
+    const pk =
+      e.elite ? 0.15 : d.behavior === "spawnling" ? 0 : this.stage.id === WORLD1_ID && !this.isEndless ? WORLD1_PICKUP_CHANCE : 0.006;
     if (Math.random() < pk) this.dropPickup(e.x, e.y);
     if (d.behavior === "parasite")
       for (let i = 0; i < 2; i++)
@@ -1380,7 +1383,10 @@ export class Engine {
     p.x = x;
     p.y = y;
     p.t = 0;
-    p.kind = kind ?? (Math.random() < 0.5 ? "repair" : Math.random() < 0.6 ? "magnet" : "emp");
+    if (kind) p.kind = kind;
+    else if (this.stage.id === WORLD1_ID && !this.isEndless)
+      p.kind = Math.random() < 1 / 3 ? "repair" : Math.random() < 0.5 ? "magnet" : "emp";
+    else p.kind = Math.random() < 0.5 ? "repair" : Math.random() < 0.6 ? "magnet" : "emp";
   }
 
   damagePlayer(amt: number) {
@@ -1676,6 +1682,8 @@ export class Engine {
     // 4. Eliminar proyectiles enemigos.
     this.eProj.killAll();
     // Aviso visual de horda superada (dura 5 segundos).
+    // Recuperación de vida al comenzar cada horda (no durante el combate con LEVIATÁN).
+    if (this.elapsed < this.duration) this.player.hp = this.player.maxHp;
     this.hordeNotice = { horde: this.lastHorde, elapsed: 0 };
   }
 
@@ -1690,12 +1698,17 @@ export class Engine {
     const alive = this.enemies.countAlive();
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
-      if (alive < CONFIG.spawn.maxAlive && (this.isEndless || this.elapsed < this.duration)) {
+      const world1 = this.stage.id === WORLD1_ID && !this.isEndless;
+      const cap = world1 ? WORLD1_MAX_ENEMIES : CONFIG.spawn.maxAlive;
+      if (alive < cap && (this.isEndless || this.elapsed < this.duration)) {
         this.spawnRegular();
         if (this.minute > 2 && Math.random() < 0.25) this.spawnRegular();
         if (this.minute > 6 && Math.random() < 0.3) this.spawnRegular();
       }
-      this.spawnTimer = spawnInterval(this.minute, this.stage.difficulty) * (this.boss ? 1.8 : 1);
+      this.spawnTimer =
+        world1 && alive >= cap
+          ? 0.5
+          : spawnInterval(this.minute, this.stage.difficulty) * (this.boss ? 1.8 : 1);
     }
     // En el mundo 1 la tabla por horda define todos los enemigos; no hay formaciones.
     if (ph.formationEvery > 0 && !(this.stage.id === WORLD1_ID && !this.isEndless)) {

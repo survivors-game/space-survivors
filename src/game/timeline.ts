@@ -61,6 +61,10 @@ export const BOSS_SCHEDULE: BossEvent[] = [
 /* Campaña, mundo 1: único jefe, LEVIATÁN, al llegar al minuto 20 (minuto 15 de la escala de misión). */
 export const CAMPAIGN_FINAL_BOSSES: BossEvent[] = [{ minute: 15, boss: "leviathan", final: true }];
 
+/* Ajustes de equilibrio del mundo 1 (solo campaña). */
+export const WORLD1_MAX_ENEMIES = 60; // enemigos normales simultáneos (antes: 90)
+export const WORLD1_PICKUP_CHANCE = 0.015; // probabilidad de objeto por enemigo eliminado (antes: 0,6 %)
+
 export type FormationKind = "vee" | "ring" | "wall" | "squad" | "swarm" | "pincer";
 
 /** Formations available per phase (combined attacks mix several families). */
