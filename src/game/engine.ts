@@ -55,6 +55,7 @@ import {
   CAMPAIGN_FINAL_BOSSES,
   WORLD1_MAX_ENEMIES,
   WORLD1_PICKUP_CHANCE,
+  WORLD1_HORDE_PRESSURE,
 } from "./timeline";
 
 export type EngineState = "PLAYING" | "LEVEL_UP" | "PAUSED" | "DYING" | "WINNING" | "ENDED";
@@ -906,13 +907,19 @@ export class Engine {
     e.parentUid = o.parentUid ?? -1;
     e.orbitA = 0;
     e.dying = 0;
+    const world1Campaign = this.stage.id === WORLD1_ID && !this.isEndless;
+    const pressure = world1Campaign
+      ? WORLD1_HORDE_PRESSURE[hordeIndexAt(this.elapsed)]!
+      : WORLD1_HORDE_PRESSURE[0];
     const hpK =
       d.behavior === "generator"
         ? this.bossScale
-        : enemyHpScale(this.minute, this.stage.difficulty);
+        : enemyHpScale(this.minute, this.stage.difficulty) * pressure.hp;
     e.maxHp = e.hp = Math.round(d.hp * hpK * (elite ? 3.2 : 1));
-    e.dmg = d.dmg * enemyDmgScale(this.minute, this.stage.dmgMult) * (elite ? 1.4 : 1);
-    e.speed = d.speed * rand(0.92, 1.08) * (1 + Math.min(0.25, this.minute * 0.015));
+    e.dmg =
+      d.dmg * enemyDmgScale(this.minute, this.stage.dmgMult) * pressure.damage * (elite ? 1.4 : 1);
+    e.speed =
+      d.speed * rand(0.92, 1.08) * (1 + Math.min(0.25, this.minute * 0.015)) * pressure.speed;
     e.radius = d.radius * (elite ? 1.25 : 1);
     e.shootCD = d.shootCD * rand(0.6, 1.2);
     e.angle = Math.atan2(this.player.y - y, this.player.x - x);
@@ -1724,10 +1731,9 @@ export class Engine {
       k.alive = false;
       if (k.kind === "repair") {
         this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.35);
-      } else if (k.kind === "magnet") {
-        this.gems.forEachAlive((g) => {
-          g.pulled = true;
-        });
+      } else {
+        // Los objetos especiales pendientes se guardan en el inventario.
+        this.inventory[k.kind] += 1;
       }
       // EMP: no queda ningún enemigo vivo que dañar en este punto.
     });
@@ -1758,10 +1764,13 @@ export class Engine {
         if (this.minute > 2 && Math.random() < 0.25) this.spawnRegular();
         if (this.minute > 6 && Math.random() < 0.3) this.spawnRegular();
       }
+      const pressure = world1
+        ? WORLD1_HORDE_PRESSURE[hordeIndexAt(this.elapsed)]!
+        : WORLD1_HORDE_PRESSURE[0];
       this.spawnTimer =
         world1 && alive >= cap
           ? 0.5
-          : spawnInterval(this.minute, this.stage.difficulty) * (this.boss ? 1.8 : 1);
+          : spawnInterval(this.minute, this.stage.difficulty) * pressure.spawn * (this.boss ? 1.8 : 1);
     }
     // En el mundo 1 la tabla por horda define todos los enemigos; no hay formaciones.
     if (ph.formationEvery > 0 && !(this.stage.id === WORLD1_ID && !this.isEndless)) {
@@ -2590,7 +2599,12 @@ export class Engine {
       this.gems.forEachAlive((g) => {
         g.pulled = true;
       });
-      this.banner("PULSO MAGNÉTICO", "Toda la energía atraída", "good");
+      // El pulso también recupera todos los objetos especiales que siguen en el campo.
+      this.pickups.forEachAlive((k) => {
+        this.inventory[k.kind] += 1;
+        k.alive = false;
+      });
+      this.banner("PULSO MAGNÉTICO", "Energía y objetos recuperados", "good");
     } else {
       this.flash = 0.6;
       this.addRing(p.x, p.y, 900, 0, "#3d7bff", 0);
