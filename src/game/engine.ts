@@ -326,11 +326,11 @@ export class Engine {
     const rawHeight = rect?.height;
     const w = Math.max(
       320,
-      Math.floor(Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : viewportWidth),
+      Math.floor(typeof rawWidth === "number" && Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : viewportWidth),
     );
     const h = Math.max(
       320,
-      Math.floor(Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : viewportHeight),
+      Math.floor(typeof rawHeight === "number" && Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : viewportHeight),
     );
     this.canvas.width = Math.max(1, Math.floor(w * dpr));
     this.canvas.height = Math.max(1, Math.floor(h * dpr));
