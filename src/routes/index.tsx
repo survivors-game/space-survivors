@@ -173,7 +173,8 @@ function Index() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleSessionLoading, setGoogleSessionLoading] = useState(true);
-  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileOpen, setTurnstileOpen] = useState(false);
+  const [turnstileVerifying, setTurnstileVerifying] = useState(false);
   const [turnstileWidgetVersion, setTurnstileWidgetVersion] = useState(0);
   const googleConnectionLockRef = useRef(false);
   const progressSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -496,10 +497,44 @@ function Index() {
     }
   };
 
+  const handleTurnstileToken = async (token: string) => {
+    if (!token || googleConnectionLockRef.current) return;
+    googleConnectionLockRef.current = true;
+    setTurnstileVerifying(true);
+    try {
+      const response = await fetch("/api/auth/verify-turnstile", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        authorizationUrl?: string;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.authorizationUrl) {
+        throw new Error(payload?.error ?? "No se pudo iniciar sesión con Google.");
+      }
+      const authorizationUrl = new URL(payload.authorizationUrl);
+      if (authorizationUrl.origin !== "https://accounts.google.com") {
+        throw new Error("El servidor devolvió una URL de autenticación no válida.");
+      }
+      window.location.assign(authorizationUrl.toString());
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo verificar la seguridad.");
+      setTurnstileWidgetVersion((version) => version + 1);
+    } finally {
+      googleConnectionLockRef.current = false;
+      setTurnstileVerifying(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     if (googleConnectionLockRef.current) return;
-    if (!googlePlayer && !turnstileToken) {
-      setNotice("COMPLETA LA VERIFICACIÓN DE SEGURIDAD");
+    if (!googlePlayer) {
+      setNotice("");
+      setTurnstileWidgetVersion((version) => version + 1);
+      setTurnstileOpen(true);
       return;
     }
     googleConnectionLockRef.current = true;
@@ -520,32 +555,9 @@ function Index() {
         setSelectedStageId("nova");
         setMarketRefresh((version) => version + 1);
         setNotice("SESIÓN CERRADA");
-      } else {
-        const response = await fetch("/api/auth/verify-turnstile", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: turnstileToken }),
-        });
-        const payload = (await response.json().catch(() => null)) as {
-          authorizationUrl?: string;
-          error?: string;
-        } | null;
-        if (!response.ok || !payload?.authorizationUrl) {
-          throw new Error(payload?.error ?? "No se pudo iniciar sesión con Google.");
-        }
-        const authorizationUrl = new URL(payload.authorizationUrl);
-        if (authorizationUrl.origin !== "https://accounts.google.com") {
-          throw new Error("El servidor devolvió una URL de autenticación no válida.");
-        }
-        window.location.assign(authorizationUrl.toString());
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "No se pudo iniciar sesión con Google.");
-      if (!googlePlayer) {
-        setTurnstileToken("");
-        setTurnstileWidgetVersion((version) => version + 1);
-      }
     } finally {
       googleConnectionLockRef.current = false;
       setGoogleConnecting(false);
@@ -1016,6 +1028,52 @@ function Index() {
             {notice}
           </p>
         ) : null}
+        {turnstileOpen ? (
+          <div
+            className="fixed inset-0 z-[100] grid place-items-center bg-black/75 p-4 backdrop-blur-sm"
+            onClick={() => {
+              if (!turnstileVerifying) setTurnstileOpen(false);
+            }}
+          >
+            <section
+              aria-labelledby="turnstile-dialog-title"
+              aria-modal="true"
+              className="w-full max-w-sm border border-cyan-400/30 bg-[#0f172a] p-5 shadow-[0_0_50px_#00f0ff20]"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <h2
+                className="text-center text-xs font-bold uppercase tracking-[0.16em] text-cyan-100"
+                id="turnstile-dialog-title"
+              >
+                Verificación anti-bot
+              </h2>
+              <p className="mt-2 text-center text-[10px] text-slate-400">
+                Completa la verificación para continuar con Google.
+              </p>
+              <div className="mt-5">
+                {turnstileVerifying ? (
+                  <p className="py-5 text-center text-xs text-cyan-200">
+                    Verificando…
+                  </p>
+                ) : (
+                  <TurnstileWidget
+                    key={turnstileWidgetVersion}
+                    onToken={(token) => void handleTurnstileToken(token)}
+                  />
+                )}
+              </div>
+              <button
+                className="mt-4 w-full border border-white/15 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-300 hover:bg-white/5 disabled:opacity-50"
+                disabled={turnstileVerifying}
+                onClick={() => setTurnstileOpen(false)}
+                type="button"
+              >
+                Cancelar
+              </button>
+            </section>
+          </div>
+        ) : null}
 
         {screen === "MENU" ? (
           <section className="grid min-w-0 flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
@@ -1037,12 +1095,9 @@ function Index() {
                 jefe del sector.
               </p>
               {!googlePlayer ? (
-                <div className="mt-7 max-w-lg space-y-3">
-                  <p className="border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
-                    INICIA SESIÓN Y DESPLIEGA TU NAVE
-                  </p>
-                  <TurnstileWidget key={turnstileWidgetVersion} onToken={setTurnstileToken} />
-                </div>
+                <p className="mt-7 max-w-lg border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
+                  INICIA SESIÓN Y DESPLIEGA TU NAVE
+                </p>
               ) : null}
               <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
                 <Button
