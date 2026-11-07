@@ -127,7 +127,6 @@ async function marketRequest<T>(path: string, init?: RequestInit): Promise<T> {
 async function submitLeaderboardUpdate(input: {
   pilotId: string;
   callsign: string;
-  obsidian: number;
   score: number;
 }): Promise<void> {
   const response = await fetch("/api/leaderboard/update", {
@@ -137,7 +136,6 @@ async function submitLeaderboardUpdate(input: {
     body: JSON.stringify({
       pilot_id: input.pilotId,
       callsign: input.callsign,
-      obsidian: input.obsidian,
       score: input.score,
     }),
   });
@@ -231,7 +229,6 @@ function Index() {
           void submitLeaderboardUpdate({
             pilotId: googlePlayer.playerId,
             callsign: profileName || pilot.callsign || "PILOTO",
-            obsidian: pilot.obsidian,
             score: ProgressStore.get().stats.kills,
           }).catch((error: unknown) => {
             if (!active) return;
@@ -405,7 +402,6 @@ function Index() {
             await submitLeaderboardUpdate({
               pilotId: googlePlayer.playerId,
               callsign: profileName || marketPilot?.callsign || "PILOTO",
-              obsidian: marketPilot?.obsidian ?? 0,
               score: next.stats.kills,
             });
           } catch (error) {

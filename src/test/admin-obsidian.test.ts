@@ -94,8 +94,6 @@ describe("administrative obsidian credits", () => {
         LEADERBOARD: adminDb.leaderboard,
       },
     );
-    expect(await leaderboardResponse.json()).toEqual({
-      entries: [{ pilot_id: PILOT_ID, callsign: "PILOTO", obsidian: 15, score: 0 }],
-    });
+    expect(await leaderboardResponse.json()).toEqual({ entries: [] });
   });
 });

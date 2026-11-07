@@ -4,7 +4,7 @@ import { Trophy } from "lucide-react";
 interface LeaderboardEntry {
   pilot_id: string;
   callsign: string;
-  obsidian: number;
+  boss_obsidian: number;
   score: number;
 }
 
@@ -63,7 +63,7 @@ export function Leaderboard() {
               <tr>
                 <th className="px-2 py-2">#</th>
                 <th className="px-2 py-2">Piloto</th>
-                <th className="px-2 py-2 text-right">OBS</th>
+                <th className="px-2 py-2 text-right">OBS Boss</th>
                 <th className="px-2 py-2 text-right">Puntuación</th>
               </tr>
             </thead>
@@ -73,7 +73,7 @@ export function Leaderboard() {
                   <td className="px-2 py-2 font-semibold text-cyan-300">{index + 1}</td>
                   <td className="max-w-40 truncate px-2 py-2 text-white">{entry.callsign}</td>
                   <td className="px-2 py-2 text-right text-fuchsia-300">
-                    {entry.obsidian.toLocaleString()}
+                    {entry.boss_obsidian.toLocaleString()}
                   </td>
                   <td className="px-2 py-2 text-right font-bold text-[#ffd700]">
                     {entry.score.toLocaleString()}

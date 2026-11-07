@@ -361,7 +361,7 @@ async function readJson(
 type LeaderboardEntry = {
   pilot_id: string;
   callsign: string;
-  obsidian: number;
+  boss_obsidian: number;
   score: number;
 };
 
@@ -416,9 +416,6 @@ async function handleLeaderboardRequest(
     typeof body["callsign"] !== "string" ||
     body["callsign"].trim().length < 1 ||
     body["callsign"].length > 32 ||
-    typeof body["obsidian"] !== "number" ||
-    !Number.isSafeInteger(body["obsidian"]) ||
-    body["obsidian"] < 0 ||
     typeof body["score"] !== "number" ||
     !Number.isSafeInteger(body["score"]) ||
     body["score"] < 0
@@ -429,9 +426,9 @@ async function handleLeaderboardRequest(
   try {
     const [pilot, profile, progress] = await Promise.all([
       db
-        .prepare("SELECT obsidian, callsign FROM pilots WHERE pilot_id = ?")
+        .prepare("SELECT boss_obsidian, callsign FROM pilots WHERE pilot_id = ?")
         .bind(account.pilot_id)
-        .first<{ obsidian: number; callsign: string }>(),
+        .first<{ boss_obsidian: number; callsign: string }>(),
       db
         .prepare("SELECT display_name FROM player_profiles WHERE pilot_id = ?")
         .bind(account.pilot_id)
@@ -453,13 +450,13 @@ async function handleLeaderboardRequest(
     }
 
     const callsign = profile?.display_name.trim() || pilot?.callsign.trim() || "PILOTO";
-    const obsidian = pilot?.obsidian;
+    const bossObsidian = pilot?.boss_obsidian;
     await upsertLeaderboardEntry(env.LEADERBOARD, {
       pilot_id: account.pilot_id,
       callsign,
-      obsidian:
-        typeof obsidian === "number" && Number.isSafeInteger(obsidian) && obsidian >= 0
-          ? obsidian
+      boss_obsidian:
+        typeof bossObsidian === "number" && Number.isSafeInteger(bossObsidian) && bossObsidian >= 0
+          ? bossObsidian
           : 0,
       score,
     });
@@ -503,12 +500,18 @@ async function readLeaderboard(kv: KVNamespace): Promise<LeaderboardEntry[]> {
         typeof entry === "object" &&
         typeof entry.pilot_id === "string" &&
         typeof entry.callsign === "string" &&
-        typeof entry.obsidian === "number" &&
-        Number.isSafeInteger(entry.obsidian) &&
-        entry.obsidian >= 0 &&
+        typeof entry.boss_obsidian === "number" &&
+        Number.isSafeInteger(entry.boss_obsidian) &&
+        entry.boss_obsidian > 0 &&
         typeof entry.score === "number" &&
         Number.isSafeInteger(entry.score) &&
         entry.score >= 0,
+    )
+    .sort(
+      (a, b) =>
+        b.boss_obsidian - a.boss_obsidian ||
+        a.callsign.localeCompare(b.callsign) ||
+        a.pilot_id.localeCompare(b.pilot_id),
     )
     .slice(0, 100);
 }
@@ -518,11 +521,11 @@ async function upsertLeaderboardEntry(kv: KVNamespace, entry: LeaderboardEntry):
   const updated = [...entries.filter((candidate) => candidate.pilot_id !== entry.pilot_id), entry]
     .sort(
       (a, b) =>
-        b.score - a.score ||
-        b.obsidian - a.obsidian ||
+        b.boss_obsidian - a.boss_obsidian ||
         a.callsign.localeCompare(b.callsign) ||
         a.pilot_id.localeCompare(b.pilot_id),
     )
+    .filter((candidate) => candidate.boss_obsidian > 0)
     .slice(0, 100);
   await kv.put(LEADERBOARD_KEY, JSON.stringify(updated));
 }
@@ -971,6 +974,7 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           pilot_id TEXT PRIMARY KEY,
           callsign TEXT NOT NULL DEFAULT 'PILOTO',
           obsidian INTEGER NOT NULL DEFAULT 5 CHECK (obsidian >= 0),
+          boss_obsidian INTEGER NOT NULL DEFAULT 0 CHECK (boss_obsidian >= 0),
           welcome_claimed INTEGER NOT NULL DEFAULT 1,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,
@@ -1224,9 +1228,11 @@ async function handleMarketRequest(
         return json({ error: "No se pudo acreditar el paquete al piloto." }, 400);
       }
       const pilot = await db
-        .prepare("SELECT pilot_id, obsidian, callsign FROM pilots WHERE pilot_id = ?")
+        .prepare(
+          "SELECT pilot_id, obsidian, boss_obsidian, callsign FROM pilots WHERE pilot_id = ?",
+        )
         .bind(pilotId)
-        .first<{ pilot_id: string; obsidian: number; callsign: string }>();
+        .first<{ pilot_id: string; obsidian: number; boss_obsidian: number; callsign: string }>();
       let leaderboardUpdated = false;
       if (env.LEADERBOARD && pilot) {
         try {
@@ -1243,7 +1249,7 @@ async function handleMarketRequest(
           await upsertLeaderboardEntry(env.LEADERBOARD, {
             pilot_id: pilot.pilot_id,
             callsign: profile?.display_name.trim() || pilot.callsign.trim() || "PILOTO",
-            obsidian: pilot.obsidian,
+            boss_obsidian: pilot.boss_obsidian,
             score: scoreFromProgress(progress?.progress_json),
           });
           leaderboardUpdated = true;

@@ -103,7 +103,7 @@ class AuthDatabase {
           return (account ?? null) as T | null;
         }
         if (query.includes("FROM pilots")) {
-          return { obsidian: 15, callsign: "PILOTO" } as T;
+          return { obsidian: 15, boss_obsidian: 0, callsign: "PILOTO" } as T;
         }
         if (query.includes("FROM player_profiles")) {
           return { display_name: "TEST PILOT" } as T;
@@ -331,16 +331,7 @@ describe("Google sign-in", () => {
       new Request("https://game.example/api/leaderboard"),
       env,
     );
-    expect(await leaderboardResponse.json()).toEqual({
-      entries: [
-        {
-          pilot_id: guestPilotId,
-          callsign: "TEST PILOT",
-          obsidian: 15,
-          score: 23,
-        },
-      ],
-    });
+    expect(await leaderboardResponse.json()).toEqual({ entries: [] });
 
     const secondSignIn = await signIn();
     const sessionResponse = await server.fetch(
