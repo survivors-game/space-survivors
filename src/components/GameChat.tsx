@@ -13,27 +13,30 @@ export function GameChat() {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const retryDelayRef = useRef(1000);
-  const shouldReconnectRef = useRef(true);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    shouldReconnectRef.current = true;
-    setMessages([]);
+    let active = true;
     let socket: WebSocket | null = null;
+    setMessages([]);
+    setConnected(false);
 
     const connect = () => {
-      if (!shouldReconnectRef.current) return;
+      if (!active) return;
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(
+      const currentSocket = new WebSocket(
         `${protocol}//${window.location.host}/api/chat/ws?language=${language}`,
       );
-      socketRef.current = socket;
+      socket = currentSocket;
+      socketRef.current = currentSocket;
 
-      socket.addEventListener("open", () => {
+      currentSocket.addEventListener("open", () => {
+        if (!active) return;
         retryDelayRef.current = 1000;
         setConnected(true);
       });
-      socket.addEventListener("message", (event) => {
+      currentSocket.addEventListener("message", (event) => {
+        if (!active) return;
         try {
           const message = JSON.parse(event.data) as ChatMessage;
           if (
@@ -53,22 +56,22 @@ export function GameChat() {
           console.error("No se pudo leer un mensaje del chat:", error);
         }
       });
-      socket.addEventListener("close", () => {
+      currentSocket.addEventListener("close", () => {
+        if (!active) return;
         setConnected(false);
-        if (socketRef.current === socket) socketRef.current = null;
-        if (!shouldReconnectRef.current) return;
+        if (socketRef.current === currentSocket) socketRef.current = null;
         reconnectTimerRef.current = window.setTimeout(connect, retryDelayRef.current);
         retryDelayRef.current = Math.min(retryDelayRef.current * 2, 30000);
       });
-      socket.addEventListener("error", () => socket?.close());
+      currentSocket.addEventListener("error", () => currentSocket.close());
     };
 
     connect();
     return () => {
-      shouldReconnectRef.current = false;
+      active = false;
       if (reconnectTimerRef.current !== null) window.clearTimeout(reconnectTimerRef.current);
       socket?.close();
-      socketRef.current = null;
+      if (socketRef.current === socket) socketRef.current = null;
     };
   }, [language]);
 
@@ -106,20 +109,14 @@ export function GameChat() {
     setDraft(`${draft.slice(0, mentionStart)}@${callsign} `);
   };
 
-  const colorByType: Record<ChatMessage["type"], string> = {
-    chat: "text-slate-200",
-    boss_kill: "text-red-300",
-    drop: "text-purple-300",
-  };
-
   return (
     <section
       aria-label="Chat multijugador"
-      className="fixed bottom-4 left-4 z-[60] flex w-[340px] max-w-[calc(100vw-32px)] flex-col overflow-hidden border border-slate-600/70 bg-[#0f172a] text-slate-100 shadow-2xl"
+      className="fixed bottom-4 left-4 z-[60] flex w-[340px] max-w-[calc(100vw-32px)] flex-col overflow-hidden border border-slate-600/70 bg-[#0f172a] font-sans text-slate-100 shadow-2xl"
       style={{ height: minimized ? "auto" : "400px" }}
     >
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-slate-700 px-3">
-        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider">
           <MessageCircle className="size-4 text-cyan-300" />
           {language === "en" ? "Global chat" : "Chat global"}
           <span
@@ -161,13 +158,13 @@ export function GameChat() {
           </nav>
           <div
             aria-live="polite"
-            className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-[11px]"
+            className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2 text-[9px] leading-4"
             ref={listRef}
           >
             {messages.map((message) => (
-              <p className={colorByType[message.type]} key={`${message.id}-${message.type}`}>
+              <p className="text-white" key={`${message.id}-${message.type}`}>
                 <button
-                  className="mr-1 font-bold hover:text-white hover:underline"
+                  className="mr-1 text-[9px] font-semibold text-blue-400 hover:text-blue-300 hover:underline"
                   onClick={() => addMention(message.callsign)}
                   title={`Mencionar a ${message.callsign}`}
                   type="button"
@@ -207,7 +204,7 @@ export function GameChat() {
             )}
             <input
               aria-label="Escribe un mensaje"
-              className="min-w-0 flex-1 bg-slate-900 px-2 py-1.5 text-[10px] outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-cyan-500"
+              className="min-w-0 flex-1 bg-slate-900 px-2 py-1.5 text-[9px] outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-cyan-500"
               maxLength={MAX_MESSAGE_LENGTH}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={
