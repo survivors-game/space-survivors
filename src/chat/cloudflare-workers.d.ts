@@ -14,11 +14,6 @@ declare module "cloudflare:workers" {
     };
     acceptWebSocket(socket: WebSocket): void;
     getWebSockets(): WebSocket[];
-    setWebSocketAutoResponse(pair: WebSocketRequestResponsePair): void;
-  }
-
-  export class WebSocketRequestResponsePair {
-    constructor(request: string, response: string);
   }
 
   export class DurableObject<Env = unknown> {
