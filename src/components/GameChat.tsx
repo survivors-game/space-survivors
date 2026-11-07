@@ -1,11 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Minus, Plus, Send } from "lucide-react";
+import { MessageCircle, Minus, Plus, Send, ZoomIn, ZoomOut } from "lucide-react";
 import type { ChatMessage } from "@/chat/chat-room";
 
 const MAX_MESSAGE_LENGTH = 500;
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 18;
+const CHAT_FONT_SIZE_KEY = "space-survivors-chat-font-size";
 
 export function GameChat() {
   const [language, setLanguage] = useState<"en" | "es">("es");
+  const [fontSize, setFontSize] = useState(() => {
+    if (typeof window === "undefined") return 9;
+    try {
+      const savedSize = Number(window.localStorage.getItem(CHAT_FONT_SIZE_KEY));
+      return Number.isInteger(savedSize) && savedSize >= MIN_FONT_SIZE && savedSize <= MAX_FONT_SIZE
+        ? savedSize
+        : 9;
+    } catch (error) {
+      console.warn("No se pudo recuperar el tamaño de letra del chat:", error);
+      return 9;
+    }
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
@@ -14,6 +29,14 @@ export function GameChat() {
   const reconnectTimerRef = useRef<number | null>(null);
   const retryDelayRef = useRef(1000);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHAT_FONT_SIZE_KEY, String(fontSize));
+    } catch (error) {
+      console.warn("No se pudo guardar el tamaño de letra del chat:", error);
+    }
+  }, [fontSize]);
 
   useEffect(() => {
     let active = true;
@@ -123,14 +146,36 @@ export function GameChat() {
             className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-amber-400"}`}
           />
         </div>
-        <button
-          aria-label={minimized ? "Expandir chat" : "Minimizar chat"}
-          className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
-          onClick={() => setMinimized((value) => !value)}
-          type="button"
-        >
-          {minimized ? <Plus className="size-4" /> : <Minus className="size-4" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            aria-label="Reducir tamaño de letra"
+            className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-40"
+            disabled={fontSize <= MIN_FONT_SIZE}
+            onClick={() => setFontSize((size) => Math.max(MIN_FONT_SIZE, size - 1))}
+            title="Reducir tamaño de letra"
+            type="button"
+          >
+            <ZoomOut className="size-3.5" />
+          </button>
+          <button
+            aria-label="Aumentar tamaño de letra"
+            className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white disabled:opacity-40"
+            disabled={fontSize >= MAX_FONT_SIZE}
+            onClick={() => setFontSize((size) => Math.min(MAX_FONT_SIZE, size + 1))}
+            title="Aumentar tamaño de letra"
+            type="button"
+          >
+            <ZoomIn className="size-3.5" />
+          </button>
+          <button
+            aria-label={minimized ? "Expandir chat" : "Minimizar chat"}
+            className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
+            onClick={() => setMinimized((value) => !value)}
+            type="button"
+          >
+            {minimized ? <Plus className="size-4" /> : <Minus className="size-4" />}
+          </button>
+        </div>
       </header>
       {!minimized && (
         <>
@@ -158,13 +203,14 @@ export function GameChat() {
           </nav>
           <div
             aria-live="polite"
-            className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2 text-[9px] leading-4"
+            className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2"
             ref={listRef}
+            style={{ fontSize: `${fontSize}px`, lineHeight: `${Math.ceil(fontSize * 1.45)}px` }}
           >
             {messages.map((message) => (
               <p className="text-white" key={`${message.id}-${message.type}`}>
                 <button
-                  className="mr-1 text-[9px] font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                  className="mr-1 font-semibold text-blue-400 hover:text-blue-300 hover:underline"
                   onClick={() => addMention(message.callsign)}
                   title={`Mencionar a ${message.callsign}`}
                   type="button"
@@ -204,9 +250,10 @@ export function GameChat() {
             )}
             <input
               aria-label="Escribe un mensaje"
-              className="min-w-0 flex-1 bg-slate-900 px-2 py-1.5 text-[9px] outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-cyan-500"
+              className="min-w-0 flex-1 bg-slate-900 px-2 py-1.5 outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-cyan-500"
               maxLength={MAX_MESSAGE_LENGTH}
               onChange={(event) => setDraft(event.target.value)}
+              style={{ fontSize: `${fontSize}px` }}
               placeholder={
                 connected
                   ? language === "en"
