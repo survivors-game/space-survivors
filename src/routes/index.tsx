@@ -152,6 +152,7 @@ function Index() {
   const shipCarouselRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (googleSessionLoading) return;
     const syncProgress = () => {
       const current = ProgressStore.get();
       setProgress(current);
@@ -162,11 +163,18 @@ function Index() {
     const unsubscribe = ProgressStore.subscribe(syncProgress);
     setAudioEnabled(!Settings.get().muted);
     return unsubscribe;
-  }, []);
+  }, [googleSessionLoading]);
 
   const ownedShipsKey = progress.ships.join(",");
   useEffect(() => {
     if (googleSessionLoading) return;
+    if (!googlePlayer) {
+      setMarketPilot(null);
+      setMarketAds([]);
+      setMarketLoading(false);
+      setMarketError("");
+      return;
+    }
     let active = true;
     setMarketLoading(true);
     setMarketError("");
@@ -200,7 +208,7 @@ function Index() {
     return () => {
       active = false;
     };
-  }, [googleSessionLoading, ownedShipsKey, progress.selectedShip, marketRefresh]);
+  }, [googleSessionLoading, googlePlayer, ownedShipsKey, progress.selectedShip, marketRefresh]);
 
   useEffect(() => {
     let active = true;
@@ -240,6 +248,17 @@ function Index() {
         if (!response.ok) throw new Error(session.error ?? "No se pudo recuperar la sesión.");
         if (!active) return;
         if (!session.authenticated) {
+          let previousAccount: string | null = null;
+          try {
+            previousAccount = localStorage.getItem(PROGRESS_ACCOUNT_KEY);
+          } catch {
+            // El almacenamiento local puede estar deshabilitado.
+          }
+          if (previousAccount) {
+            ProgressStore.set(defaultProgress());
+          }
+          setMarketPilot(null);
+          setMarketAds([]);
           setGoogleSessionLoading(false);
           return;
         }
@@ -385,6 +404,12 @@ function Index() {
         });
         if (!response.ok) throw new Error("No se pudo cerrar la sesión de Google.");
         setGooglePlayer(null);
+        setMarketPilot(null);
+        setMarketAds([]);
+        ProgressStore.set(defaultProgress());
+        setProgress(defaultProgress());
+        setSelectedShipId("falcon");
+        setSelectedStageId("nova");
         setMarketRefresh((version) => version + 1);
         setNotice("SESIÓN CERRADA");
       } else {
@@ -794,12 +819,19 @@ function Index() {
                 className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
               >
                 <Wallet className="size-3.5" />
-                <span>
-                  {googleConnecting
-                    ? "CONECTANDO..."
-                    : googlePlayer
-                      ? googlePlayer.email
-                      : "INICIAR SESIÓN CON GOOGLE"}
+                <span className="flex flex-col items-start leading-tight">
+                  <span>
+                    {googleConnecting
+                      ? "CONECTANDO..."
+                      : googlePlayer
+                        ? googlePlayer.email
+                        : "INICIAR SESIÓN CON GOOGLE"}
+                  </span>
+                  {googlePlayer ? (
+                    <span className="mt-1 text-[7px] normal-case tracking-normal text-cyan-200/70">
+                      PILOT ID: {googlePlayer.playerId}
+                    </span>
+                  ) : null}
                 </span>
               </Button>
             ) : null}
