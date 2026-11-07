@@ -1,4 +1,4 @@
-import { DurableObject, WebSocketRequestResponsePair } from "cloudflare:workers";
+import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "cloudflare:workers";
 
 type MessageType = "chat" | "boss_kill" | "drop" | "join" | "leave";
@@ -59,7 +59,6 @@ export class ChatRoom extends DurableObject {
         timestamp INTEGER NOT NULL
       )`,
     );
-    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -116,6 +115,10 @@ export class ChatRoom extends DurableObject {
   }
 
   webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+    if (message === "ping") {
+      socket.send("pong");
+      return;
+    }
     const client = socket as HibernatingWebSocket;
     const attachment = client.deserializeAttachment();
     const text = typeof message === "string" ? message : new TextDecoder().decode(message);
