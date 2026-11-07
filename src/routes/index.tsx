@@ -820,14 +820,16 @@ function Index() {
             </span>
           </button>
           <div className="flex items-center gap-2 sm:gap-5">
-            <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
-              <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
-              {progress.credits.toLocaleString()} CR
-              <span className="ml-2 inline-flex items-center gap-1 text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
-                <Gem className="size-3" />
-                {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
+            {googlePlayer ? (
+              <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
+                <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
+                {progress.credits.toLocaleString()} CR
+                <span className="ml-2 inline-flex items-center gap-1 text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
+                  <Gem className="size-3" />
+                  {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
+                </span>
               </span>
-            </span>
+            ) : null}
             {screen === "MENU" ? (
               <Button
                 variant="outline"
@@ -1786,15 +1788,17 @@ function Index() {
           <span>
             SPACE SURVIVORS <span className="text-cyan-300/70">//</span> PROTOCOLO DE DEFENSA ACTIVO
           </span>
-          <span>
-            CRÉDITOS{" "}
-            <span className="font-arcade text-[8px] text-[#ffd700]/80">
-              {progress.credits.toLocaleString()} CR
+          {googlePlayer ? (
+            <span>
+              CRÉDITOS{" "}
+              <span className="font-arcade text-[8px] text-[#ffd700]/80">
+                {progress.credits.toLocaleString()} CR
+              </span>
+              <span className="ml-3 font-arcade text-[8px] text-[#d946ef]">
+                {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
+              </span>
             </span>
-            <span className="ml-3 font-arcade text-[8px] text-[#d946ef]">
-              {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
-            </span>
-          </span>
+          ) : null}
         </footer>
       </div>
     </main>
