@@ -18,7 +18,12 @@ type D1Database = {
   prepare(query: string): D1Statement;
   batch<T = Record<string, unknown>>(statements: D1Statement[]): Promise<D1Result<T>[]>;
 };
-type WorkerEnv = { DB?: D1Database; ADMIN_SECRET?: string };
+type WorkerEnv = {
+  DB?: D1Database;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REDIRECT_URI?: string;
+};
 type CloudflareRequest = Request & {
   runtime?: { cloudflare?: { env?: WorkerEnv } };
 };
@@ -29,11 +34,16 @@ type ServerEntry = {
 
 const SESSION_COOKIE = "__Host-ss_session";
 const PILOT_COOKIE = "__Host-ss_pilot";
+const OAUTH_STATE_COOKIE = "__Host-ss_google_state";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
+const ADMIN_EMAIL = "emprendedora.onlinevee@gmail.com";
+const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 let schemaPromise: Promise<void> | undefined;
 let marketSchemaPromise: Promise<void> | undefined;
+let googleJwksPromise: Promise<{ keys: JsonWebKey[] }> | undefined;
+let googleJwksCache: { keys: JsonWebKey[]; expiresAt: number } | undefined;
 
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
@@ -49,10 +59,10 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
     schemaPromise = (async () => {
       await db
         .prepare(
-          `CREATE TABLE IF NOT EXISTS auth_challenges (
-        challenge_id TEXT PRIMARY KEY,
-        wallet_address TEXT NOT NULL,
-        message TEXT NOT NULL,
+          `CREATE TABLE IF NOT EXISTS google_oauth_states (
+        state_hash TEXT PRIMARY KEY,
+        nonce TEXT NOT NULL,
+        code_verifier TEXT NOT NULL,
         expires_at INTEGER NOT NULL,
         consumed_at INTEGER
       )`,
@@ -60,8 +70,34 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
         .run();
       await db
         .prepare(
-          `CREATE INDEX IF NOT EXISTS idx_auth_challenges_expiry
-        ON auth_challenges(expires_at)`,
+          `CREATE INDEX IF NOT EXISTS idx_google_oauth_states_expiry
+        ON google_oauth_states(expires_at)`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS player_accounts (
+        google_sub TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        pilot_id TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS player_progress (
+        pilot_id TEXT PRIMARY KEY,
+        progress_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE INDEX IF NOT EXISTS idx_player_accounts_email
+        ON player_accounts(email)`,
         )
         .run();
       await db
@@ -115,32 +151,6 @@ function randomHex(length: number): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function base58Decode(value: string): Uint8Array | null {
-  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  if (!value || value.length > 64) return null;
-  const littleEndian: number[] = [0];
-  for (const character of value) {
-    const digit = alphabet.indexOf(character);
-    if (digit < 0) return null;
-    let carry = digit;
-    for (let i = 0; i < littleEndian.length; i++) {
-      carry += littleEndian[i]! * 58;
-      littleEndian[i] = carry & 0xff;
-      carry >>= 8;
-    }
-    while (carry > 0) {
-      littleEndian.push(carry & 0xff);
-      carry >>= 8;
-    }
-  }
-  let leadingZeroes = 0;
-  while (leadingZeroes < value.length && value[leadingZeroes] === "1") leadingZeroes++;
-  const significant = value === "1".repeat(value.length) ? [] : littleEndian.reverse();
-  const decoded = new Uint8Array(leadingZeroes + significant.length);
-  decoded.set(significant, leadingZeroes);
-  return decoded;
-}
-
 function readCookie(request: Request, name: string): string | null {
   const cookieHeader = request.headers.get("cookie") ?? "";
   for (const item of cookieHeader.split(";")) {
@@ -157,24 +167,126 @@ function sessionCookie(token: string, maxAge: number): string {
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
+function googleStateCookie(state: string, maxAge: number): string {
+  return `${OAUTH_STATE_COOKIE}=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+function googleRedirect(location: string): Response {
+  const headers = new Headers({
+    location,
+    "cache-control": "no-store",
+    "referrer-policy": "no-referrer",
+  });
+  return new Response(null, { status: 302, headers });
+}
+
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function matchesSecret(value: string, secret: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const [valueDigest, secretDigest] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(value)),
-    crypto.subtle.digest("SHA-256", encoder.encode(secret)),
-  ]);
-  const valueBytes = new Uint8Array(valueDigest);
-  const secretBytes = new Uint8Array(secretDigest);
-  let difference = 0;
-  for (let i = 0; i < valueBytes.length; i++) {
-    difference |= valueBytes[i]! ^ secretBytes[i]!;
+function base64UrlDecode(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function decodeJwtPart<T>(value: string): T {
+  return JSON.parse(new TextDecoder().decode(base64UrlDecode(value))) as T;
+}
+
+type GoogleIdClaims = {
+  iss: string;
+  aud: string | string[];
+  azp?: string;
+  exp: number;
+  iat: number;
+  nonce: string;
+  sub: string;
+  email: string;
+  email_verified: boolean;
+};
+
+async function getGoogleJwks(): Promise<{ keys: JsonWebKey[] }> {
+  if (googleJwksCache && googleJwksCache.expiresAt > Date.now()) {
+    return googleJwksCache;
   }
-  return difference === 0;
+  if (!googleJwksPromise) {
+    googleJwksPromise = fetch(GOOGLE_JWKS_URL, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Google JWKS respondió HTTP ${response.status}.`);
+        const keySet = (await response.json()) as { keys: JsonWebKey[] };
+        googleJwksCache = { ...keySet, expiresAt: Date.now() + 5 * 60 * 1000 };
+        return keySet;
+      })
+      .catch((error) => {
+        googleJwksPromise = undefined;
+        throw error;
+      });
+  }
+  try {
+    return await googleJwksPromise;
+  } finally {
+    googleJwksPromise = undefined;
+  }
+}
+
+async function verifyGoogleIdToken(
+  token: string,
+  clientId: string,
+  expectedNonce: string,
+): Promise<GoogleIdClaims | null> {
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts.some((part) => part.length > 16384)) return null;
+  try {
+    const header = decodeJwtPart<{ alg?: string; kid?: string }>(parts[0]!);
+    const claims = decodeJwtPart<GoogleIdClaims>(parts[1]!);
+    if (header.alg !== "RS256" || typeof header.kid !== "string") return null;
+    const key = (await getGoogleJwks()).keys.find(
+      (candidate) => (candidate as JsonWebKey & { kid?: string }).kid === header.kid,
+    );
+    if (!key) return null;
+    const publicKey = await crypto.subtle.importKey(
+      "jwk",
+      key,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const signatureValid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      publicKey,
+      new Uint8Array(base64UrlDecode(parts[2]!)).buffer,
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+    const now = Math.floor(Date.now() / 1000);
+    const audienceMatches = Array.isArray(claims.aud)
+      ? claims.aud.includes(clientId)
+      : claims.aud === clientId;
+    if (
+      !signatureValid ||
+      !["accounts.google.com", "https://accounts.google.com"].includes(claims.iss) ||
+      !audienceMatches ||
+      (claims.azp !== undefined && claims.azp !== clientId) ||
+      (Array.isArray(claims.aud) && claims.aud.length > 1 && claims.azp !== clientId) ||
+      !Number.isFinite(claims.exp) ||
+      claims.exp <= now ||
+      !Number.isFinite(claims.iat) ||
+      claims.iat > now + 60 ||
+      claims.nonce !== expectedNonce ||
+      claims.email_verified !== true ||
+      typeof claims.sub !== "string" ||
+      !claims.sub ||
+      typeof claims.email !== "string" ||
+      !claims.email.includes("@")
+    ) {
+      return null;
+    }
+    return claims;
+  } catch (error) {
+    console.error("No se pudo validar el token de identidad de Google:", error);
+    return null;
+  }
 }
 
 function isSameOriginPost(request: Request, url: URL): boolean {
@@ -182,10 +294,13 @@ function isSameOriginPost(request: Request, url: URL): boolean {
   return origin === url.origin;
 }
 
-async function readJson(request: Request): Promise<Record<string, unknown> | null> {
+async function readJson(
+  request: Request,
+  maxLength = 8192,
+): Promise<Record<string, unknown> | null> {
   try {
     const text = await request.text();
-    if (text.length > 8192) return null;
+    if (text.length > maxLength) return null;
     const value: unknown = JSON.parse(text);
     return value && typeof value === "object" && !Array.isArray(value)
       ? (value as Record<string, unknown>)
@@ -211,151 +326,264 @@ async function handleAuthRequest(
     return json({ error: "No se pudo preparar la autenticación. Inténtalo de nuevo." }, 503);
   }
 
-  if (url.pathname === "/api/auth/challenge" && request.method === "POST") {
+  if (url.pathname === "/api/auth/google/start" && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
-    const body = await readJson(request);
-    const address = body?.["address"];
-    if (typeof address !== "string" || base58Decode(address)?.length !== 32) {
-      return json({ error: "La dirección Solana no es válida." }, 400);
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI) {
+      return json({ error: "Faltan las credenciales de Google en el Worker." }, 503);
     }
-
     const now = Date.now();
-    const challengeId = randomHex(24);
-    const nonce = randomHex(24);
-    const expiresAt = now + CHALLENGE_TTL_MS;
-    const issuedAt = new Date(now).toISOString();
-    const message = [
-      "SPACE SURVIVORS — Verificación de wallet",
-      `Dominio: ${url.host}`,
-      `Cuenta Solana: ${address}`,
-      `Nonce: ${nonce}`,
-      `Fecha: ${issuedAt}`,
-      `Expira: ${new Date(expiresAt).toISOString()}`,
-      "Esta firma solo demuestra el control de la cuenta. No autoriza pagos ni transacciones.",
-    ].join("\n");
-
+    const state = randomHex(32);
+    const nonce = randomHex(32);
+    const codeVerifier = randomHex(32);
+    const challengeDigest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(codeVerifier),
+    );
+    const codeChallenge = btoa(
+      Array.from(new Uint8Array(challengeDigest), (byte) => String.fromCharCode(byte)).join(""),
+    )
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
     await db
       .prepare(
-        `INSERT INTO auth_challenges
-      (challenge_id, wallet_address, message, expires_at, consumed_at)
+        `INSERT INTO google_oauth_states
+      (state_hash, nonce, code_verifier, expires_at, consumed_at)
       VALUES (?, ?, ?, ?, NULL)`,
       )
-      .bind(challengeId, address, message, expiresAt)
+      .bind(await sha256Hex(state), nonce, codeVerifier, now + GOOGLE_STATE_TTL_MS)
       .run();
-
-    return json({ challengeId, message, expiresAt });
+    const authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authorizationUrl.search = new URLSearchParams({
+      client_id: env.GOOGLE_CLIENT_ID,
+      redirect_uri: env.GOOGLE_REDIRECT_URI,
+      response_type: "code",
+      scope: "openid email profile",
+      state,
+      nonce,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+    }).toString();
+    return json({ authorizationUrl: authorizationUrl.toString() }, 200, {
+      "set-cookie": googleStateCookie(state, Math.floor(GOOGLE_STATE_TTL_MS / 1000)),
+    });
   }
 
-  if (url.pathname === "/api/auth/verify" && request.method === "POST") {
-    if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
-    const body = await readJson(request);
-    const challengeId = body?.["challengeId"];
-    const address = body?.["address"];
-    const signatureText = body?.["signature"];
-    if (
-      typeof challengeId !== "string" ||
-      typeof address !== "string" ||
-      typeof signatureText !== "string" ||
-      signatureText.length > 256
-    ) {
-      return json({ error: "Faltan datos para verificar la firma." }, 400);
+  if (url.pathname === "/api/auth/google/callback" && request.method === "GET") {
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI) {
+      return json({ error: "Falta configurar las credenciales de Google en el Worker." }, 503);
     }
-
-    const challenge = await db
+    const oauthError = url.searchParams.get("error");
+    if (oauthError) return googleRedirect(`${url.origin}/?google_error=cancelled`);
+    const state = url.searchParams.get("state");
+    const code = url.searchParams.get("code");
+    if (!state || state.length > 128 || !code || code.length > 4096) {
+      return googleRedirect(`${url.origin}/?google_error=invalid_response`);
+    }
+    if (readCookie(request, OAUTH_STATE_COOKIE) !== state) {
+      return googleRedirect(`${url.origin}/?google_error=invalid_response`);
+    }
+    const oauthState = await db
       .prepare(
-        `SELECT message, expires_at
-      FROM auth_challenges
-      WHERE challenge_id = ? AND wallet_address = ? AND consumed_at IS NULL`,
+        `SELECT nonce, code_verifier, expires_at
+      FROM google_oauth_states WHERE state_hash = ? AND consumed_at IS NULL`,
       )
-      .bind(challengeId, address)
-      .first<{ message: string; expires_at: number }>();
-
+      .bind(await sha256Hex(state))
+      .first<{ nonce: string; code_verifier: string; expires_at: number }>();
     const now = Date.now();
-    if (!challenge || challenge.expires_at <= now) {
-      return json({ error: "La solicitud de firma venció. Vuelve a conectar la wallet." }, 401);
+    if (!oauthState || oauthState.expires_at <= now) {
+      return googleRedirect(`${url.origin}/?google_error=expired`);
     }
-
-    const publicKeyBytes = base58Decode(address);
-    let signature: Uint8Array;
-    try {
-      const binary = atob(signatureText);
-      signature = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    } catch {
-      return json({ error: "La firma recibida no es válida." }, 400);
-    }
-    if (!publicKeyBytes || publicKeyBytes.length !== 32 || signature.length !== 64) {
-      return json({ error: "La clave o firma Solana no es válida." }, 400);
-    }
-
-    let valid = false;
-    try {
-      const publicKey = await crypto.subtle.importKey(
-        "raw",
-        new Uint8Array(publicKeyBytes).buffer,
-        { name: "Ed25519" },
-        false,
-        ["verify"],
-      );
-      valid = await crypto.subtle.verify(
-        { name: "Ed25519" },
-        publicKey,
-        new Uint8Array(signature).buffer,
-        new TextEncoder().encode(challenge.message),
-      );
-    } catch {
-      valid = false;
-    }
-    if (!valid)
-      return json({ error: "MetaMask no pudo demostrar el control de esta cuenta." }, 401);
-
     const consumed = await db
       .prepare(
-        `UPDATE auth_challenges SET consumed_at = ?
-      WHERE challenge_id = ? AND wallet_address = ? AND consumed_at IS NULL AND expires_at > ?`,
+        `UPDATE google_oauth_states SET consumed_at = ?
+      WHERE state_hash = ? AND consumed_at IS NULL AND expires_at > ?`,
       )
-      .bind(now, challengeId, address, now)
+      .bind(now, await sha256Hex(state), now)
       .run();
     if ((consumed.meta?.changes ?? 0) !== 1) {
-      return json({ error: "La solicitud ya fue utilizada o venció. Vuelve a conectar." }, 401);
+      return googleRedirect(`${url.origin}/?google_error=expired`);
+    }
+
+    let tokenPayload: { id_token?: string };
+    try {
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: env.GOOGLE_CLIENT_ID,
+          client_secret: env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: env.GOOGLE_REDIRECT_URI,
+          grant_type: "authorization_code",
+          code_verifier: oauthState.code_verifier,
+        }),
+      });
+      if (!tokenResponse.ok) {
+        console.error("Google rechazó el intercambio OAuth:", tokenResponse.status);
+        return googleRedirect(`${url.origin}/?google_error=verification_failed`);
+      }
+      tokenPayload = (await tokenResponse.json()) as { id_token?: string };
+    } catch (error) {
+      console.error("No se pudo completar el intercambio OAuth con Google:", error);
+      return googleRedirect(`${url.origin}/?google_error=verification_failed`);
+    }
+    if (typeof tokenPayload.id_token !== "string") {
+      return googleRedirect(`${url.origin}/?google_error=verification_failed`);
+    }
+    const identity = await verifyGoogleIdToken(
+      tokenPayload.id_token,
+      env.GOOGLE_CLIENT_ID,
+      oauthState.nonce,
+    );
+    if (!identity) {
+      return googleRedirect(`${url.origin}/?google_error=verification_failed`);
+    }
+    const email = identity.email.trim().toLowerCase();
+    let account = await db
+      .prepare(`SELECT google_sub, email, pilot_id FROM player_accounts WHERE google_sub = ?`)
+      .bind(identity.sub)
+      .first<PlayerAccount>();
+    if (!account) {
+      const existingEmail = await db
+        .prepare(`SELECT google_sub, email, pilot_id FROM player_accounts WHERE email = ?`)
+        .bind(email)
+        .first<PlayerAccount>();
+      if (existingEmail) {
+        return googleRedirect(`${url.origin}/?google_error=account_conflict`);
+      }
+      try {
+        await ensureMarketSchema(db);
+        let pilotId = readCookie(request, PILOT_COOKIE);
+        if (!validPilotId(pilotId)) pilotId = `plt_${randomHex(12)}`;
+        const claimedPilot = await db
+          .prepare(`SELECT google_sub FROM player_accounts WHERE pilot_id = ?`)
+          .bind(pilotId)
+          .first<{ google_sub: string }>();
+        if (claimedPilot) pilotId = `plt_${randomHex(12)}`;
+        const createdAt = Date.now();
+        const results = await db.batch([
+          db
+            .prepare(
+              `INSERT OR IGNORE INTO pilots
+            (pilot_id, callsign, obsidian, welcome_claimed, created_at, updated_at)
+            VALUES (?, 'PILOTO', 5, 1, ?, ?)`,
+            )
+            .bind(pilotId, createdAt, createdAt),
+          db
+            .prepare(
+              `INSERT INTO player_accounts
+            (google_sub, email, pilot_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+            )
+            .bind(identity.sub, email, pilotId, createdAt, createdAt),
+        ]);
+        if (results[1]?.meta?.changes !== 1) {
+          throw new Error("No se pudo crear una cuenta de jugador única.");
+        }
+        account = {
+          google_sub: identity.sub,
+          email,
+          pilot_id: pilotId,
+        };
+      } catch (error) {
+        console.error("No se pudo crear la cuenta de jugador de Google:", error);
+        account = await db
+          .prepare(`SELECT google_sub, email, pilot_id FROM player_accounts WHERE google_sub = ?`)
+          .bind(identity.sub)
+          .first<PlayerAccount>();
+        if (!account) {
+          return googleRedirect(`${url.origin}/?google_error=account_conflict`);
+        }
+      }
+    } else if (account.email !== email) {
+      try {
+        await db
+          .prepare(`UPDATE player_accounts SET email = ?, updated_at = ? WHERE google_sub = ?`)
+          .bind(email, Date.now(), identity.sub)
+          .run();
+        account.email = email;
+      } catch (error) {
+        console.error("No se pudo actualizar el correo de la cuenta de Google:", error);
+        return googleRedirect(`${url.origin}/?google_error=account_conflict`);
+      }
     }
 
     const token = randomHex(32);
     const tokenHash = await sha256Hex(token);
-    const expiresAt = now + SESSION_TTL_MS;
+    const expiresAt = Date.now() + SESSION_TTL_MS;
     await db
       .prepare(
         `INSERT INTO auth_sessions
       (token_hash, wallet_address, created_at, expires_at) VALUES (?, ?, ?, ?)`,
       )
-      .bind(tokenHash, address, now, expiresAt)
+      .bind(tokenHash, `google:${identity.sub}`, Date.now(), expiresAt)
       .run();
-
-    return json({ authenticated: true, address, expiresAt }, 200, {
-      "set-cookie": sessionCookie(token, Math.floor(SESSION_TTL_MS / 1000)),
+    const headers = new Headers({
+      location: url.origin,
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
     });
+    headers.append("set-cookie", sessionCookie(token, Math.floor(SESSION_TTL_MS / 1000)));
+    headers.append("set-cookie", googleStateCookie("", 0));
+    headers.append(
+      "set-cookie",
+      `${PILOT_COOKIE}=${account.pilot_id}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+    );
+    return new Response(null, { status: 302, headers });
   }
 
   if (url.pathname === "/api/auth/session" && request.method === "GET") {
     const token = readCookie(request, SESSION_COOKIE);
     if (!token) return json({ authenticated: false }, 200);
     const tokenHash = await sha256Hex(token);
-    const session = await db
-      .prepare(
-        `SELECT wallet_address, expires_at FROM auth_sessions
-      WHERE token_hash = ? AND expires_at > ?`,
-      )
-      .bind(tokenHash, Date.now())
-      .first<{ wallet_address: string; expires_at: number }>();
-    if (!session) {
+    const account = await getAuthenticatedAccount(db, tokenHash);
+    if (!account) {
       return json({ authenticated: false }, 200, {
         "set-cookie": sessionCookie("", 0),
       });
     }
+    const savedProgress = await db
+      .prepare(`SELECT progress_json FROM player_progress WHERE pilot_id = ?`)
+      .bind(account.pilot_id)
+      .first<{ progress_json: string }>();
     return json({
       authenticated: true,
-      address: session.wallet_address,
-      expiresAt: session.expires_at,
+      email: account.email,
+      playerId: account.pilot_id,
+      isAdmin: account.email === ADMIN_EMAIL,
+      progress: savedProgress ? JSON.parse(savedProgress.progress_json) : null,
     });
+  }
+
+  if (url.pathname === "/api/auth/progress" && request.method === "GET") {
+    const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+    if (!account)
+      return json({ error: "Inicia sesión con Google para recuperar el progreso." }, 401);
+    const savedProgress = await db
+      .prepare(`SELECT progress_json FROM player_progress WHERE pilot_id = ?`)
+      .bind(account.pilot_id)
+      .first<{ progress_json: string }>();
+    return json({ progress: savedProgress ? JSON.parse(savedProgress.progress_json) : null });
+  }
+
+  if (url.pathname === "/api/auth/progress" && request.method === "POST") {
+    if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+    const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+    if (!account) return json({ error: "Inicia sesión con Google para guardar el progreso." }, 401);
+    const body = await readJson(request, 65536);
+    if (!body || !body["progress"] || typeof body["progress"] !== "object") {
+      return json({ error: "Los datos del progreso no son válidos." }, 400);
+    }
+    await db
+      .prepare(
+        `INSERT INTO player_progress (pilot_id, progress_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(pilot_id) DO UPDATE SET
+        progress_json = excluded.progress_json, updated_at = excluded.updated_at`,
+      )
+      .bind(account.pilot_id, JSON.stringify(body["progress"]), Date.now())
+      .run();
+    return json({ success: true });
   }
 
   if (url.pathname === "/api/auth/logout" && request.method === "POST") {
@@ -367,10 +595,42 @@ async function handleAuthRequest(
         .bind(await sha256Hex(token))
         .run();
     }
-    return json({ authenticated: false }, 200, { "set-cookie": sessionCookie("", 0) });
+    const headers = new Headers();
+    headers.append("set-cookie", sessionCookie("", 0));
+    headers.append(
+      "set-cookie",
+      `${PILOT_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+    );
+    return json({ authenticated: false }, 200, headers);
   }
 
   return json({ error: "Ruta de autenticación no encontrada." }, 404);
+}
+
+type PlayerAccount = { google_sub: string; email: string; pilot_id: string };
+
+async function requestSessionHash(request: Request): Promise<string> {
+  const token = readCookie(request, SESSION_COOKIE);
+  return token ? sha256Hex(token) : "";
+}
+
+async function getAuthenticatedAccount(
+  db: D1Database,
+  tokenHash: string,
+): Promise<PlayerAccount | null> {
+  if (!tokenHash) return null;
+  const session = await db
+    .prepare(
+      `SELECT wallet_address, expires_at FROM auth_sessions
+    WHERE token_hash = ? AND expires_at > ?`,
+    )
+    .bind(tokenHash, Date.now())
+    .first<{ wallet_address: string; expires_at: number }>();
+  if (!session || !session.wallet_address.startsWith("google:")) return null;
+  return db
+    .prepare(`SELECT google_sub, email, pilot_id FROM player_accounts WHERE google_sub = ?`)
+    .bind(session.wallet_address.slice("google:".length))
+    .first<PlayerAccount>();
 }
 
 type MarketInventoryRow = {
@@ -528,11 +788,12 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
   await marketSchemaPromise;
 }
 
-function validPilotId(value: string | null): value is string {
-  return value !== null && VALID_PILOT_ID.test(value);
+function validPilotId(value: unknown): value is string {
+  return typeof value === "string" && VALID_PILOT_ID.test(value);
 }
 
-function resolvePilotId(request: Request): string {
+function resolvePilotId(request: Request, authenticatedPilotId?: string): string {
+  if (authenticatedPilotId) return authenticatedPilotId;
   const cookieId = readCookie(request, PILOT_COOKIE);
   if (validPilotId(cookieId)) return cookieId;
   const headerId = request.headers.get("x-pilot-id");
@@ -616,31 +877,32 @@ async function handleMarketRequest(
   const db = env.DB;
   try {
     await ensureMarketSchema(db);
+    await ensureAuthSchema(db);
   } catch (error) {
     console.error("No se pudo preparar el esquema del mercado:", error);
     return json({ error: "No se pudo preparar el mercado. Inténtalo de nuevo." }, 503);
   }
 
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
   if (isAdminPath && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
-    if (!env.ADMIN_SECRET) {
-      return json({ error: "El endpoint administrativo no está habilitado." }, 503);
-    }
-    const authorization = request.headers.get("authorization") ?? "";
-    if (!(await matchesSecret(authorization, `Bearer ${env.ADMIN_SECRET}`))) {
-      return json({ error: "Autorización administrativa no válida." }, 403);
+    if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+    if (account.email !== ADMIN_EMAIL) {
+      return json({ error: "Acción administrativa no autorizada." }, 403);
     }
     const body = await readJson(request);
     if (
-      typeof body["pilotId"] !== "string" ||
-      !validPilotId(body["pilotId"]) ||
-      typeof body["packagesCount"] !== "number" ||
+      typeof body?.["pilotId"] !== "string" ||
+      !validPilotId(body?.["pilotId"] ?? null) ||
+      typeof body?.["packagesCount"] !== "number" ||
       !Number.isInteger(body["packagesCount"]) ||
       body["packagesCount"] < 1 ||
       body["packagesCount"] > 1000
     ) {
       return json({ error: "Solicitud administrativa no válida." }, 403);
     }
+    const pilotId = body["pilotId"];
     const amount = body["packagesCount"] * 10;
     const now = Date.now();
     try {
@@ -650,20 +912,20 @@ async function handleMarketRequest(
             `UPDATE pilots SET obsidian = obsidian + ?, updated_at = ?
           WHERE pilot_id = ?`,
           )
-          .bind(amount, now, body["pilotId"]),
+          .bind(amount, now, pilotId),
         db
           .prepare(
             `INSERT INTO admin_obsidian_logs
           (id, pilot_id, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)`,
           )
-          .bind(`obs_${randomHex(8)}`, body["pilotId"], amount, "PAQUETE_ADMINISTRATIVO", now),
+          .bind(`obs_${randomHex(8)}`, pilotId, amount, "PAQUETE_ADMINISTRATIVO", now),
       ]);
       if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
         return json({ error: "No se pudo acreditar el paquete al piloto." }, 400);
       }
       const pilot = await db
         .prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?")
-        .bind(body["pilotId"])
+        .bind(pilotId)
         .first<{ obsidian: number }>();
       return json({ success: true, credited: amount, obsidian: pilot?.obsidian ?? null });
     } catch (error) {
@@ -677,7 +939,7 @@ async function handleMarketRequest(
     return json({ error: "Solicitud no autorizada." }, 403);
   }
 
-  const pilotId = resolvePilotId(request);
+  const pilotId = resolvePilotId(request, account?.pilot_id);
   try {
     await ensurePilot(db, pilotId);
   } catch (error) {

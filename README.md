@@ -28,17 +28,25 @@ npm run dev
 El mercado usa la sesión nativa del piloto y la base D1 del Worker; no requiere
 una wallet. El esquema se crea automáticamente al atender la primera solicitud
 del mercado. El inventario vendible se sincroniza desde las naves desbloqueadas
-en el progreso local; los consumibles actuales solo existen durante una partida
+en el progreso del jugador; los consumibles actuales solo existen durante una partida
 y no forman parte del inventario permanente.
 
-El endpoint administrativo de acreditación de obsidiana permanece deshabilitado
-hasta configurar el secreto del Worker:
+## Inicio de sesión con Google
+
+Configura en el Worker `GOOGLE_CLIENT_ID` y `GOOGLE_REDIRECT_URI`, y guarda
+`GOOGLE_CLIENT_SECRET` como secreto del Worker:
 
 ```sh
-npx wrangler secret put ADMIN_SECRET
+npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
-La acreditación requiere enviar ese secreto como `Authorization: Bearer <secreto>`
-en una llamada administrativa fuera del frontend. Nunca lo incluyas en código ni
-solicitudes del navegador. El cuerpo lleva `pilotId` y `packagesCount`. Un paquete
-administrativo acredita 10 OBS. No hay integración de pagos real.
+`GOOGLE_REDIRECT_URI` debe ser la URL HTTPS pública
+`https://<dominio-del-juego>/api/auth/google/callback` y debe registrarse como
+URI de redirección autorizado en las credenciales OAuth de Google. El ID de
+cliente se configura solo en el Worker; el secreto nunca se incluye en el
+frontend. Las cuentas se vinculan por el identificador Google verificado y el
+correo verificado, y el perfil persistente del jugador se guarda en D1.
+
+La cuenta `emprendedora.onlinevee@gmail.com` es la única administradora; la
+autorización se comprueba en el servidor en cada acción administrativa. Un
+paquete administrativo acredita 10 OBS. No hay integración de pagos real.

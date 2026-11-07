@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -50,11 +56,6 @@ import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
-import {
-  connectAndVerifyMetaMaskSolana,
-  disconnectMetaMaskSolana,
-  getAuthenticatedSolanaWallet,
-} from "@/lib/solana-wallet";
 import type { P2PMyAd, P2PPilotState, P2PPublishInput } from "@/game/data/market";
 import {
   ProgressStore,
@@ -63,6 +64,7 @@ import {
   claimMission,
   defaultProgress,
   missionValue,
+  sanitize,
   type Progress,
   type RunSummary,
 } from "@/game/meta/progress";
@@ -92,6 +94,9 @@ const WEAPON_NAMES: Record<string, string> = {
   plasma: "CAÑÓN DE PLASMA",
   field: "CAMPO ELÉCTRICO",
 };
+const PROGRESS_ACCOUNT_KEY = "space_survivors_progress_account_v1";
+
+type GooglePlayer = { email: string; playerId: string; isAdmin: boolean };
 
 async function marketRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -136,9 +141,11 @@ function Index() {
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketError, setMarketError] = useState("");
   const [marketRefresh, setMarketRefresh] = useState(0);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [walletConnecting, setWalletConnecting] = useState(false);
-  const walletConnectionLockRef = useRef(false);
+  const [googlePlayer, setGooglePlayer] = useState<GooglePlayer | null>(null);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [googleSessionLoading, setGoogleSessionLoading] = useState(true);
+  const googleConnectionLockRef = useRef(false);
+  const progressSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
@@ -159,6 +166,7 @@ function Index() {
 
   const ownedShipsKey = progress.ships.join(",");
   useEffect(() => {
+    if (googleSessionLoading) return;
     let active = true;
     setMarketLoading(true);
     setMarketError("");
@@ -192,26 +200,136 @@ function Index() {
     return () => {
       active = false;
     };
-  }, [ownedShipsKey, progress.selectedShip, marketRefresh]);
+  }, [googleSessionLoading, ownedShipsKey, progress.selectedShip, marketRefresh]);
 
   useEffect(() => {
     let active = true;
-    getAuthenticatedSolanaWallet()
-      .then((wallet) => {
-        if (active && wallet) setWalletAddress(wallet.address);
-      })
-      .catch((error) => {
-        console.error("No se pudo recuperar la sesión de wallet:", error);
-      });
+    const errorCode = new URLSearchParams(window.location.search).get("google_error");
+    const authErrors: Record<string, string> = {
+      cancelled: "INICIO DE SESIÓN CANCELADO",
+      invalid_response: "RESPUESTA DE GOOGLE NO VÁLIDA",
+      expired: "LA SOLICITUD DE GOOGLE VENCIÓ. INTÉNTALO DE NUEVO",
+      verification_failed: "NO SE PUDO VERIFICAR LA CUENTA DE GOOGLE",
+      account_conflict: "EL CORREO YA ESTÁ VINCULADO A OTRA CUENTA",
+    };
+    if (errorCode) {
+      setNotice(authErrors[errorCode] ?? "NO SE PUDO INICIAR SESIÓN CON GOOGLE");
+      const returnUrl = new URL(window.location.href);
+      returnUrl.searchParams.delete("google_error");
+      window.history.replaceState(
+        null,
+        "",
+        `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`,
+      );
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/auth/session", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const session = (await response.json()) as {
+          authenticated?: boolean;
+          email?: string;
+          playerId?: string;
+          isAdmin?: boolean;
+          progress?: unknown;
+          error?: string;
+        };
+        if (!response.ok) throw new Error(session.error ?? "No se pudo recuperar la sesión.");
+        if (!active) return;
+        if (!session.authenticated) {
+          setGoogleSessionLoading(false);
+          return;
+        }
+        if (
+          typeof session.email !== "string" ||
+          typeof session.playerId !== "string" ||
+          typeof session.isAdmin !== "boolean"
+        ) {
+          throw new Error("La sesión de Google devolvió datos incompletos.");
+        }
+
+        const player = {
+          email: session.email,
+          playerId: session.playerId,
+          isAdmin: session.isAdmin,
+        };
+        setGooglePlayer(player);
+        let localOwner: string | null = null;
+        try {
+          localOwner = localStorage.getItem(PROGRESS_ACCOUNT_KEY);
+        } catch (error) {
+          console.warn("No se pudo leer el propietario local del progreso:", error);
+        }
+        const hasSavedProgress =
+          session.progress !== null &&
+          typeof session.progress === "object" &&
+          !Array.isArray(session.progress);
+        const currentProgress = ProgressStore.get();
+        const accountProgress = hasSavedProgress
+          ? sanitize(session.progress)
+          : localOwner && localOwner !== player.playerId
+            ? defaultProgress()
+            : currentProgress;
+        ProgressStore.set(accountProgress);
+        try {
+          localStorage.setItem(PROGRESS_ACCOUNT_KEY, player.playerId);
+        } catch (error) {
+          console.warn("No se pudo guardar localmente el propietario del progreso:", error);
+        }
+        if (!hasSavedProgress) {
+          const saveResponse = await fetch("/api/auth/progress", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ progress: accountProgress }),
+          });
+          if (!saveResponse.ok) {
+            throw new Error("No se pudo guardar el progreso de esta cuenta en el servidor.");
+          }
+        }
+        if (active) setGoogleSessionLoading(false);
+      } catch (error) {
+        console.error("No se pudo recuperar el perfil de Google:", error);
+        if (active) {
+          setNotice(error instanceof Error ? error.message : "No se pudo recuperar el perfil.");
+          setGoogleSessionLoading(false);
+        }
+      }
+    })();
+
     return () => {
       active = false;
     };
   }, []);
 
-  const saveProgress = (next: Progress) => {
-    ProgressStore.set(next);
-    setProgress(next);
-  };
+  const saveProgress = useCallback(
+    (next: Progress) => {
+      ProgressStore.set(next);
+      setProgress(next);
+      if (!googlePlayer) return;
+      progressSaveQueueRef.current = progressSaveQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await fetch("/api/auth/progress", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ progress: next }),
+          });
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          if (!response.ok) {
+            throw new Error(payload?.error ?? "No se pudo guardar el progreso en el servidor.");
+          }
+        });
+      void progressSaveQueueRef.current.catch((error: unknown) => {
+        setNotice(error instanceof Error ? error.message : "No se pudo guardar el progreso.");
+      });
+    },
+    [googlePlayer],
+  );
 
   const publishMarketAd = async (input: P2PPublishInput) => {
     setMarketError("");
@@ -255,27 +373,45 @@ function Index() {
     }
   };
 
-  const handleWalletConnection = async () => {
-    // A ref blocks duplicate clicks before React has time to render the disabled button.
-    if (walletConnectionLockRef.current) return;
-    walletConnectionLockRef.current = true;
-    setWalletConnecting(true);
+  const handleGoogleSignIn = async () => {
+    if (googleConnectionLockRef.current) return;
+    googleConnectionLockRef.current = true;
+    setGoogleConnecting(true);
     try {
-      if (walletAddress) {
-        await disconnectMetaMaskSolana();
-        setWalletAddress(null);
-        setNotice("WALLET DESCONECTADA");
+      if (googlePlayer) {
+        const response = await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error("No se pudo cerrar la sesión de Google.");
+        setGooglePlayer(null);
+        setMarketRefresh((version) => version + 1);
+        setNotice("SESIÓN CERRADA");
       } else {
-        const connected = await connectAndVerifyMetaMaskSolana();
-        setWalletAddress(connected.address);
-        setNotice("WALLET SOLANA VERIFICADA");
+        const response = await fetch("/api/auth/google/start", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          authorizationUrl?: string;
+          error?: string;
+        } | null;
+        if (!response.ok || !payload?.authorizationUrl) {
+          throw new Error(payload?.error ?? "No se pudo iniciar sesión con Google.");
+        }
+        const authorizationUrl = new URL(payload.authorizationUrl);
+        if (authorizationUrl.origin !== "https://accounts.google.com") {
+          throw new Error("El servidor devolvió una URL de autenticación no válida.");
+        }
+        window.location.assign(authorizationUrl.toString());
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo conectar la wallet.";
-      setNotice(message);
+      setNotice(error instanceof Error ? error.message : "No se pudo iniciar sesión con Google.");
     } finally {
-      walletConnectionLockRef.current = false;
-      setWalletConnecting(false);
+      googleConnectionLockRef.current = false;
+      setGoogleConnecting(false);
       window.setTimeout(() => setNotice(""), 3500);
     }
   };
@@ -335,7 +471,7 @@ function Index() {
       engine.stop();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode]);
+  }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode, saveProgress]);
 
   const chooseShip = (id: string) => {
     if (
@@ -385,7 +521,7 @@ function Index() {
   const handleClaimMission = (missionId: string) => {
     const res = claimMission(progress, missionId);
     if (res.ok && res.progress) {
-      ProgressStore.set(res.progress);
+      saveProgress(res.progress);
       Audio.SFX.levelUp?.();
       setNotice("¡Recompensa de misión reclamada!");
       window.setTimeout(() => setNotice(""), 1800);
@@ -650,17 +786,20 @@ function Index() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleWalletConnection}
-                disabled={walletConnecting}
+                onClick={handleGoogleSignIn}
+                disabled={googleConnecting}
+                title={
+                  googlePlayer ? `Sesión de ${googlePlayer.email}` : "Iniciar sesión con Google"
+                }
                 className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
               >
                 <Wallet className="size-3.5" />
                 <span>
-                  {walletConnecting
+                  {googleConnecting
                     ? "CONECTANDO..."
-                    : walletAddress
-                      ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
-                      : "CONECTAR METAMASK"}
+                    : googlePlayer
+                      ? googlePlayer.email
+                      : "INICIAR SESIÓN CON GOOGLE"}
                 </span>
               </Button>
             ) : null}
