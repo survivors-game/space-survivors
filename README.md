@@ -38,4 +38,7 @@ hasta configurar el secreto del Worker:
 npx wrangler secret put ADMIN_SECRET
 ```
 
-Un paquete administrativo acredita 10 OBS. No hay integración de pagos real.
+La acreditación requiere enviar ese secreto como `Authorization: Bearer <secreto>`
+en una llamada administrativa fuera del frontend. Nunca lo incluyas en código ni
+solicitudes del navegador. El cuerpo lleva `pilotId` y `packagesCount`. Un paquete
+administrativo acredita 10 OBS. No hay integración de pagos real.

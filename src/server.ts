@@ -162,6 +162,21 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function matchesSecret(value: string, secret: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [valueDigest, secretDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(value)),
+    crypto.subtle.digest("SHA-256", encoder.encode(secret)),
+  ]);
+  const valueBytes = new Uint8Array(valueDigest);
+  const secretBytes = new Uint8Array(secretDigest);
+  let difference = 0;
+  for (let i = 0; i < valueBytes.length; i++) {
+    difference |= valueBytes[i]! ^ secretBytes[i]!;
+  }
+  return difference === 0;
+}
+
 function isSameOriginPost(request: Request, url: URL): boolean {
   const origin = request.headers.get("origin");
   return origin === url.origin;
@@ -611,10 +626,12 @@ async function handleMarketRequest(
     if (!env.ADMIN_SECRET) {
       return json({ error: "El endpoint administrativo no está habilitado." }, 503);
     }
+    const authorization = request.headers.get("authorization") ?? "";
+    if (!(await matchesSecret(authorization, `Bearer ${env.ADMIN_SECRET}`))) {
+      return json({ error: "Autorización administrativa no válida." }, 403);
+    }
     const body = await readJson(request);
     if (
-      typeof body?.["adminSecret"] !== "string" ||
-      body["adminSecret"] !== env.ADMIN_SECRET ||
       typeof body["pilotId"] !== "string" ||
       !validPilotId(body["pilotId"]) ||
       typeof body["packagesCount"] !== "number" ||
