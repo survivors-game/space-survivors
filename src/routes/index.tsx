@@ -11,6 +11,7 @@ import {
   CirclePause,
   Crosshair,
   Flame,
+  Gem,
   Heart,
   LockKeyhole,
   Pause,
@@ -49,7 +50,12 @@ import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
-import { connectAndVerifyMetaMaskSolana, disconnectMetaMaskSolana, getAuthenticatedSolanaWallet } from "@/lib/solana-wallet";
+import {
+  connectAndVerifyMetaMaskSolana,
+  disconnectMetaMaskSolana,
+  getAuthenticatedSolanaWallet,
+} from "@/lib/solana-wallet";
+import type { P2PMyAd, P2PPilotState, P2PPublishInput } from "@/game/data/market";
 import {
   ProgressStore,
   applyRun as recordRun,
@@ -87,6 +93,29 @@ const WEAPON_NAMES: Record<string, string> = {
   field: "CAMPO ELÉCTRICO",
 };
 
+async function marketRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    credentials: "same-origin",
+    headers: {
+      ...(init?.body ? { "content-type": "application/json" } : {}),
+      ...init?.headers,
+    },
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error =
+      payload &&
+      typeof payload === "object" &&
+      "error" in payload &&
+      typeof payload.error === "string"
+        ? payload.error
+        : "No se pudo completar la operación del mercado.";
+    throw new Error(error);
+  }
+  return payload as T;
+}
+
 function Index() {
   const [screen, setScreen] = useState<Screen>("MENU");
   const [gameMode, setGameMode] = useState<GameMode>("CAMPAIGN");
@@ -102,6 +131,11 @@ function Index() {
   const [runCredits, setRunCredits] = useState(0);
   const [unlockedSectors, setUnlockedSectors] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
+  const [marketPilot, setMarketPilot] = useState<P2PPilotState | null>(null);
+  const [marketAds, setMarketAds] = useState<P2PMyAd[]>([]);
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [marketError, setMarketError] = useState("");
+  const [marketRefresh, setMarketRefresh] = useState(0);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletConnecting, setWalletConnecting] = useState(false);
   const walletConnectionLockRef = useRef(false);
@@ -123,6 +157,43 @@ function Index() {
     return unsubscribe;
   }, []);
 
+  const ownedShipsKey = progress.ships.join(",");
+  useEffect(() => {
+    let active = true;
+    setMarketLoading(true);
+    setMarketError("");
+    void (async () => {
+      try {
+        await marketRequest<{ success: boolean }>("/api/market/sync-inventory", {
+          method: "POST",
+          body: JSON.stringify({
+            ships: ownedShipsKey ? ownedShipsKey.split(",") : [],
+            selectedShip: progress.selectedShip,
+          }),
+        });
+        const [pilot, myAds] = await Promise.all([
+          marketRequest<P2PPilotState>("/api/market/pilot-state"),
+          marketRequest<{ ads: P2PMyAd[] }>("/api/market/my-ads"),
+        ]);
+        if (active) {
+          setMarketPilot(pilot);
+          setMarketAds(myAds.ads);
+        }
+      } catch (error) {
+        if (active) {
+          setMarketError(
+            error instanceof Error ? error.message : "No se pudo sincronizar el mercado.",
+          );
+        }
+      } finally {
+        if (active) setMarketLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [ownedShipsKey, progress.selectedShip, marketRefresh]);
+
   useEffect(() => {
     let active = true;
     getAuthenticatedSolanaWallet()
@@ -140,6 +211,48 @@ function Index() {
   const saveProgress = (next: Progress) => {
     ProgressStore.set(next);
     setProgress(next);
+  };
+
+  const publishMarketAd = async (input: P2PPublishInput) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/publish", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo publicar el anuncio.");
+      throw error;
+    }
+  };
+
+  const toggleMarketAd = async (adId: string) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/toggle-ad", {
+        method: "POST",
+        body: JSON.stringify({ adId }),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo actualizar el anuncio.");
+      throw error;
+    }
+  };
+
+  const cancelMarketAd = async (adId: string) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/cancel-ad", {
+        method: "POST",
+        body: JSON.stringify({ adId }),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo cancelar el anuncio.");
+      throw error;
+    }
   };
 
   const handleWalletConnection = async () => {
@@ -225,7 +338,12 @@ function Index() {
   }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode]);
 
   const chooseShip = (id: string) => {
-    if (!progress.ships.includes(id)) return;
+    if (
+      !progress.ships.includes(id) ||
+      marketLoading ||
+      marketAds.some((ad) => ad.itemId === id && ad.status !== "CANCELADO")
+    )
+      return;
     setSelectedShipId(id);
     saveProgress({ ...progress, selectedShip: id });
   };
@@ -523,6 +641,10 @@ function Index() {
             <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
               <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
               {progress.credits.toLocaleString()} CR
+              <span className="ml-2 inline-flex items-center gap-1 text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
+                <Gem className="size-3" />
+                {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
+              </span>
             </span>
             {screen === "MENU" ? (
               <Button
@@ -533,7 +655,13 @@ function Index() {
                 className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
               >
                 <Wallet className="size-3.5" />
-                <span>{walletConnecting ? "CONECTANDO..." : walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "CONECTAR METAMASK"}</span>
+                <span>
+                  {walletConnecting
+                    ? "CONECTANDO..."
+                    : walletAddress
+                      ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`
+                      : "CONECTAR METAMASK"}
+                </span>
               </Button>
             ) : null}
             <Button
@@ -549,7 +677,11 @@ function Index() {
           </div>
         </header>
         {notice ? (
-          <p role="status" aria-live="polite" className="mx-auto w-full max-w-[1500px] px-4 pt-2 text-center text-[10px] uppercase tracking-widest text-cyan-200 sm:px-7">
+          <p
+            role="status"
+            aria-live="polite"
+            className="mx-auto w-full max-w-[1500px] px-4 pt-2 text-center text-[10px] uppercase tracking-widest text-cyan-200 sm:px-7"
+          >
             {notice}
           </p>
         ) : null}
@@ -698,13 +830,16 @@ function Index() {
                   className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
                 >
                   {SHIPS.map((ship) => {
-                    const owned = progress.ships.includes(ship.id);
+                    const listed = marketAds.some(
+                      (ad) => ad.itemId === ship.id && ad.status !== "CANCELADO",
+                    );
+                    const owned = progress.ships.includes(ship.id) && !listed;
                     const selected = selectedShipId === ship.id;
                     return (
                       <button
                         key={ship.id}
                         type="button"
-                        disabled={!owned}
+                        disabled={!owned || marketLoading}
                         onClick={() => chooseShip(ship.id)}
                         className={`relative min-h-56 min-w-[min(100%,270px)] snap-start border p-4 text-left transition sm:min-w-[280px] ${selected ? "border-cyan-300/70 bg-cyan-300/[0.075] shadow-[0_0_28px_#00f0ff14]" : "border-white/10 bg-white/[0.025] hover:border-white/25"} ${!owned ? "cursor-not-allowed opacity-45" : ""}`}
                       >
@@ -720,6 +855,13 @@ function Index() {
                               className={`rounded-none text-[9px] tracking-widest ${selected ? "border-cyan-300/50 text-cyan-200" : "border-white/15 text-white/45"}`}
                             >
                               {selected ? "ACTIVA" : ship.role}
+                            </Badge>
+                          ) : listed ? (
+                            <Badge
+                              variant="outline"
+                              className="rounded-none border-[#ff0055]/35 text-[9px] text-[#ff8aa9]"
+                            >
+                              <LockKeyhole className="mr-1 size-3" /> EN MERCADO
                             </Badge>
                           ) : (
                             <Badge
@@ -880,6 +1022,10 @@ function Index() {
                 <p className="font-arcade mt-1 text-base tabular-nums text-[#ffd700] drop-shadow-[0_0_12px_#ffd70030] sm:text-xl">
                   {progress.credits.toLocaleString()}{" "}
                   <span className="text-sm tracking-widest">CR</span>
+                </p>
+                <p className="mt-1 flex items-center gap-1 font-arcade text-[10px] tabular-nums text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
+                  <Gem className="size-3" />
+                  {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
                 </p>
               </div>
               <div className="text-right text-[10px] uppercase leading-5 tracking-widest text-white/45">
@@ -1175,7 +1321,18 @@ function Index() {
               </div>
             ) : hangarTab === "MARKET" ? (
               <div className="lg:col-start-2">
-                <MarketSection />
+                <MarketSection
+                  actions={{
+                    pilotState: marketPilot,
+                    ads: marketAds,
+                    selectedShipId: progress.selectedShip,
+                    isLoading: marketLoading,
+                    error: marketError,
+                    onPublish: publishMarketAd,
+                    onToggleAd: toggleMarketAd,
+                    onCancelAd: cancelMarketAd,
+                  }}
+                />
               </div>
             ) : (
               <div className="mt-6 space-y-8 lg:col-start-2">
@@ -1272,7 +1429,7 @@ function Index() {
                       : hangarTab === "ARSENAL"
                         ? "Domina cada arma y su sinergia pasiva para desbloquear su evolución."
                         : hangarTab === "MARKET"
-                          ? "Explora objetos mock del mercado; compras y listados no están disponibles todavía."
+                          ? "Publica naves desbloqueadas y administra tus anuncios con obsidiana del juego."
                           : "Historial permanente de despliegues y rendimiento de la flota."}
               </p>
               <Button
@@ -1428,6 +1585,9 @@ function Index() {
             CRÉDITOS{" "}
             <span className="font-arcade text-[8px] text-[#ffd700]/80">
               {progress.credits.toLocaleString()} CR
+            </span>
+            <span className="ml-3 font-arcade text-[8px] text-[#d946ef]">
+              {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
             </span>
           </span>
         </footer>

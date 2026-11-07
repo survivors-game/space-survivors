@@ -3,6 +3,13 @@ import { MarketBuy } from "@/components/hangar/MarketBuy";
 import { MarketHistory } from "@/components/hangar/MarketHistory";
 import { MarketListings } from "@/components/hangar/MarketListings";
 import { MarketSell } from "@/components/hangar/MarketSell";
+import type {
+  P2PAd,
+  P2PInventoryItem,
+  P2PMyAd,
+  P2PPilotState,
+  P2PPublishInput,
+} from "@/game/data/market";
 
 type MarketTab = "COMPRAR" | "VENDER" | "MIS LISTADOS" | "HISTORIAL";
 type NavigationTab = { label: MarketTab; disabled: false } | { label: "OFERTAS"; disabled: true };
@@ -15,8 +22,22 @@ const TABS: NavigationTab[] = [
   { label: "HISTORIAL", disabled: false },
 ];
 
-export function MarketSection() {
+export interface MarketActions {
+  pilotState: P2PPilotState | null;
+  ads: P2PMyAd[];
+  selectedShipId: string;
+  isLoading: boolean;
+  error: string;
+  onPublish: (input: P2PPublishInput) => Promise<void>;
+  onToggleAd: (adId: string) => Promise<void>;
+  onCancelAd: (adId: string) => Promise<void>;
+}
+
+export function MarketSection({ actions }: { actions: MarketActions }) {
   const [activeTab, setActiveTab] = useState<MarketTab>("COMPRAR");
+  const pilot = actions.pilotState;
+  const inventory: P2PInventoryItem[] = pilot?.inventory ?? [];
+  const ads: P2PAd[] = actions.ads;
 
   return (
     <div className="mt-6 space-y-6">
@@ -45,9 +66,35 @@ export function MarketSection() {
           );
         })}
       </nav>
+
+      <div aria-live="polite">
+        {actions.error ? (
+          <p
+            role="alert"
+            className="border border-[#ff0055]/25 bg-[#ff0055]/5 p-3 text-[9px] uppercase tracking-widest text-[#ff9ab9]"
+          >
+            {actions.error}
+          </p>
+        ) : null}
+      </div>
       {activeTab === "COMPRAR" ? <MarketBuy /> : null}
-      {activeTab === "VENDER" ? <MarketSell /> : null}
-      {activeTab === "MIS LISTADOS" ? <MarketListings /> : null}
+      {activeTab === "VENDER" ? (
+        <MarketSell
+          inventory={inventory}
+          obsidian={pilot?.obsidian ?? null}
+          selectedShipId={actions.selectedShipId}
+          isLoading={actions.isLoading}
+          onPublish={actions.onPublish}
+        />
+      ) : null}
+      {activeTab === "MIS LISTADOS" ? (
+        <MarketListings
+          ads={ads}
+          isLoading={actions.isLoading}
+          onToggleAd={actions.onToggleAd}
+          onCancelAd={actions.onCancelAd}
+        />
+      ) : null}
       {activeTab === "HISTORIAL" ? <MarketHistory /> : null}
     </div>
   );
