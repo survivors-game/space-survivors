@@ -935,11 +935,15 @@ async function handleMarketRequest(
   }
   if (isAdminPath) return json({ error: "Método no permitido." }, 405);
 
+  if (!account) {
+    return json({ error: "Inicia sesión con Google para consultar tu piloto y usar el mercado." }, 401);
+  }
+
   if (!isSameOriginPost(request, url) && request.method !== "GET") {
     return json({ error: "Solicitud no autorizada." }, 403);
   }
 
-  const pilotId = resolvePilotId(request, account?.pilot_id);
+  const pilotId = resolvePilotId(request, account.pilot_id);
   try {
     await ensurePilot(db, pilotId);
   } catch (error) {
