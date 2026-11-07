@@ -1,11 +1,13 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "cloudflare:workers";
 
-type MessageType = "chat" | "boss_kill" | "drop" | "join" | "leave";
+export type ChatLanguage = "en" | "es";
+type MessageType = "chat" | "boss_kill" | "drop";
 
 export interface ChatMessage {
   id: number;
   type: MessageType;
+  language: ChatLanguage;
   callsign: string;
   text: string;
   timestamp: number;
@@ -17,6 +19,7 @@ interface StoredMessage extends ChatMessage {
 
 interface NewMessage {
   type: MessageType;
+  language: ChatLanguage;
   pilotId: string;
   callsign: string;
   text: string;
@@ -25,6 +28,7 @@ interface NewMessage {
 interface ChatAttachment {
   pilotId: string;
   callsign: string;
+  language: ChatLanguage;
 }
 
 interface HibernatingWebSocket extends WebSocket {
@@ -34,6 +38,7 @@ interface HibernatingWebSocket extends WebSocket {
 
 interface IncomingChat {
   type: "chat";
+  language: ChatLanguage;
   text: string;
 }
 
@@ -41,6 +46,7 @@ interface IncomingEvent {
   pilotId: string;
   callsign: string;
   type: "boss_kill" | "drop";
+  language: ChatLanguage;
   text: string;
 }
 
@@ -56,9 +62,20 @@ export class ChatRoom extends DurableObject {
         pilot_id TEXT NOT NULL,
         callsign TEXT NOT NULL,
         text TEXT NOT NULL,
+        language TEXT NOT NULL DEFAULT 'es',
         timestamp INTEGER NOT NULL
       )`,
     );
+    const schema = ctx.storage.sql
+      .exec<{ sql: string | null }>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'",
+      )
+      .toArray()[0]?.sql;
+    if (!schema?.includes("language")) {
+      ctx.storage.sql.exec(
+        "ALTER TABLE chat_messages ADD COLUMN language TEXT NOT NULL DEFAULT 'es'",
+      );
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -70,22 +87,17 @@ export class ChatRoom extends DurableObject {
 
       const pilotId = url.searchParams.get("pilotId");
       const callsign = url.searchParams.get("callsign");
-      if (!pilotId || !callsign) return new Response("Missing pilot identity.", { status: 400 });
+      const language = url.searchParams.get("language");
+      if (!pilotId || !callsign || !isChatLanguage(language)) {
+        return new Response("Missing chat identity or language.", { status: 400 });
+      }
 
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1] as HibernatingWebSocket;
-      server.serializeAttachment({ pilotId, callsign });
+      server.serializeAttachment({ pilotId, callsign, language });
       this.ctx.acceptWebSocket(server);
-      this.sendHistory(server);
-      this.broadcast(
-        this.saveMessage({
-          type: "join",
-          pilotId,
-          callsign,
-          text: `${callsign} se unió al chat.`,
-        }),
-      );
+      this.sendHistory(server, language);
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -95,6 +107,7 @@ export class ChatRoom extends DurableObject {
         !payload ||
         typeof payload.pilotId !== "string" ||
         typeof payload.callsign !== "string" ||
+        !isChatLanguage(payload.language) ||
         !["boss_kill", "drop"].includes(payload.type) ||
         !isValidMessage(payload.text)
       ) {
@@ -103,6 +116,7 @@ export class ChatRoom extends DurableObject {
       this.broadcast(
         this.saveMessage({
           type: payload.type,
+          language: payload.language,
           pilotId: payload.pilotId,
           callsign: payload.callsign,
           text: payload.text.trim(),
@@ -128,11 +142,18 @@ export class ChatRoom extends DurableObject {
     } catch {
       return;
     }
-    if (payload?.type !== "chat" || !isValidMessage(payload.text)) return;
+    if (
+      payload?.type !== "chat" ||
+      payload.language !== attachment.language ||
+      !isValidMessage(payload.text)
+    ) {
+      return;
+    }
 
     this.broadcast(
       this.saveMessage({
         type: "chat",
+        language: attachment.language,
         pilotId: attachment.pilotId,
         callsign: attachment.callsign,
         text: payload.text.trim(),
@@ -140,21 +161,11 @@ export class ChatRoom extends DurableObject {
     );
   }
 
-  webSocketClose(socket: WebSocket): void {
-    const { pilotId, callsign } = (socket as HibernatingWebSocket).deserializeAttachment();
-    this.broadcast(
-      this.saveMessage({
-        type: "leave",
-        pilotId,
-        callsign,
-        text: `${callsign} salió del chat.`,
-      }),
-    );
-  }
-
   broadcast(message: ChatMessage): void {
     const serialized = JSON.stringify(message);
     for (const socket of this.ctx.getWebSockets()) {
+      const client = socket as HibernatingWebSocket;
+      if (client.deserializeAttachment().language !== message.language) continue;
       try {
         socket.send(serialized);
       } catch (error) {
@@ -167,12 +178,13 @@ export class ChatRoom extends DurableObject {
   saveMessage(input: NewMessage): ChatMessage {
     const timestamp = Date.now();
     const result = this.ctx.storage.sql.exec<{ id: number }>(
-      `INSERT INTO chat_messages (type, pilot_id, callsign, text, timestamp)
-       VALUES (?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO chat_messages (type, pilot_id, callsign, text, language, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
       input.type,
       input.pilotId,
       input.callsign,
       input.text,
+      input.language,
       timestamp,
     );
     this.ctx.storage.sql.exec(
@@ -184,17 +196,21 @@ export class ChatRoom extends DurableObject {
     return {
       id,
       type: input.type,
+      language: input.language,
       callsign: input.callsign,
       text: input.text,
       timestamp,
     };
   }
 
-  sendHistory(socket: WebSocket): void {
+  sendHistory(socket: WebSocket, language: ChatLanguage): void {
     const messages = this.ctx.storage.sql
       .exec<StoredMessage>(
-        `SELECT id, type, pilot_id, callsign, text, timestamp
-         FROM chat_messages ORDER BY id DESC LIMIT 50`,
+        `SELECT id, type, pilot_id, callsign, text, language, timestamp
+         FROM chat_messages
+         WHERE language = ? AND type NOT IN ('join', 'leave')
+         ORDER BY id DESC LIMIT 50`,
+        language,
       )
       .toArray()
       .reverse();
@@ -203,6 +219,7 @@ export class ChatRoom extends DurableObject {
         JSON.stringify({
           id: message.id,
           type: message.type,
+          language: message.language,
           callsign: message.callsign,
           text: message.text,
           timestamp: message.timestamp,
@@ -210,6 +227,10 @@ export class ChatRoom extends DurableObject {
       );
     }
   }
+}
+
+function isChatLanguage(value: string | null): value is ChatLanguage {
+  return value === "en" || value === "es";
 }
 
 function isValidMessage(text: unknown): text is string {

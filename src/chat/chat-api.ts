@@ -58,11 +58,16 @@ export async function handleChatRequest(
     }
 
     const room = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName("global"));
+    const language = url.searchParams.get("language");
+    if (language !== "en" && language !== "es") {
+      return json({ error: "Selecciona un idioma válido para el chat." }, 400);
+    }
     const socketUrl = new URL(request.url);
     socketUrl.pathname = "/websocket";
     socketUrl.search = new URLSearchParams({
       pilotId: player.pilot_id,
       callsign: player.display_name,
+      language,
     }).toString();
     return room.fetch(new Request(socketUrl, request));
   }
@@ -82,39 +87,49 @@ export async function handleChatRequest(
     }
 
     let type: "boss_kill" | "drop";
-    let text: string;
+    let englishText: string;
+    let spanishText: string;
     if (
       body["type"] === "boss_kill" &&
       isShortText(body["bossName"], 50) &&
       isShortText(body["shipName"], 50)
     ) {
       type = "boss_kill";
-      text = `mató al boss ${body["bossName"].trim()} con la nave ${body["shipName"].trim()}.`;
+      englishText = `defeated boss ${body["bossName"].trim()} with ship ${body["shipName"].trim()}.`;
+      spanishText = `mató al boss ${body["bossName"].trim()} con la nave ${body["shipName"].trim()}.`;
     } else if (body["type"] === "drop" && isShortText(body["itemName"], 50)) {
       type = "drop";
-      text = `obtuvo ${body["itemName"].trim()}.`;
+      englishText = `picked up ${body["itemName"].trim()}.`;
+      spanishText = `obtuvo ${body["itemName"].trim()}.`;
     } else {
       return json({ error: "El evento de chat no es válido." }, 400);
     }
-    if (text.length > MAX_EVENT_TEXT_LENGTH) {
+    if (englishText.length > MAX_EVENT_TEXT_LENGTH || spanishText.length > MAX_EVENT_TEXT_LENGTH) {
       return json({ error: "El evento de chat es demasiado largo." }, 400);
     }
 
     const room = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName("global"));
-    const response = await room.fetch(
-      new Request("https://chat-room/event", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          pilotId: player.pilot_id,
-          callsign: player.display_name,
-          type,
-          text: `${player.display_name} ${text}`,
+    const eventRequests = (["en", "es"] as const).map((language) =>
+      room.fetch(
+        new Request("https://chat-room/event", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            pilotId: player.pilot_id,
+            callsign: player.display_name,
+            type,
+            language,
+            text: `${player.display_name} ${language === "en" ? englishText : spanishText}`,
+          }),
         }),
-      }),
+      ),
     );
-    if (!response.ok) {
-      console.error("El Durable Object rechazó un evento de chat:", response.status);
+    const responses = await Promise.all(eventRequests);
+    if (responses.some((response) => !response.ok)) {
+      console.error(
+        "El Durable Object rechazó un evento de chat:",
+        responses.filter((response) => !response.ok).map((response) => response.status),
+      );
       return json({ error: "No se pudo publicar el evento en el chat." }, 502);
     }
     return new Response(null, { status: 204 });

@@ -5,6 +5,7 @@ import type { ChatMessage } from "@/chat/chat-room";
 const MAX_MESSAGE_LENGTH = 500;
 
 export function GameChat() {
+  const [language, setLanguage] = useState<"en" | "es">("es");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
@@ -17,12 +18,15 @@ export function GameChat() {
 
   useEffect(() => {
     shouldReconnectRef.current = true;
+    setMessages([]);
     let socket: WebSocket | null = null;
 
     const connect = () => {
       if (!shouldReconnectRef.current) return;
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(`${protocol}//${window.location.host}/api/chat/ws`);
+      socket = new WebSocket(
+        `${protocol}//${window.location.host}/api/chat/ws?language=${language}`,
+      );
       socketRef.current = socket;
 
       socket.addEventListener("open", () => {
@@ -36,7 +40,8 @@ export function GameChat() {
             typeof message.id !== "number" ||
             typeof message.callsign !== "string" ||
             typeof message.text !== "string" ||
-            !["chat", "boss_kill", "drop", "join", "leave"].includes(message.type)
+            message.language !== language ||
+            !["chat", "boss_kill", "drop"].includes(message.type)
           ) {
             return;
           }
@@ -65,7 +70,7 @@ export function GameChat() {
       socket?.close();
       socketRef.current = null;
     };
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     const list = listRef.current;
@@ -87,7 +92,7 @@ export function GameChat() {
     const text = draft.trim();
     const socket = socketRef.current;
     if (!text || text.length > MAX_MESSAGE_LENGTH || socket?.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({ type: "chat", text }));
+    socket.send(JSON.stringify({ type: "chat", language, text }));
     setDraft("");
   };
 
@@ -105,20 +110,18 @@ export function GameChat() {
     chat: "text-slate-200",
     boss_kill: "text-red-300",
     drop: "text-purple-300",
-    join: "text-slate-400",
-    leave: "text-slate-500",
   };
 
   return (
     <section
       aria-label="Chat multijugador"
-      className="fixed bottom-0 left-0 z-[60] flex w-[340px] max-w-[calc(100vw-16px)] flex-col overflow-hidden border border-slate-600/70 bg-[#0f172a] text-slate-100 shadow-2xl"
+      className="fixed bottom-4 left-4 z-[60] flex w-[340px] max-w-[calc(100vw-32px)] flex-col overflow-hidden border border-slate-600/70 bg-[#0f172a] text-slate-100 shadow-2xl"
       style={{ height: minimized ? "auto" : "400px" }}
     >
       <header className="flex h-10 shrink-0 items-center justify-between border-b border-slate-700 px-3">
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+        <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider">
           <MessageCircle className="size-4 text-cyan-300" />
-          Chat global
+          {language === "en" ? "Global chat" : "Chat global"}
           <span
             className={`size-2 rounded-full ${connected ? "bg-emerald-400" : "bg-amber-400"}`}
           />
@@ -134,9 +137,31 @@ export function GameChat() {
       </header>
       {!minimized && (
         <>
+          <nav aria-label="Idioma del chat" className="flex shrink-0 border-b border-slate-700">
+            {(
+              [
+                ["en", "ENGLISH"],
+                ["es", "ESPAÑOL"],
+              ] as const
+            ).map(([code, label]) => (
+              <button
+                aria-pressed={language === code}
+                className={`flex-1 py-1.5 text-[9px] font-bold tracking-wider transition ${
+                  language === code
+                    ? "bg-cyan-900/50 text-cyan-200"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+                key={code}
+                onClick={() => setLanguage(code)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
           <div
             aria-live="polite"
-            className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-xs"
+            className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2 text-[11px]"
             ref={listRef}
           >
             {messages.map((message) => (
@@ -170,7 +195,7 @@ export function GameChat() {
               <div className="absolute bottom-full left-2 mb-1 flex max-h-28 flex-col overflow-y-auto border border-slate-600 bg-slate-800 p-1 shadow-xl">
                 {mentionMatches.map((name) => (
                   <button
-                    className="px-2 py-1 text-left text-xs hover:bg-slate-700"
+                    className="px-2 py-1 text-left text-[10px] hover:bg-slate-700"
                     key={name}
                     onClick={() => addMention(name)}
                     type="button"
@@ -182,10 +207,18 @@ export function GameChat() {
             )}
             <input
               aria-label="Escribe un mensaje"
-              className="min-w-0 flex-1 bg-slate-900 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-cyan-500"
+              className="min-w-0 flex-1 bg-slate-900 px-2 py-1.5 text-[10px] outline-none placeholder:text-slate-500 focus:ring-1 focus:ring-cyan-500"
               maxLength={MAX_MESSAGE_LENGTH}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder={connected ? "Escribe un mensaje o @..." : "Reconectando..."}
+              placeholder={
+                connected
+                  ? language === "en"
+                    ? "Write a message or @..."
+                    : "Escribe un mensaje o @..."
+                  : language === "en"
+                    ? "Reconnecting..."
+                    : "Reconectando..."
+              }
               value={draft}
             />
             <button
