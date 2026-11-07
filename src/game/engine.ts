@@ -64,6 +64,11 @@ export interface EngineCallbacks {
   onLevelUp: (choices: UpgradeChoice[], rerolls: number) => void;
   onEnd: (r: RunResult) => void;
   onPauseChange: (paused: boolean) => void;
+  onChatEvent?: (
+    event:
+      | { type: "boss_kill"; bossName: string; shipName: string }
+      | { type: "drop"; itemName: string },
+  ) => void;
 }
 
 export interface EngineOptions {
@@ -1376,6 +1381,11 @@ export class Engine {
 
   private finishBoss(e: Enemy) {
     const def = e.boss!;
+    this.cb.onChatEvent?.({
+      type: "boss_kill",
+      bossName: def.name,
+      shipName: this.ship.name,
+    });
     this.kills++;
     this.killsByType[def.id] = (this.killsByType[def.id] ?? 0) + 1;
     this.bossesDefeated.push(def.id);
@@ -2599,6 +2609,9 @@ export class Engine {
       k.alive = false;
       Audio.SFX.pickup();
       this.inventory[k.kind] += 1;
+      const itemName =
+        k.kind === "repair" ? "REPARACIÓN" : k.kind === "magnet" ? "IMÁN" : "PULSO EMP";
+      this.cb.onChatEvent?.({ type: "drop", itemName });
     });
   }
 

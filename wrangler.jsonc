@@ -1,0 +1,21 @@
+{
+  "name": "survivors-game-space-survivors",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-11-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "space-survivors-db",
+      "database_id": "8864837b-152c-46d0-87d1-c705940be3fe",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatRoom"] }],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public",
+  },
+}

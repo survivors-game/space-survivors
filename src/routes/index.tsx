@@ -53,6 +53,7 @@ import { spriteUrl } from "@/game/sprites";
 import { Hotbar } from "@/components/game/Hotbar";
 import { CombatStatsOverlay } from "@/components/game/CombatStatsOverlay";
 import { WeaponHotbar } from "@/components/game/WeaponHotbar";
+import { GameChat } from "@/components/GameChat";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { MISSIONS } from "@/game/meta/missions";
@@ -521,6 +522,26 @@ function Index() {
           setScreen("GAMEOVER");
         },
         onPauseChange: setPaused,
+        onChatEvent: (chatEvent) => {
+          void fetch("/api/chat/event", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(chatEvent),
+          })
+            .then(async (response) => {
+              if (!response.ok) {
+                const payload = (await response.json().catch(() => null)) as {
+                  error?: string;
+                } | null;
+                throw new Error(payload?.error ?? "No se pudo publicar el evento en el chat.");
+              }
+            })
+            .catch((error: unknown) => {
+              console.error("No se pudo publicar un evento del juego en el chat:", error);
+              setNotice(error instanceof Error ? error.message : "No se pudo publicar el evento en el chat.");
+            });
+        },
       },
     });
     engineRef.current = engine;
@@ -640,6 +661,7 @@ function Index() {
         <canvas ref={canvasRef} className="w-full h-full block" />
         <TouchControls />
         <Hotbar inventory={hud?.inventory} onUse={(kind) => engineRef.current?.useItem(kind)} />
+        {googlePlayer && <GameChat />}
         <CombatStatsOverlay stats={hud?.playerStats} />
         <WeaponHotbar weapons={hud?.weapons} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">

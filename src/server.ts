@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { SHIPS } from "./game/data/ships";
+import { handleChatRequest, type ChatWorkerEnv } from "./chat/chat-api";
 
 type D1Result<T = Record<string, unknown>> = {
   meta?: { changes?: number };
@@ -18,7 +19,7 @@ type D1Database = {
   prepare(query: string): D1Statement;
   batch<T = Record<string, unknown>>(statements: D1Statement[]): Promise<D1Result<T>[]>;
 };
-type WorkerEnv = {
+type WorkerEnv = ChatWorkerEnv & {
   DB?: D1Database;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
@@ -149,11 +150,22 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   )?.DB;
   if (!database && candidates.length === 0) return undefined;
 
+  const chatRoom = candidates.find((candidate) => candidate.CHAT_ROOM)?.CHAT_ROOM;
+  const googleClientId = candidates.find(
+    (candidate) => candidate.GOOGLE_CLIENT_ID,
+  )?.GOOGLE_CLIENT_ID;
+  const googleClientSecret = candidates.find(
+    (candidate) => candidate.GOOGLE_CLIENT_SECRET,
+  )?.GOOGLE_CLIENT_SECRET;
+  const googleRedirectUri = candidates.find(
+    (candidate) => candidate.GOOGLE_REDIRECT_URI,
+  )?.GOOGLE_REDIRECT_URI;
   return {
-    DB: database,
-    GOOGLE_CLIENT_ID: candidates.find((candidate) => candidate.GOOGLE_CLIENT_ID)?.GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET: candidates.find((candidate) => candidate.GOOGLE_CLIENT_SECRET)?.GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI: candidates.find((candidate) => candidate.GOOGLE_REDIRECT_URI)?.GOOGLE_REDIRECT_URI,
+    ...(database ? { DB: database } : {}),
+    ...(chatRoom ? { CHAT_ROOM: chatRoom } : {}),
+    ...(googleClientId ? { GOOGLE_CLIENT_ID: googleClientId } : {}),
+    ...(googleClientSecret ? { GOOGLE_CLIENT_SECRET: googleClientSecret } : {}),
+    ...(googleRedirectUri ? { GOOGLE_REDIRECT_URI: googleRedirectUri } : {}),
   };
 }
 
@@ -593,7 +605,7 @@ async function handleAuthRequest(
     const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
     if (!account) return json({ error: "Inicia sesión con Google para guardar tu perfil." }, 401);
     const body = await readJson(request, 2048);
-    const displayName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
+    const displayName = typeof body?.["displayName"] === "string" ? body["displayName"].trim() : "";
     if (!/^[\p{L}\p{N}_-]{3,20}$/u.test(displayName)) {
       return json({ error: "El nombre debe tener entre 3 y 20 caracteres: letras, números, guion o guion bajo." }, 400);
     }
@@ -1408,6 +1420,8 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
+      const chatResponse = await handleChatRequest(request, workerEnv);
+      if (chatResponse) return chatResponse;
       const authResponse = await handleAuthRequest(request, workerEnv);
       if (authResponse) return authResponse;
       const marketResponse = await handleMarketRequest(request, workerEnv);
@@ -1420,6 +1434,7 @@ export default {
       const pathname = new URL(request.url).pathname;
       if (
         pathname.startsWith("/api/auth/") ||
+        pathname.startsWith("/api/chat/") ||
         pathname.startsWith("/api/market/") ||
         pathname === "/api/admin/credit-obsidian"
       ) {
@@ -1437,3 +1452,5 @@ export default {
     }
   },
 };
+
+export { ChatRoom } from "./chat/chat-room";
