@@ -901,7 +901,7 @@ function Index() {
               </p>
               {!googlePlayer ? (
                 <p className="mt-7 max-w-lg border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
-                  INICIA SESIÓN CON GOOGLE PARA DESBLOQUEAR EL HANGAR Y COMENZAR A JUGAR.
+                  INICIA SESION Y DESPLIEGA TU NAVE
                 </p>
               ) : null}
               <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
