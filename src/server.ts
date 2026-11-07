@@ -128,15 +128,24 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   const cloudflareEnv = (request as CloudflareRequest).runtime?.cloudflare?.env;
   const workerEnv = env && typeof env === "object" ? (env as WorkerEnv) : undefined;
   const nitroEnv = (globalThis as NitroGlobal).__env__;
-
-  // Prefer the environment that actually contains the D1 binding.
-  // Nitro may expose a partial Cloudflare runtime env on the Request;
-  // returning it unconditionally can hide the real Worker env argument.
-  const candidates = [workerEnv, cloudflareEnv, nitroEnv];
-  return (
-    candidates.find((candidate) => candidate?.DB && typeof candidate.DB.prepare === "function") ??
-    candidates.find((candidate) => candidate !== undefined)
+  const candidates = [workerEnv, cloudflareEnv, nitroEnv].filter(
+    (candidate): candidate is WorkerEnv => candidate !== undefined,
   );
+
+  // Cloudflare/Nitro can expose partial env objects in different places.
+  // Resolve each binding independently so a partial object with DB cannot
+  // hide Google OAuth secrets supplied by another runtime env object.
+  const database = candidates.find(
+    (candidate) => candidate.DB && typeof candidate.DB.prepare === "function",
+  )?.DB;
+  if (!database && candidates.length === 0) return undefined;
+
+  return {
+    DB: database,
+    GOOGLE_CLIENT_ID: candidates.find((candidate) => candidate.GOOGLE_CLIENT_ID)?.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: candidates.find((candidate) => candidate.GOOGLE_CLIENT_SECRET)?.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI: candidates.find((candidate) => candidate.GOOGLE_REDIRECT_URI)?.GOOGLE_REDIRECT_URI,
+  };
 }
 
 function json(data: unknown, status = 200, headers?: HeadersInit): Response {
