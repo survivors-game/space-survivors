@@ -594,7 +594,7 @@ async function handleAuthRequest(
     if (!account) return json({ error: "Inicia sesión con Google para guardar tu perfil." }, 401);
     const body = await readJson(request, 2048);
     const displayName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
-    if (!/^[\\p{L}\\p{N}_-]{3,20}$/u.test(displayName)) {
+    if (!/^[\p{L}\p{N}_-]{3,20}$/u.test(displayName)) {
       return json({ error: "El nombre debe tener entre 3 y 20 caracteres: letras, números, guion o guion bajo." }, 400);
     }
     const duplicate = await db
