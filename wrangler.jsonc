@@ -10,6 +10,15 @@
       "database_id": "8864837b-152c-46d0-87d1-c705940be3fe",
     },
   ],
+  "kv_namespaces": [
+    {
+      "binding": "LEADERBOARD",
+      "id": "dabc63ce0ea14f6a80accf286f5d41aa",
+    },
+  ],
+  "vars": {
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF3_cGCrnDqEPxfr",
+  },
   "durable_objects": {
     "bindings": [{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }],
   },

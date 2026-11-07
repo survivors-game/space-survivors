@@ -102,6 +102,12 @@ class AuthDatabase {
               : [...accounts.values()].find((item) => item.pilot_id === value);
           return (account ?? null) as T | null;
         }
+        if (query.includes("FROM pilots")) {
+          return { obsidian: 15, callsign: "PILOTO" } as T;
+        }
+        if (query.includes("FROM player_profiles")) {
+          return { display_name: "TEST PILOT" } as T;
+        }
         if (query.includes("FROM player_progress")) {
           const saved = progress.get(values[0] as string);
           return (saved ? { progress_json: saved } : null) as T | null;
@@ -181,7 +187,7 @@ describe("Google sign-in", () => {
     let idToken = "";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const target = String(input);
         if (target === "https://oauth2.googleapis.com/token") {
           return new Response(JSON.stringify({ id_token: idToken }), { status: 200 });
@@ -189,23 +195,64 @@ describe("Google sign-in", () => {
         if (target === "https://www.googleapis.com/oauth2/v3/certs") {
           return new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200 });
         }
+        if (target === "https://challenges.cloudflare.com/turnstile/v0/siteverify") {
+          const form = new URLSearchParams(String(init?.body ?? ""));
+          return new Response(
+            JSON.stringify({
+              success: form.get("response") !== "invalid-token",
+              hostname: "game.example",
+              action: "login",
+            }),
+            { status: 200 },
+          );
+        }
         throw new Error(`Unexpected fetch: ${target}`);
       }),
     );
     const env = {
       DB: database,
+      LEADERBOARD: {
+        values: new Map<string, string>(),
+        async get(key: string) {
+          return this.values.get(key) ?? null;
+        },
+        async put(key: string, value: string) {
+          this.values.set(key, value);
+        },
+      },
       GOOGLE_CLIENT_ID: "test-client",
       GOOGLE_CLIENT_SECRET: "server-only-secret",
       GOOGLE_REDIRECT_URI: "https://game.example/api/auth/google/callback",
+      TURNSTILE_SECRET_KEY: "server-only-turnstile-secret",
     };
     const guestPilotId = "plt_0123456789abcdef01234567";
 
+    const missingTurnstile = await server.fetch(
+      new Request("https://game.example/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { origin: "https://game.example", "content-type": "application/json" },
+        body: "{}",
+      }),
+      env,
+    );
+    expect(missingTurnstile.status).toBe(400);
+
+    const rejectedTurnstile = await server.fetch(
+      new Request("https://game.example/api/auth/verify-turnstile", {
+        method: "POST",
+        headers: { origin: "https://game.example", "content-type": "application/json" },
+        body: JSON.stringify({ token: "invalid-token" }),
+      }),
+      env,
+    );
+    expect(rejectedTurnstile.status).toBe(403);
+
     const signIn = async (subject = "google-sub-1", email = "pilot@example.com") => {
       const startResponse = await server.fetch(
-        new Request("https://game.example/api/auth/google/start", {
+        new Request("https://game.example/api/auth/verify-turnstile", {
           method: "POST",
           headers: { origin: "https://game.example", "content-type": "application/json" },
-          body: "{}",
+          body: JSON.stringify({ token: "verified-turnstile-token" }),
         }),
         env,
       );
@@ -242,7 +289,11 @@ describe("Google sign-in", () => {
     const initialAccount = database.accounts.get("google-sub-1")!;
     expect(initialAccount.pilot_id).toBe(guestPilotId);
 
-    const savedProgress = { credits: 840, ships: ["falcon", "comet"] };
+    const savedProgress = {
+      credits: 840,
+      ships: ["falcon", "comet"],
+      stats: { kills: 23 },
+    };
     const saveResponse = await server.fetch(
       new Request("https://game.example/api/auth/progress", {
         method: "POST",
@@ -256,6 +307,40 @@ describe("Google sign-in", () => {
       env,
     );
     expect(saveResponse.status).toBe(200);
+
+    const leaderboardUpdate = await server.fetch(
+      new Request("https://game.example/api/leaderboard/update", {
+        method: "POST",
+        headers: {
+          origin: "https://game.example",
+          "content-type": "application/json",
+          cookie: firstCookie,
+        },
+        body: JSON.stringify({
+          pilot_id: guestPilotId,
+          callsign: "UNTRUSTED NAME",
+          obsidian: 9999,
+          score: 23,
+        }),
+      }),
+      env,
+    );
+    expect(leaderboardUpdate.status).toBe(200);
+
+    const leaderboardResponse = await server.fetch(
+      new Request("https://game.example/api/leaderboard"),
+      env,
+    );
+    expect(await leaderboardResponse.json()).toEqual({
+      entries: [
+        {
+          pilot_id: guestPilotId,
+          callsign: "TEST PILOT",
+          obsidian: 15,
+          score: 23,
+        },
+      ],
+    });
 
     const secondSignIn = await signIn();
     const sessionResponse = await server.fetch(

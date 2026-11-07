@@ -19,11 +19,18 @@ type D1Database = {
   prepare(query: string): D1Statement;
   batch<T = Record<string, unknown>>(statements: D1Statement[]): Promise<D1Result<T>[]>;
 };
+type KVNamespace = {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
+};
 type WorkerEnv = ChatWorkerEnv & {
   DB?: D1Database;
+  LEADERBOARD?: KVNamespace;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  TURNSTILE_SITE_KEY?: string;
 };
 type CloudflareRequest = Request & {
   runtime?: { cloudflare?: { env?: WorkerEnv } };
@@ -40,6 +47,7 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
 const ADMIN_EMAIL = "emprendedora.onlinevee@gmail.com";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+const LEADERBOARD_KEY = "global:top100";
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 let schemaPromise: Promise<void> | undefined;
 let marketSchemaPromise: Promise<void> | undefined;
@@ -160,12 +168,22 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   const googleRedirectUri = candidates.find(
     (candidate) => candidate.GOOGLE_REDIRECT_URI,
   )?.GOOGLE_REDIRECT_URI;
+  const leaderboard = candidates.find((candidate) => candidate.LEADERBOARD)?.LEADERBOARD;
+  const turnstileSecretKey = candidates.find(
+    (candidate) => candidate.TURNSTILE_SECRET_KEY,
+  )?.TURNSTILE_SECRET_KEY;
+  const turnstileSiteKey = candidates.find(
+    (candidate) => candidate.TURNSTILE_SITE_KEY,
+  )?.TURNSTILE_SITE_KEY;
   return {
     ...(database ? { DB: database } : {}),
     ...(chatRoom ? { CHAT_ROOM: chatRoom } : {}),
+    ...(leaderboard ? { LEADERBOARD: leaderboard } : {}),
     ...(googleClientId ? { GOOGLE_CLIENT_ID: googleClientId } : {}),
     ...(googleClientSecret ? { GOOGLE_CLIENT_SECRET: googleClientSecret } : {}),
     ...(googleRedirectUri ? { GOOGLE_REDIRECT_URI: googleRedirectUri } : {}),
+    ...(turnstileSecretKey ? { TURNSTILE_SECRET_KEY: turnstileSecretKey } : {}),
+    ...(turnstileSiteKey ? { TURNSTILE_SITE_KEY: turnstileSiteKey } : {}),
   };
 }
 
@@ -340,6 +358,200 @@ async function readJson(
   }
 }
 
+type LeaderboardEntry = {
+  pilot_id: string;
+  callsign: string;
+  obsidian: number;
+  score: number;
+};
+
+async function handleLeaderboardRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/leaderboard" && url.pathname !== "/api/leaderboard/update") {
+    return null;
+  }
+  if (!env?.LEADERBOARD) {
+    return json({ error: "La clasificación no está disponible en este Worker." }, 503);
+  }
+
+  if (url.pathname === "/api/leaderboard" && request.method === "GET") {
+    try {
+      const entries = await readLeaderboard(env.LEADERBOARD);
+      return json({ entries });
+    } catch (error) {
+      console.error("No se pudo leer la clasificación:", error);
+      return json({ error: "No se pudo cargar la clasificación." }, 503);
+    }
+  }
+  if (url.pathname !== "/api/leaderboard/update" || request.method !== "POST") {
+    return json({ error: "Método de clasificación no permitido." }, 405);
+  }
+  if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+  if (!env.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
+
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await ensureMarketSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar la base de datos de la clasificación:", error);
+    return json({ error: "No se pudo preparar la clasificación." }, 503);
+  }
+
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) {
+    return json(
+      { error: "Inicia sesión con Google para actualizar la clasificación." },
+      401,
+    );
+  }
+
+  const body = await readJson(request, 4096);
+  if (
+    !body ||
+    body["pilot_id"] !== account.pilot_id ||
+    typeof body["callsign"] !== "string" ||
+    body["callsign"].trim().length < 1 ||
+    body["callsign"].length > 32 ||
+    typeof body["obsidian"] !== "number" ||
+    !Number.isSafeInteger(body["obsidian"]) ||
+    body["obsidian"] < 0 ||
+    typeof body["score"] !== "number" ||
+    !Number.isSafeInteger(body["score"]) ||
+    body["score"] < 0
+  ) {
+    return json({ error: "Los datos de la clasificación no son válidos." }, 400);
+  }
+
+  try {
+    const [pilot, profile, progress] = await Promise.all([
+      db
+        .prepare("SELECT obsidian, callsign FROM pilots WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ obsidian: number; callsign: string }>(),
+      db
+        .prepare("SELECT display_name FROM player_profiles WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ display_name: string }>(),
+      db
+        .prepare("SELECT progress_json FROM player_progress WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ progress_json: string }>(),
+    ]);
+
+    let score: number;
+    try {
+      score = scoreFromProgress(progress?.progress_json);
+    } catch {
+      return json({ error: "El progreso guardado no contiene una puntuación válida." }, 409);
+    }
+    if (body["score"] !== score) {
+      return json({ error: "La puntuación debe coincidir con el progreso guardado." }, 409);
+    }
+
+    const callsign = profile?.display_name.trim() || pilot?.callsign.trim() || "PILOTO";
+    const obsidian = pilot?.obsidian;
+    await upsertLeaderboardEntry(env.LEADERBOARD, {
+      pilot_id: account.pilot_id,
+      callsign,
+      obsidian:
+        typeof obsidian === "number" && Number.isSafeInteger(obsidian) && obsidian >= 0
+          ? obsidian
+          : 0,
+      score,
+    });
+    return json({ success: true });
+  } catch (error) {
+    console.error("No se pudo actualizar la clasificación:", error);
+    return json({ error: "No se pudo actualizar la clasificación." }, 503);
+  }
+}
+
+function scoreFromProgress(progressJson?: string): number {
+  if (!progressJson) return 0;
+  const savedProgress: unknown = JSON.parse(progressJson);
+  if (
+    !savedProgress ||
+    typeof savedProgress !== "object" ||
+    !("stats" in savedProgress) ||
+    !savedProgress.stats ||
+    typeof savedProgress.stats !== "object" ||
+    !("kills" in savedProgress.stats) ||
+    typeof savedProgress.stats.kills !== "number" ||
+    !Number.isSafeInteger(savedProgress.stats.kills) ||
+    savedProgress.stats.kills < 0
+  ) {
+    throw new Error("El progreso guardado no contiene una puntuación válida.");
+  }
+  return savedProgress.stats.kills;
+}
+
+async function readLeaderboard(kv: KVNamespace): Promise<LeaderboardEntry[]> {
+  const stored = await kv.get(LEADERBOARD_KEY);
+  if (stored === null) return [];
+  const parsed: unknown = JSON.parse(stored);
+  if (!Array.isArray(parsed)) {
+    throw new Error("El formato guardado de la clasificación no es válido.");
+  }
+  return parsed
+    .filter(
+      (entry): entry is LeaderboardEntry =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        typeof entry.pilot_id === "string" &&
+        typeof entry.callsign === "string" &&
+        typeof entry.obsidian === "number" &&
+        Number.isSafeInteger(entry.obsidian) &&
+        entry.obsidian >= 0 &&
+        typeof entry.score === "number" &&
+        Number.isSafeInteger(entry.score) &&
+        entry.score >= 0,
+    )
+    .slice(0, 100);
+}
+
+async function upsertLeaderboardEntry(kv: KVNamespace, entry: LeaderboardEntry): Promise<void> {
+  const entries = await readLeaderboard(kv);
+  const updated = [...entries.filter((candidate) => candidate.pilot_id !== entry.pilot_id), entry]
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.obsidian - a.obsidian ||
+        a.callsign.localeCompare(b.callsign) ||
+        a.pilot_id.localeCompare(b.pilot_id),
+    )
+    .slice(0, 100);
+  await kv.put(LEADERBOARD_KEY, JSON.stringify(updated));
+}
+
+async function verifyTurnstileToken(
+  token: string,
+  secretKey: string,
+  expectedHostname: string,
+): Promise<boolean> {
+  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ secret: secretKey, response: token }),
+  });
+  if (!response.ok) {
+    throw new Error(`Turnstile respondió HTTP ${response.status}.`);
+  }
+  const result = (await response.json()) as {
+    success?: boolean;
+    hostname?: string;
+    action?: string;
+  };
+  return (
+    result.success === true &&
+    result.hostname === expectedHostname &&
+    result.action === "login"
+  );
+}
+
 async function handleAuthRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -356,8 +568,27 @@ async function handleAuthRequest(
     return json({ error: "No se pudo preparar la autenticación. Inténtalo de nuevo." }, 503);
   }
 
-  if (url.pathname === "/api/auth/google/start" && request.method === "POST") {
+  if (
+    (url.pathname === "/api/auth/google/start" || url.pathname === "/api/auth/verify-turnstile") &&
+    request.method === "POST"
+  ) {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+    if (!env.TURNSTILE_SECRET_KEY) {
+      return json({ error: "Falta configurar Turnstile en el Worker." }, 503);
+    }
+    const body = await readJson(request, 2048);
+    const token = body?.["token"];
+    if (typeof token !== "string" || token.length < 1 || token.length > 2048) {
+      return json({ error: "Completa la verificación de seguridad." }, 400);
+    }
+    try {
+      if (!(await verifyTurnstileToken(token, env.TURNSTILE_SECRET_KEY, url.hostname))) {
+        return json({ error: "La verificación de seguridad falló. Inténtalo de nuevo." }, 403);
+      }
+    } catch (error) {
+      console.error("No se pudo verificar el token de Turnstile:", error);
+      return json({ error: "No se pudo verificar la seguridad. Inténtalo de nuevo." }, 503);
+    }
     if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI) {
       return json({ error: "Faltan las credenciales de Google en el Worker." }, 503);
     }
@@ -993,10 +1224,39 @@ async function handleMarketRequest(
         return json({ error: "No se pudo acreditar el paquete al piloto." }, 400);
       }
       const pilot = await db
-        .prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?")
+        .prepare("SELECT pilot_id, obsidian, callsign FROM pilots WHERE pilot_id = ?")
         .bind(pilotId)
-        .first<{ obsidian: number }>();
-      return json({ success: true, credited: amount, obsidian: pilot?.obsidian ?? null });
+        .first<{ pilot_id: string; obsidian: number; callsign: string }>();
+      let leaderboardUpdated = false;
+      if (env.LEADERBOARD && pilot) {
+        try {
+          const [profile, progress] = await Promise.all([
+            db
+              .prepare("SELECT display_name FROM player_profiles WHERE pilot_id = ?")
+              .bind(pilotId)
+              .first<{ display_name: string }>(),
+            db
+              .prepare("SELECT progress_json FROM player_progress WHERE pilot_id = ?")
+              .bind(pilotId)
+              .first<{ progress_json: string }>(),
+          ]);
+          await upsertLeaderboardEntry(env.LEADERBOARD, {
+            pilot_id: pilot.pilot_id,
+            callsign: profile?.display_name.trim() || pilot.callsign.trim() || "PILOTO",
+            obsidian: pilot.obsidian,
+            score: scoreFromProgress(progress?.progress_json),
+          });
+          leaderboardUpdated = true;
+        } catch (error) {
+          console.error("No se pudo actualizar la clasificación tras acreditar obsidiana:", error);
+        }
+      }
+      return json({
+        success: true,
+        credited: amount,
+        obsidian: pilot?.obsidian ?? null,
+        leaderboardUpdated,
+      });
     } catch (error) {
       console.error("No se pudo acreditar obsidiana administrativa:", error);
       return json({ error: "No se pudo acreditar el paquete al piloto." }, 400);
@@ -1424,6 +1684,8 @@ export default {
       if (chatResponse) return chatResponse;
       const authResponse = await handleAuthRequest(request, workerEnv);
       if (authResponse) return authResponse;
+      const leaderboardResponse = await handleLeaderboardRequest(request, workerEnv);
+      if (leaderboardResponse) return leaderboardResponse;
       const marketResponse = await handleMarketRequest(request, workerEnv);
       if (marketResponse) return marketResponse;
       const handler = await getServerEntry();
@@ -1435,6 +1697,7 @@ export default {
       if (
         pathname.startsWith("/api/auth/") ||
         pathname.startsWith("/api/chat/") ||
+        pathname.startsWith("/api/leaderboard") ||
         pathname.startsWith("/api/market/") ||
         pathname === "/api/admin/credit-obsidian"
       ) {

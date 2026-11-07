@@ -54,8 +54,10 @@ import { Hotbar } from "@/components/game/Hotbar";
 import { CombatStatsOverlay } from "@/components/game/CombatStatsOverlay";
 import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { GameChat } from "@/components/GameChat";
+import { Leaderboard } from "@/components/Leaderboard";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { MISSIONS } from "@/game/meta/missions";
 import type { P2PMyAd, P2PPilotState, P2PPublishInput } from "@/game/data/market";
 import {
@@ -122,6 +124,29 @@ async function marketRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+async function submitLeaderboardUpdate(input: {
+  pilotId: string;
+  callsign: string;
+  obsidian: number;
+  score: number;
+}): Promise<void> {
+  const response = await fetch("/api/leaderboard/update", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      pilot_id: input.pilotId,
+      callsign: input.callsign,
+      obsidian: input.obsidian,
+      score: input.score,
+    }),
+  });
+  const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+  if (!response.ok) {
+    throw new Error(payload?.error ?? "No se pudo actualizar la clasificación.");
+  }
+}
+
 function Index() {
   const [screen, setScreen] = useState<Screen>("MENU");
   const [gameMode, setGameMode] = useState<GameMode>("CAMPAIGN");
@@ -148,6 +173,8 @@ function Index() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleSessionLoading, setGoogleSessionLoading] = useState(true);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileWidgetVersion, setTurnstileWidgetVersion] = useState(0);
   const googleConnectionLockRef = useRef(false);
   const progressSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
@@ -198,6 +225,23 @@ function Index() {
         if (active) {
           setMarketPilot(pilot);
           setMarketAds(myAds.ads);
+          await progressSaveQueueRef.current.catch(() => undefined);
+          if (!active) return;
+          void submitLeaderboardUpdate({
+            pilotId: googlePlayer.playerId,
+            callsign: profileName || pilot.callsign || "PILOTO",
+            obsidian: pilot.obsidian,
+            score: ProgressStore.get().stats.kills,
+          }).catch((error: unknown) => {
+            if (!active) return;
+            console.error(
+              "No se pudo actualizar la clasificación después de sincronizar el piloto:",
+              error,
+            );
+            setNotice(
+              error instanceof Error ? error.message : "No se pudo actualizar la clasificación.",
+            );
+          });
         }
       } catch (error) {
         if (active) {
@@ -212,7 +256,14 @@ function Index() {
     return () => {
       active = false;
     };
-  }, [googleSessionLoading, googlePlayer, ownedShipsKey, progress.selectedShip, marketRefresh]);
+  }, [
+    googleSessionLoading,
+    googlePlayer,
+    ownedShipsKey,
+    progress.selectedShip,
+    marketRefresh,
+    profileName,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -349,12 +400,28 @@ function Index() {
           if (!response.ok) {
             throw new Error(payload?.error ?? "No se pudo guardar el progreso en el servidor.");
           }
+          try {
+            await submitLeaderboardUpdate({
+              pilotId: googlePlayer.playerId,
+              callsign: profileName || marketPilot?.callsign || "PILOTO",
+              obsidian: marketPilot?.obsidian ?? 0,
+              score: next.stats.kills,
+            });
+          } catch (error) {
+            console.error(
+              "No se pudo actualizar la clasificación después de guardar progreso:",
+              error,
+            );
+            setNotice(
+              error instanceof Error ? error.message : "No se pudo actualizar la clasificación.",
+            );
+          }
         });
       void progressSaveQueueRef.current.catch((error: unknown) => {
         setNotice(error instanceof Error ? error.message : "No se pudo guardar el progreso.");
       });
     },
-    [googlePlayer],
+    [googlePlayer, marketPilot, profileName],
   );
 
   const publishMarketAd = async (input: P2PPublishInput) => {
@@ -431,6 +498,10 @@ function Index() {
 
   const handleGoogleSignIn = async () => {
     if (googleConnectionLockRef.current) return;
+    if (!googlePlayer && !turnstileToken) {
+      setNotice("COMPLETA LA VERIFICACIÓN DE SEGURIDAD");
+      return;
+    }
     googleConnectionLockRef.current = true;
     setGoogleConnecting(true);
     try {
@@ -450,11 +521,11 @@ function Index() {
         setMarketRefresh((version) => version + 1);
         setNotice("SESIÓN CERRADA");
       } else {
-        const response = await fetch("/api/auth/google/start", {
+        const response = await fetch("/api/auth/verify-turnstile", {
           method: "POST",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
-          body: "{}",
+          body: JSON.stringify({ token: turnstileToken }),
         });
         const payload = (await response.json().catch(() => null)) as {
           authorizationUrl?: string;
@@ -471,6 +542,10 @@ function Index() {
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "No se pudo iniciar sesión con Google.");
+      if (!googlePlayer) {
+        setTurnstileToken("");
+        setTurnstileWidgetVersion((version) => version + 1);
+      }
     } finally {
       googleConnectionLockRef.current = false;
       setGoogleConnecting(false);
@@ -962,9 +1037,12 @@ function Index() {
                 jefe del sector.
               </p>
               {!googlePlayer ? (
-                <p className="mt-7 max-w-lg border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
-                  INICIA SESION Y DESPLIEGA TU NAVE
-                </p>
+                <div className="mt-7 max-w-lg space-y-3">
+                  <p className="border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
+                    INICIA SESIÓN Y DESPLIEGA TU NAVE
+                  </p>
+                  <TurnstileWidget key={turnstileWidgetVersion} onToken={setTurnstileToken} />
+                </div>
               ) : null}
               <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
                 <Button
@@ -1046,6 +1124,9 @@ function Index() {
                   bajas
                 </p>
               ) : null}
+            </div>
+            <div className="w-full lg:col-span-2">
+              <Leaderboard />
             </div>
           </section>
         ) : null}

@@ -5,6 +5,15 @@ const PILOT_ID = "plt_0123456789abcdef01234567";
 
 function createDatabase(email: string) {
   let batchCalls = 0;
+  const leaderboardValues = new Map<string, string>();
+  const leaderboard = {
+    async get(key: string) {
+      return leaderboardValues.get(key) ?? null;
+    },
+    async put(key: string, value: string) {
+      leaderboardValues.set(key, value);
+    },
+  };
   const db = {
     prepare(query: string) {
       let values: unknown[] = [];
@@ -27,8 +36,8 @@ function createDatabase(email: string) {
               pilot_id: "plt_aaaaaaaaaaaaaaaaaaaaaaaa",
             };
           }
-          if (query.includes("SELECT obsidian FROM pilots")) {
-            return { obsidian: 15 };
+          if (query.includes("FROM pilots")) {
+            return { pilot_id: PILOT_ID, obsidian: 15, callsign: "PILOTO" };
           }
           return null;
         },
@@ -42,7 +51,7 @@ function createDatabase(email: string) {
       return statements.map(() => ({ meta: { changes: 1 } }));
     },
   };
-  return { db, getBatchCalls: () => batchCalls };
+  return { db, leaderboard, getBatchCalls: () => batchCalls };
 }
 
 function makeRequest(session = false) {
@@ -66,13 +75,27 @@ describe("administrative obsidian credits", () => {
     const responses = await Promise.all([
       server.fetch(makeRequest(), { DB: anonymousDb.db }),
       server.fetch(makeRequest(true), { DB: playerDb.db }),
-      server.fetch(makeRequest(true), { DB: adminDb.db }),
+      server.fetch(makeRequest(true), { DB: adminDb.db, LEADERBOARD: adminDb.leaderboard }),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([401, 403, 200]);
     expect(anonymousDb.getBatchCalls()).toBe(0);
     expect(playerDb.getBatchCalls()).toBe(0);
     expect(adminDb.getBatchCalls()).toBe(1);
-    expect(await responses[2]!.json()).toMatchObject({ success: true, credited: 10, obsidian: 15 });
+    expect(await responses[2]!.json()).toMatchObject({
+      success: true,
+      credited: 10,
+      obsidian: 15,
+      leaderboardUpdated: true,
+    });
+    const leaderboardResponse = await server.fetch(
+      new Request("https://game.example/api/leaderboard"),
+      {
+        LEADERBOARD: adminDb.leaderboard,
+      },
+    );
+    expect(await leaderboardResponse.json()).toEqual({
+      entries: [{ pilot_id: PILOT_ID, callsign: "PILOTO", obsidian: 15, score: 0 }],
+    });
   });
 });
