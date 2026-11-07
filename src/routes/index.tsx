@@ -142,6 +142,9 @@ function Index() {
   const [marketError, setMarketError] = useState("");
   const [marketRefresh, setMarketRefresh] = useState(0);
   const [googlePlayer, setGooglePlayer] = useState<GooglePlayer | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [profileNameDraft, setProfileNameDraft] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleSessionLoading, setGoogleSessionLoading] = useState(true);
   const googleConnectionLockRef = useRef(false);
@@ -242,6 +245,7 @@ function Index() {
           email?: string;
           playerId?: string;
           isAdmin?: boolean;
+          displayName?: string;
           progress?: unknown;
           error?: string;
         };
@@ -276,6 +280,8 @@ function Index() {
           isAdmin: session.isAdmin,
         };
         setGooglePlayer(player);
+        setProfileName(session.displayName?.trim() ?? "");
+        setProfileNameDraft(session.displayName?.trim() ?? "");
         let localOwner: string | null = null;
         try {
           localOwner = localStorage.getItem(PROGRESS_ACCOUNT_KEY);
@@ -834,11 +840,16 @@ function Index() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleGoogleSignIn}
+                onClick={() => {
+                  if (googlePlayer) {
+                    setHangarTab("PROFILE");
+                    setScreen("HANGAR");
+                  } else {
+                    void handleGoogleSignIn();
+                  }
+                }}
                 disabled={googleConnecting}
-                title={
-                  googlePlayer ? `Sesión de ${googlePlayer.email}` : "Iniciar sesión con Google"
-                }
+                title={googlePlayer ? "Abrir perfil del piloto" : "Iniciar sesión con Google"}
                 className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
               >
                 <Wallet className="size-3.5" />
@@ -847,12 +858,12 @@ function Index() {
                     {googleConnecting
                       ? "CONECTANDO..."
                       : googlePlayer
-                        ? googlePlayer.email
+                        ? profileName || "COMPLETAR PERFIL"
                         : "INICIAR SESIÓN CON GOOGLE"}
                   </span>
                   {googlePlayer ? (
                     <span className="mt-1 text-[7px] normal-case tracking-normal text-cyan-200/70">
-                      PILOT ID: {googlePlayer.playerId}
+                      PERFIL DEL PILOTO
                     </span>
                   ) : null}
                 </span>
@@ -956,29 +967,29 @@ function Index() {
                     <MenuHeroShip ship={selectedShip} />
                   </div>
                   <div className="absolute bottom-4 left-4 text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
-                    NAVE ACTIVA
+                    {googlePlayer ? "NAVE ACTIVA" : "NAVE DE EXHIBICIÓN"}
                     <br />
-                    <span className="text-white">{selectedShip.name}</span>
+                    <span className="text-white">{googlePlayer ? selectedShip.name : "HALCÓN NOVA"}</span>
                   </div>
                   <div className="absolute bottom-4 right-4 text-right text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
                     SECTOR
                     <br />
-                    <span className="text-white">{selectedStage.name}</span>
+                    <span className="text-white">{googlePlayer ? selectedStage.name : "—"}</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 border-t border-white/10">
                   <MenuStat
                     label="Misiones"
-                    value={progress.stats.runs.toString().padStart(2, "0")}
+                    value={googlePlayer ? progress.stats.runs.toString().padStart(2, "0") : "00"}
                   />
-                  <MenuStat label="Bajas" value={progress.stats.kills.toLocaleString()} />
+                  <MenuStat label="Bajas" value={googlePlayer ? progress.stats.kills.toLocaleString() : "0"} />
                   <MenuStat
                     label="Naves"
-                    value={progress.ships.length.toString().padStart(2, "0")}
+                    value={googlePlayer ? progress.ships.length.toString().padStart(2, "0") : "00"}
                   />
                 </div>
               </div>
-              {latestRun ? (
+              {googlePlayer && latestRun ? (
                 <p className="mt-3 text-right text-[9px] uppercase tracking-[0.15em] text-white/35">
                   Última misión: {latestRun.victory ? "Victoria" : "Retirada"} · {latestRun.kills}{" "}
                   bajas
@@ -1543,6 +1554,78 @@ function Index() {
               </div>
             ) : (
               <div className="mt-6 space-y-8 lg:col-start-2">
+                <section className="border border-cyan-500/20 bg-[#0b0d1c]/75 p-4 sm:p-6">
+                  <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+                    IDENTIDAD DEL PILOTO
+                  </h2>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[8px] uppercase tracking-widest text-white/40">PILOT ID</p>
+                      <p className="mt-2 break-all text-[10px] text-cyan-100">{googlePlayer?.playerId}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] uppercase tracking-widest text-white/40">CORREO PRIVADO DE ACCESO</p>
+                      <p className="mt-2 break-all text-[10px] text-white/60">{googlePlayer?.email}</p>
+                    </div>
+                  </div>
+                  <form
+                    className="mt-5 flex flex-col gap-3 sm:flex-row"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      if (!googlePlayer || profileSaving) return;
+                      setProfileSaving(true);
+                      try {
+                        const response = await fetch("/api/auth/profile", {
+                          method: "POST",
+                          credentials: "same-origin",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ displayName: profileNameDraft }),
+                        });
+                        const payload = (await response.json().catch(() => null)) as
+                          | { displayName?: string; error?: string }
+                          | null;
+                        if (!response.ok || !payload?.displayName) {
+                          throw new Error(payload?.error ?? "No se pudo guardar el nombre de usuario.");
+                        }
+                        setProfileName(payload.displayName);
+                        setProfileNameDraft(payload.displayName);
+                        setNotice("NOMBRE DE USUARIO GUARDADO");
+                      } catch (error) {
+                        setNotice(error instanceof Error ? error.message : "No se pudo guardar el perfil.");
+                      } finally {
+                        setProfileSaving(false);
+                      }
+                    }}
+                  >
+                    <label className="min-w-0 flex-1">
+                      <span className="mb-2 block text-[8px] uppercase tracking-widest text-white/45">NOMBRE DE USUARIO (3–20 CARACTERES)</span>
+                      <input
+                        value={profileNameDraft}
+                        onChange={(event) => setProfileNameDraft(event.target.value)}
+                        minLength={3}
+                        maxLength={20}
+                        pattern="[A-Za-zÀ-ÿ0-9_-]{3,20}"
+                        autoComplete="nickname"
+                        required
+                        className="h-11 w-full border border-cyan-400/30 bg-[#070814] px-3 text-xs text-white outline-none focus:border-cyan-300"
+                        placeholder="ELIGE TU NOMBRE"
+                      />
+                    </label>
+                    <Button type="submit" disabled={profileSaving} className="mt-auto h-11 rounded-none bg-[#00f0ff] px-5 text-[9px] font-bold uppercase text-[#070814] hover:bg-cyan-200">
+                      {profileSaving ? "GUARDANDO..." : "GUARDAR NOMBRE"}
+                    </Button>
+                  </form>
+                  <p className="mt-2 text-[8px] text-white/35">El nombre será visible en el juego. Tu correo se conserva únicamente para iniciar sesión.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleGoogleSignIn()}
+                    disabled={googleConnecting}
+                    className="mt-5 h-10 rounded-none border-[#ff6b95]/40 bg-[#ff6b95]/5 px-4 text-[9px] uppercase tracking-widest text-[#ff9ab9] hover:bg-[#ff6b95]/10"
+                  >
+                    CERRAR SESIÓN
+                  </Button>
+                </section>
                 <section>
                   <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
                     ESTADÍSTICAS HISTÓRICAS
@@ -1637,7 +1720,7 @@ function Index() {
                         ? "Domina cada arma y su sinergia pasiva para desbloquear su evolución."
                         : hangarTab === "MARKET"
                           ? "Publica naves desbloqueadas y administra tus anuncios con obsidiana del juego."
-                          : "Historial permanente de despliegues y rendimiento de la flota."}
+                          : "Perfil del piloto, estadísticas e historial permanente de despliegues."}
               </p>
               <Button
                 onClick={() => setScreen("SELECT")}
