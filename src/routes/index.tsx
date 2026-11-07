@@ -498,6 +498,26 @@ function Index() {
     };
   }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode, saveProgress]);
 
+  useEffect(() => {
+    if (googleSessionLoading || googlePlayer) return;
+    if (screen !== "MENU") {
+      setScreen("MENU");
+      setNotice("INICIA SESIÓN CON GOOGLE PARA ACCEDER AL HANGAR Y DESPLEGAR");
+    }
+  }, [googleSessionLoading, googlePlayer, screen]);
+
+  const requireGoogleSession = () => {
+    if (googleSessionLoading) {
+      setNotice("VERIFICANDO SESIÓN. ESPERA UN MOMENTO.");
+      return false;
+    }
+    if (!googlePlayer) {
+      setNotice("INICIA SESIÓN CON GOOGLE PARA ACCEDER AL HANGAR Y DESPLEGAR");
+      return false;
+    }
+    return true;
+  };
+
   const chooseShip = (id: string) => {
     if (
       !progress.ships.includes(id) ||
@@ -516,6 +536,7 @@ function Index() {
   };
 
   const startMission = () => {
+    if (!requireGoogleSession()) return;
     Audio.init();
     setHud(null);
     setChoices([]);
@@ -876,17 +897,30 @@ function Index() {
                 hordas enemigas, recolecta recursos, mejora tu arsenal y sobrevive hasta derrotar al
                 jefe del sector.
               </p>
+              {!googlePlayer ? (
+                <p className="mt-7 max-w-lg border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
+                  INICIA SESIÓN CON GOOGLE PARA DESBLOQUEAR EL HANGAR Y COMENZAR A JUGAR.
+                </p>
+              ) : null}
               <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
                 <Button
-                  onClick={() => setScreen("SELECT")}
-                  className="font-arcade h-12 flex-1 rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[8px] uppercase tracking-[0.04em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200"
+                  onClick={() => {
+                    if (requireGoogleSession()) setScreen("SELECT");
+                  }}
+                  disabled={!googlePlayer || googleSessionLoading}
+                  title={!googlePlayer ? "Inicia sesión con Google para desplegar" : "Desplegar"}
+                  className="font-arcade h-12 flex-1 rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[8px] uppercase tracking-[0.04em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Rocket /> Desplegar
                 </Button>
                 <Button
-                  onClick={() => setScreen("HANGAR")}
+                  onClick={() => {
+                    if (requireGoogleSession()) setScreen("HANGAR");
+                  }}
+                  disabled={!googlePlayer || googleSessionLoading}
+                  title={!googlePlayer ? "Inicia sesión con Google para entrar al hangar" : "Hangar"}
                   variant="outline"
-                  className="h-12 flex-1 rounded-none border-[#8a2be2]/60 bg-[#8a2be2]/10 text-sm font-bold uppercase tracking-[0.18em] text-white hover:bg-[#8a2be2]/25"
+                  className="h-12 flex-1 rounded-none border-[#8a2be2]/60 bg-[#8a2be2]/10 text-sm font-bold uppercase tracking-[0.18em] text-white hover:bg-[#8a2be2]/25 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Wrench /> Hangar
                 </Button>
