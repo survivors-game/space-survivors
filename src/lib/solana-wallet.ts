@@ -32,8 +32,7 @@ type MetaMaskSolanaSdk = {
 };
 
 let clientPromise: Promise<MetaMaskSolanaClient> | undefined;
-const METAMASK_SOLANA_SDK_URL =
-  "https://esm.sh/@metamask/connect-solana@2.1.1?bundle";
+const METAMASK_SOLANA_SDK_URL = "https://esm.sh/@metamask/connect-solana@2.1.1?bundle";
 
 async function getMetaMaskClient(): Promise<MetaMaskSolanaClient> {
   if (!clientPromise) {
@@ -102,13 +101,13 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
   const signMessage = wallet.features["solana:signMessage"] as SignMessageFeature | undefined;
 
   if (!connect?.connect || !signMessage?.signMessage) {
-    throw new Error("MetaMask no ofrece las funciones necesarias para conectar y firmar en Solana.");
+    throw new Error(
+      "MetaMask no ofrece las funciones necesarias para conectar y firmar en Solana.",
+    );
   }
 
   const { accounts } = await connect.connect();
-  const account = accounts.find((item) =>
-    item.chains.some((chain) => chain.startsWith("solana:")),
-  );
+  const account = accounts.find((item) => item.chains.some((chain) => chain.startsWith("solana:")));
   if (!account || account.publicKey.length !== 32) {
     throw new Error("MetaMask no devolvió una cuenta Solana válida.");
   }
@@ -132,9 +131,7 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
   if (!signature) {
     throw new Error("MetaMask no devolvió una firma Solana.");
   }
-  const signatureBase64 = btoa(
-    Array.from(signature, (byte) => String.fromCharCode(byte)).join(""),
-  );
+  const signatureBase64 = btoa(Array.from(signature, (byte) => String.fromCharCode(byte)).join(""));
 
   const verifyResponse = await fetch("/api/auth/verify", {
     method: "POST",
@@ -159,7 +156,9 @@ export async function connectAndVerifyMetaMaskSolana(): Promise<ConnectedSolanaW
   // Confirm that the secure session cookie was stored and can be read immediately.
   const authenticated = await getAuthenticatedSolanaWallet();
   if (!authenticated || authenticated.address !== account.address) {
-    throw new Error("La firma se completó, pero no se pudo recuperar la sesión. Inténtalo de nuevo.");
+    throw new Error(
+      "La firma se completó, pero no se pudo recuperar la sesión. Inténtalo de nuevo.",
+    );
   }
 
   return { ...authenticated, walletName: wallet.name };
