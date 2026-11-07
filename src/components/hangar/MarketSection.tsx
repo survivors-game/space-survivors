@@ -132,7 +132,7 @@ const PENDING = "Acción lista · pendiente de conexión con el servidor del mer
 
 /* ---------------------------- EXPLORAR ---------------------------- */
 
-function Explore({ actions, onOpenAd }: { actions?: MarketActions; onOpenAd: (ad: P2PAd) => void }) {
+function Explore({ actions, onOpenAd }: { actions?: MarketActions | undefined; onOpenAd: (ad: P2PAd) => void }) {
   const [query, setQuery] = useState("");
   const [tipo, setTipo] = useState<"todos" | P2PAd["tipo"]>("todos");
   const [metodo, setMetodo] = useState<"todos" | P2PPayMethod>("todos");
@@ -221,7 +221,7 @@ function Explore({ actions, onOpenAd }: { actions?: MarketActions; onOpenAd: (ad
   );
 }
 
-function BuyConfirm({ ad, actions, onBack }: { ad: P2PAd; actions?: MarketActions; onBack: () => void }) {
+function BuyConfirm({ ad, actions, onBack }: { ad: P2PAd; actions?: MarketActions | undefined; onBack: () => void }) {
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <section className="space-y-4">
@@ -264,7 +264,7 @@ function Row({ k, v, gold }: { k: string; v: string; gold?: boolean }) {
 
 /* ---------------------------- PUBLICAR ---------------------------- */
 
-function Publish({ actions }: { actions?: MarketActions }) {
+function Publish({ actions }: { actions?: MarketActions | undefined }) {
   const [item, setItem] = useState(P2P_MY_INVENTORY[0] ?? "");
   const [precio, setPrecio] = useState("");
   const [moneda, setMoneda] = useState("COP");
@@ -333,7 +333,7 @@ function Publish({ actions }: { actions?: MarketActions }) {
 
 /* --------------------------- MIS ANUNCIOS --------------------------- */
 
-function MyAds({ actions }: { actions?: MarketActions }) {
+function MyAds({ actions }: { actions?: MarketActions | undefined }) {
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <section className="space-y-2">
@@ -387,7 +387,7 @@ function OrdersList({ onOpen }: { onOpen: (o: P2POrder) => void }) {
   );
 }
 
-function OrderDetail({ order, actions, onBack, onDispute }: { order: P2POrder; actions?: MarketActions; onBack: () => void; onDispute: () => void }) {
+function OrderDetail({ order, actions, onBack, onDispute }: { order: P2POrder; actions?: MarketActions | undefined; onBack: () => void; onDispute: () => void }) {
   const [verified, setVerified] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const run = (fn?: (id: string) => void) => (fn ? fn(order.id) : setNotice(PENDING));
@@ -455,7 +455,7 @@ function OrderDetail({ order, actions, onBack, onDispute }: { order: P2POrder; a
   );
 }
 
-function OrderChat({ order, actions }: { order: P2POrder; actions?: MarketActions }) {
+function OrderChat({ order, actions }: { order: P2POrder; actions?: MarketActions | undefined }) {
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const msgs = P2P_CHAT[order.id] ?? [];
@@ -502,7 +502,7 @@ function OrderChat({ order, actions }: { order: P2POrder; actions?: MarketAction
 
 /* --------------------------- DISPUTAS --------------------------- */
 
-function OpenDispute({ order, actions, onBack }: { order: P2POrder; actions?: MarketActions; onBack: () => void }) {
+function OpenDispute({ order, actions, onBack }: { order: P2POrder; actions?: MarketActions | undefined; onBack: () => void }) {
   const [motivo, setMotivo] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -544,7 +544,7 @@ const DSTATUS: Record<P2PDispute["estado"], string> = {
   RESUELTA_VENDEDOR: "border-emerald-400/50 text-emerald-200",
 };
 
-function DisputeCard({ d, admin, actions }: { d: P2PDispute; admin?: boolean; actions?: MarketActions }) {
+function DisputeCard({ d, admin, actions }: { d: P2PDispute; admin?: boolean; actions?: MarketActions | undefined }) {
   const [notice, setNotice] = useState<string | null>(null);
   const resolved = d.estado.startsWith("RESUELTA");
   const resolve = (favor: "COMPRADOR" | "VENDEDOR") => (actions?.onResolveDispute ? actions.onResolveDispute(d.id, favor) : setNotice(PENDING));
@@ -577,7 +577,7 @@ function DisputeCard({ d, admin, actions }: { d: P2PDispute; admin?: boolean; ac
   );
 }
 
-function AdminPanel({ actions }: { actions?: MarketActions }) {
+function AdminPanel({ actions }: { actions?: MarketActions | undefined }) {
   const open = P2P_DISPUTES.filter((d) => !d.estado.startsWith("RESUELTA")).length;
   return (
     <section className="space-y-4">
@@ -593,7 +593,7 @@ function AdminPanel({ actions }: { actions?: MarketActions }) {
 
 /* --------------------------- RAÍZ --------------------------- */
 
-export function MarketSection({ actions }: { actions?: MarketActions } = {}) {
+export function MarketSection({ actions }: { actions?: MarketActions | undefined } = {}) {
   const [tab, setTab] = useState<Tab>("EXPLORAR");
   const [ad, setAd] = useState<P2PAd | null>(null);
   const [order, setOrder] = useState<P2POrder | null>(null);
