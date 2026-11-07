@@ -1,6 +1,6 @@
 import { Crosshair, ScrollText, ShoppingBag, Skull, Target, Wrench } from "lucide-react";
 
-export type HangarTab = "UPGRADES" | "MISSIONS" | "BESTIARY" | "ARSENAL" | "LOGS" | "MARKET";
+export type HangarTab = "UPGRADES" | "MISSIONS" | "BESTIARY" | "ARSENAL" | "PROFILE" | "MARKET";
 
 interface HangarSidebarProps {
   activeTab: HangarTab;
@@ -13,7 +13,7 @@ const HANGAR_SECTIONS = [
   { id: "MISSIONS", label: "MISIONES", Icon: Target },
   { id: "BESTIARY", label: "BESTIARIO", Icon: Skull },
   { id: "ARSENAL", label: "ARSENAL", Icon: Crosshair },
-  { id: "LOGS", label: "REGISTRO", Icon: ScrollText },
+  { id: "PROFILE", label: "PERFIL", Icon: ScrollText },
   { id: "MARKET", label: "MERCADO", Icon: ShoppingBag },
 ] as const satisfies readonly { id: HangarTab; label: string; Icon: typeof Wrench }[];
 
