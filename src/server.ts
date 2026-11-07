@@ -96,6 +96,15 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
         .run();
       await db
         .prepare(
+          `CREATE TABLE IF NOT EXISTS player_profiles (
+        pilot_id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+        )
+        .run();
+      await db
+        .prepare(
           `CREATE INDEX IF NOT EXISTS idx_player_accounts_email
         ON player_accounts(email)`,
         )
@@ -555,13 +564,52 @@ async function handleAuthRequest(
       .prepare(`SELECT progress_json FROM player_progress WHERE pilot_id = ?`)
       .bind(account.pilot_id)
       .first<{ progress_json: string }>();
+    const savedProfile = await db
+      .prepare(`SELECT display_name FROM player_profiles WHERE pilot_id = ?`)
+      .bind(account.pilot_id)
+      .first<{ display_name: string }>();
     return json({
       authenticated: true,
       email: account.email,
       playerId: account.pilot_id,
+      displayName: savedProfile?.display_name ?? "",
       isAdmin: account.email === ADMIN_EMAIL,
       progress: savedProgress ? JSON.parse(savedProgress.progress_json) : null,
     });
+  }
+
+  if (url.pathname === "/api/auth/profile" && request.method === "GET") {
+    const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+    if (!account) return json({ error: "Inicia sesión con Google para consultar tu perfil." }, 401);
+    const profile = await db
+      .prepare(`SELECT display_name FROM player_profiles WHERE pilot_id = ?`)
+      .bind(account.pilot_id)
+      .first<{ display_name: string }>();
+    return json({ displayName: profile?.display_name ?? "" });
+  }
+
+  if (url.pathname === "/api/auth/profile" && request.method === "POST") {
+    if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+    const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+    if (!account) return json({ error: "Inicia sesión con Google para guardar tu perfil." }, 401);
+    const body = await readJson(request, 2048);
+    const displayName = typeof body?.displayName === "string" ? body.displayName.trim() : "";
+    if (!/^[\\p{L}\\p{N}_-]{3,20}$/u.test(displayName)) {
+      return json({ error: "El nombre debe tener entre 3 y 20 caracteres: letras, números, guion o guion bajo." }, 400);
+    }
+    const duplicate = await db
+      .prepare(`SELECT pilot_id FROM player_profiles WHERE lower(display_name) = lower(?) AND pilot_id <> ?`)
+      .bind(displayName, account.pilot_id)
+      .first<{ pilot_id: string }>();
+    if (duplicate) return json({ error: "Ese nombre de usuario ya está en uso." }, 409);
+    await db
+      .prepare(`INSERT INTO player_profiles (pilot_id, display_name, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(pilot_id) DO UPDATE SET
+          display_name = excluded.display_name, updated_at = excluded.updated_at`)
+      .bind(account.pilot_id, displayName, Date.now())
+      .run();
+    return json({ success: true, displayName });
   }
 
   if (url.pathname === "/api/auth/progress" && request.method === "GET") {
