@@ -398,6 +398,36 @@ function Index() {
     }
   };
 
+  const handleGoogleSignOut = async () => {
+    if (googleConnectionLockRef.current) return;
+    googleConnectionLockRef.current = true;
+    setGoogleConnecting(true);
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("No se pudo cerrar la sesión de Google.");
+      setGooglePlayer(null);
+      setProfileName("");
+      setProfileNameDraft("");
+      setMarketPilot(null);
+      setMarketAds([]);
+      ProgressStore.set(defaultProgress());
+      setProgress(defaultProgress());
+      setSelectedShipId("falcon");
+      setSelectedStageId("nova");
+      setMarketRefresh((version) => version + 1);
+      setScreen("MENU");
+      setNotice("SESIÓN CERRADA");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo cerrar la sesión.");
+    } finally {
+      googleConnectionLockRef.current = false;
+      setGoogleConnecting(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     if (googleConnectionLockRef.current) return;
     googleConnectionLockRef.current = true;
@@ -1619,7 +1649,7 @@ function Index() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => void handleGoogleSignIn()}
+                    onClick={() => void handleGoogleSignOut()}
                     disabled={googleConnecting}
                     className="mt-5 h-10 rounded-none border-[#ff6b95]/40 bg-[#ff6b95]/5 px-4 text-[9px] uppercase tracking-widest text-[#ff9ab9] hover:bg-[#ff6b95]/10"
                   >
