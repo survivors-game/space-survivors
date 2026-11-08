@@ -198,7 +198,6 @@ function Index() {
     return unsubscribe;
   }, [googleSessionLoading]);
 
-  const ownedShipsKey = progress.ships.join(",");
   useEffect(() => {
     if (googleSessionLoading) return;
     if (!googlePlayer) {
@@ -213,13 +212,6 @@ function Index() {
     setMarketError("");
     void (async () => {
       try {
-        await marketRequest<{ success: boolean }>("/api/market/sync-inventory", {
-          method: "POST",
-          body: JSON.stringify({
-            ships: ownedShipsKey ? ownedShipsKey.split(",") : [],
-            selectedShip: progress.selectedShip,
-          }),
-        });
         const [pilot, myAds] = await Promise.all([
           marketRequest<P2PPilotState>("/api/market/pilot-state"),
           marketRequest<{ ads: P2PMyAd[] }>("/api/market/my-ads"),
@@ -257,14 +249,7 @@ function Index() {
     return () => {
       active = false;
     };
-  }, [
-    googleSessionLoading,
-    googlePlayer,
-    ownedShipsKey,
-    progress.selectedShip,
-    marketRefresh,
-    profileName,
-  ]);
+  }, [googleSessionLoading, googlePlayer, marketRefresh, profileName]);
 
   useEffect(() => {
     let active = true;
@@ -299,6 +284,7 @@ function Index() {
           playerId?: string;
           isAdmin?: boolean;
           displayName?: string;
+          ownedShips?: string[];
           progress?: unknown;
           error?: string;
         };
@@ -351,6 +337,21 @@ function Index() {
           : localOwner && localOwner !== player.playerId
             ? defaultProgress()
             : currentProgress;
+        const ownedShips = Array.isArray(session.ownedShips)
+          ? Array.from(
+              new Set([
+                "falcon",
+                ...session.ownedShips.filter(
+                  (shipId): shipId is string =>
+                    typeof shipId === "string" && SHIPS.some((ship) => ship.id === shipId),
+                ),
+              ]),
+            )
+          : ["falcon"];
+        accountProgress.ships = ownedShips;
+        if (!ownedShips.includes(accountProgress.selectedShip)) {
+          accountProgress.selectedShip = "falcon";
+        }
         ProgressStore.set(accountProgress);
         try {
           localStorage.setItem(PROGRESS_ACCOUNT_KEY, player.playerId);
@@ -609,13 +610,20 @@ function Index() {
           setScreen("GAMEOVER");
         },
         onPauseChange: setPaused,
-        onBossDefeated: (bossId) => {
+        onBossStarted: async (bossId) => {
+          const result = await marketRequest<{ ticket: string }>("/api/bosses/attempt", {
+            method: "POST",
+            body: JSON.stringify({ bossId }),
+          });
+          return result.ticket;
+        },
+        onBossDefeated: (bossId, ticket) => {
           void marketRequest<{
             obsidian: number;
             rewards: { itemType: "nave" | "objeto"; itemName: string }[];
-          }>("/api/bosses/defeat", {
+          }>("/api/bosses/claim", {
             method: "POST",
-            body: JSON.stringify({ bossId }),
+            body: JSON.stringify({ bossId, ticket }),
           })
             .then((result) => {
               setMarketRefresh((version) => version + 1);
@@ -627,7 +635,9 @@ function Index() {
             .catch((error: unknown) => {
               console.error("No se pudo reclamar la recompensa del boss:", error);
               setNotice(
-                error instanceof Error ? error.message : "No se pudo reclamar la recompensa del boss.",
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo reclamar la recompensa del boss.",
               );
             });
         },

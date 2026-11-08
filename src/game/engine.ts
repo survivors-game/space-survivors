@@ -65,7 +65,8 @@ export interface EngineCallbacks {
   onLevelUp: (choices: UpgradeChoice[], rerolls: number) => void;
   onEnd: (r: RunResult) => void;
   onPauseChange: (paused: boolean) => void;
-  onBossDefeated?: (bossId: string) => void;
+  onBossStarted?: (bossId: string) => Promise<string>;
+  onBossDefeated?: (bossId: string, ticket: string) => void;
   onChatEvent?: (
     event:
       | { type: "boss_kill"; bossName: string; shipName: string }
@@ -148,6 +149,8 @@ export class Engine {
   nextBoss = 0;
   bossWarnAt = -1;
   boss: Enemy | null = null;
+  private bossSpawnPending = false;
+  private bossAttemptToken: string | null = null;
   pendingLevelUps = 0;
   choices: UpgradeChoice[] = [];
   bannerState: HudState["banner"] = null;
@@ -1067,11 +1070,14 @@ export class Engine {
     }
   }
 
-  private spawnBoss(id: string) {
+  private async spawnBoss(id: string) {
+    const ticket = await this.cb.onBossStarted?.(id);
+    if (!ticket) throw new Error("El servidor no autorizó el combate contra el boss.");
     const def = bossById(id);
     const pos = this.spawnRing();
     const e = this.spawnEnemyAt("destroyer", pos.x, pos.y);
-    if (!e) return;
+    if (!e) throw new Error("No se pudo reservar el enemigo del boss.");
+    this.bossAttemptToken = ticket;
     e.boss = def;
     e.elite = false;
     e.maxHp = e.hp = Math.round(def.hp * this.bossScale);
@@ -1395,7 +1401,9 @@ export class Engine {
     this.killsByType[def.id] = (this.killsByType[def.id] ?? 0) + 1;
     this.bossesDefeated.push(def.id);
     this.bossCooldowns[def.id] = Date.now() + BOSS_COOLDOWN_MS;
-    this.cb.onBossDefeated?.(def.id);
+    const ticket = this.bossAttemptToken;
+    this.bossAttemptToken = null;
+    if (ticket) this.cb.onBossDefeated?.(def.id, ticket);
     this.creditsRaw += def.credits;
     this.explosion(e.x, e.y, 90, def.color);
     this.emit(e.x, e.y, 60, {
@@ -1826,6 +1834,7 @@ export class Engine {
     if (!this.isEndless && (this.elapsed < this.duration || this.stage.id !== WORLD1_ID)) return;
     const plan = this.isEndless ? BOSS_SCHEDULE : CAMPAIGN_FINAL_BOSSES;
     const next = plan[this.nextBoss];
+    if (this.bossSpawnPending) return;
     if (next && this.minute >= next.minute && !this.boss) {
       if (this.bossWarnAt < 0) {
         const cooldownUntil = this.bossCooldowns[next.boss] ?? 0;
@@ -1853,9 +1862,24 @@ export class Engine {
         );
         Audio.SFX.alarm();
       } else if (this.elapsed >= this.bossWarnAt) {
-        this.spawnBoss(next.boss);
-        this.nextBoss++;
-        this.bossWarnAt = -1;
+        this.bossSpawnPending = true;
+        void this.spawnBoss(next.boss)
+          .then(() => {
+            this.nextBoss++;
+            this.bossWarnAt = -1;
+            this.bossSpawnPending = false;
+          })
+          .catch((error: unknown) => {
+            console.error("El servidor no pudo autorizar el combate contra el boss:", error);
+            this.nextBoss++;
+            this.bossWarnAt = -1;
+            this.bossSpawnPending = false;
+            this.banner("JEFE NO DISPONIBLE", "No se pudo validar el combate", "warn");
+            if (!this.isEndless && next.final) {
+              this.state = "DYING";
+              this.endTimer = 2;
+            }
+          });
       }
     }
   }

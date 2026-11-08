@@ -46,6 +46,8 @@ const PILOT_COOKIE = "__Host-ss_pilot";
 const OAUTH_STATE_COOKIE = "__Host-ss_google_state";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
+const BOSS_ATTEMPT_TTL_MS = 2 * 60 * 60 * 1000;
+const BOSS_MIN_COMBAT_MS = 15 * 1000;
 const ADMIN_EMAIL = "emprendedora.onlinevee@gmail.com";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const LEADERBOARD_KEY = "global:top100";
@@ -815,13 +817,18 @@ async function handleAuthRequest(
       .prepare(`SELECT display_name FROM player_profiles WHERE pilot_id = ?`)
       .bind(account.pilot_id)
       .first<{ display_name: string }>();
+    await ensureMarketSchema(db);
+    await ensurePilot(db, account.pilot_id);
+    const progress = await canonicalizeProgress(db, account.pilot_id, savedProgress?.progress_json);
+    const ownedShips = await getOwnedShips(db, account.pilot_id);
     return json({
       authenticated: true,
       email: account.email,
       playerId: account.pilot_id,
       displayName: savedProfile?.display_name ?? "",
       isAdmin: account.email === ADMIN_EMAIL,
-      progress: savedProgress ? JSON.parse(savedProgress.progress_json) : null,
+      progress,
+      ownedShips,
     });
   }
 
@@ -863,11 +870,15 @@ async function handleAuthRequest(
     const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
     if (!account)
       return json({ error: "Inicia sesión con Google para recuperar el progreso." }, 401);
+    await ensureMarketSchema(db);
+    await ensurePilot(db, account.pilot_id);
     const savedProgress = await db
       .prepare(`SELECT progress_json FROM player_progress WHERE pilot_id = ?`)
       .bind(account.pilot_id)
       .first<{ progress_json: string }>();
-    return json({ progress: savedProgress ? JSON.parse(savedProgress.progress_json) : null });
+    return json({
+      progress: await canonicalizeProgress(db, account.pilot_id, savedProgress?.progress_json),
+    });
   }
 
   if (url.pathname === "/api/auth/progress" && request.method === "POST") {
@@ -875,8 +886,33 @@ async function handleAuthRequest(
     const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
     if (!account) return json({ error: "Inicia sesión con Google para guardar el progreso." }, 401);
     const body = await readJson(request, 65536);
-    if (!body || !body["progress"] || typeof body["progress"] !== "object") {
+    if (
+      !body ||
+      !body["progress"] ||
+      typeof body["progress"] !== "object" ||
+      Array.isArray(body["progress"])
+    ) {
       return json({ error: "Los datos del progreso no son válidos." }, 400);
+    }
+    await ensureMarketSchema(db);
+    await ensurePilot(db, account.pilot_id);
+    const progress = await canonicalizeProgress(db, account.pilot_id, body["progress"]);
+    if (!progress) return json({ error: "Los datos del progreso no son válidos." }, 400);
+    const selectedShip = progress["selectedShip"];
+    const selection = await db
+      .prepare(
+        `UPDATE pilots SET selected_ship_id = ?, updated_at = ?
+        WHERE pilot_id = ? AND EXISTS (
+          SELECT 1 FROM pilot_inventory
+          WHERE pilot_id = ? AND item_id = ? AND item_type = 'nave'
+            AND quantity > 0 AND is_locked = 0
+            AND grant_source IN ('starter', 'boss', 'market')
+        )`,
+      )
+      .bind(selectedShip, Date.now(), account.pilot_id, account.pilot_id, selectedShip)
+      .run();
+    if (selection.meta?.changes !== 1) {
+      return json({ error: "No puedes seleccionar una nave que no posees." }, 409);
     }
     await db
       .prepare(
@@ -885,9 +921,9 @@ async function handleAuthRequest(
       ON CONFLICT(pilot_id) DO UPDATE SET
         progress_json = excluded.progress_json, updated_at = excluded.updated_at`,
       )
-      .bind(account.pilot_id, JSON.stringify(body["progress"]), Date.now())
+      .bind(account.pilot_id, JSON.stringify(progress), Date.now())
       .run();
-    return json({ success: true });
+    return json({ success: true, progress });
   }
 
   if (url.pathname === "/api/auth/logout" && request.method === "POST") {
@@ -944,6 +980,7 @@ type MarketInventoryRow = {
   item_type: "nave" | "objeto";
   quantity: number;
   is_locked: number;
+  grant_source: "starter" | "boss" | "market" | "legacy";
 };
 
 type MarketAdRow = {
@@ -989,6 +1026,8 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           item_type TEXT NOT NULL CHECK (item_type IN ('nave', 'objeto')),
           quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 0),
           is_locked INTEGER NOT NULL DEFAULT 0 CHECK (is_locked IN (0, 1)),
+          grant_source TEXT NOT NULL DEFAULT 'legacy'
+            CHECK (grant_source IN ('starter', 'boss', 'market', 'legacy')),
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )`,
@@ -1022,6 +1061,15 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           last_reward_id TEXT NOT NULL,
           PRIMARY KEY (pilot_id, boss_id)
         )`,
+        `CREATE TABLE IF NOT EXISTS boss_attempts (
+          token_hash TEXT PRIMARY KEY,
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          boss_id TEXT NOT NULL,
+          issued_at INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL,
+          claimed_at INTEGER,
+          claim_id TEXT
+        )`,
         `CREATE TABLE IF NOT EXISTS p2p_orders (
           id TEXT PRIMARY KEY,
           ad_id TEXT NOT NULL REFERENCES p2p_ads(id),
@@ -1048,6 +1096,8 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           ON p2p_ads(inventory_id) WHERE status IN ('ACTIVO', 'PAUSADO')`,
         `CREATE INDEX IF NOT EXISTS idx_p2p_orders_ad_status
           ON p2p_orders(ad_id, status)`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_boss_attempts_active
+          ON boss_attempts(pilot_id, boss_id) WHERE claimed_at IS NULL`,
         `CREATE TRIGGER IF NOT EXISTS market_publish_pilot_guard
           AFTER UPDATE OF obsidian ON pilots
           WHEN NEW.obsidian = OLD.obsidian - 1
@@ -1092,6 +1142,46 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           END`,
       ];
       for (const statement of schema) await db.prepare(statement).run();
+      const inventoryColumns = await db
+        .prepare("PRAGMA table_info(pilot_inventory)")
+        .all<{ name: string }>();
+      if (!(inventoryColumns.results ?? []).some((column) => column.name === "grant_source")) {
+        await db
+          .prepare(
+            `ALTER TABLE pilot_inventory ADD COLUMN grant_source TEXT NOT NULL DEFAULT 'legacy'
+            CHECK (grant_source IN ('starter', 'boss', 'market', 'legacy'))`,
+          )
+          .run();
+      }
+      const attemptColumns = await db
+        .prepare("PRAGMA table_info(boss_attempts)")
+        .all<{ name: string }>();
+      if (!(attemptColumns.results ?? []).some((column) => column.name === "claim_id")) {
+        await db.prepare("ALTER TABLE boss_attempts ADD COLUMN claim_id TEXT").run();
+      }
+      await db
+        .prepare(
+          `UPDATE pilot_inventory SET grant_source = 'starter'
+          WHERE item_id = 'falcon' AND item_type = 'nave' AND grant_source = 'legacy'`,
+        )
+        .run();
+      await db
+        .prepare(
+          `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
+          WHERE status IN ('ACTIVO', 'PAUSADO') AND EXISTS (
+            SELECT 1 FROM pilot_inventory
+            WHERE pilot_inventory.id = p2p_ads.inventory_id
+              AND pilot_inventory.grant_source = 'legacy'
+          )`,
+        )
+        .bind(Date.now())
+        .run();
+      await db
+        .prepare(
+          `UPDATE pilot_inventory SET is_locked = 0
+          WHERE grant_source = 'legacy' AND is_locked = 1`,
+        )
+        .run();
     })().catch((error) => {
       marketSchemaPromise = undefined;
       throw error;
@@ -1133,6 +1223,60 @@ async function ensurePilot(db: D1Database, pilotId: string): Promise<void> {
     )
     .bind(pilotId, now, now)
     .run();
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO pilot_inventory
+        (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
+      VALUES (?, ?, 'falcon', ?, 'nave', 1, 0, 'starter', ?, ?)`,
+    )
+    .bind(`inv_${pilotId}_falcon`, pilotId, SHIPS[0]!.name, now, now)
+    .run();
+}
+
+async function getOwnedShips(db: D1Database, pilotId: string): Promise<string[]> {
+  const { results = [] } = await db
+    .prepare(
+      `SELECT item_id FROM pilot_inventory
+      WHERE pilot_id = ? AND item_type = 'nave' AND quantity > 0 AND is_locked = 0
+        AND grant_source IN ('starter', 'boss', 'market')`,
+    )
+    .bind(pilotId)
+    .all<{ item_id: string }>();
+  return Array.from(
+    new Set([
+      "falcon",
+      ...results.map((item) => item.item_id).filter((id) => VALID_SHIP_IDS.has(id)),
+    ]),
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+type CanonicalProgress = Record<string, unknown> & { ships: string[]; selectedShip: string };
+
+async function canonicalizeProgress(
+  db: D1Database,
+  pilotId: string,
+  savedProgress: unknown,
+): Promise<CanonicalProgress | null> {
+  let parsed: unknown = savedProgress;
+  if (typeof savedProgress === "string") {
+    try {
+      parsed = JSON.parse(savedProgress);
+    } catch (error) {
+      console.error("El progreso guardado no es JSON válido:", error);
+      return null;
+    }
+  }
+  if (!isRecord(parsed)) return null;
+  const ships = await getOwnedShips(db, pilotId);
+  const selectedShip =
+    typeof parsed["selectedShip"] === "string" && ships.includes(parsed["selectedShip"])
+      ? parsed["selectedShip"]
+      : "falcon";
+  return { ...parsed, ships, selectedShip };
 }
 
 function decodeMethods(value: string): string[] {
@@ -1181,17 +1325,17 @@ async function handleBossRequest(
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/api/bosses/status" && url.pathname !== "/api/bosses/defeat") {
+  const isStatus = url.pathname === "/api/bosses/status";
+  const isAttempt = url.pathname === "/api/bosses/attempt";
+  const isClaim = url.pathname === "/api/bosses/claim";
+  if (!isStatus && !isAttempt && !isClaim) {
     return null;
   }
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
-  if (
-    (url.pathname === "/api/bosses/status" && request.method !== "GET") ||
-    (url.pathname === "/api/bosses/defeat" && request.method !== "POST")
-  ) {
+  if ((isStatus && request.method !== "GET") || (!isStatus && request.method !== "POST")) {
     return json({ error: "Método no permitido." }, 405);
   }
-  if (request.method === "POST" && !isSameOriginPost(request, url)) {
+  if (!isStatus && !isSameOriginPost(request, url)) {
     return json({ error: "Solicitud no autorizada." }, 403);
   }
 
@@ -1206,7 +1350,7 @@ async function handleBossRequest(
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión con Google para luchar contra bosses." }, 401);
 
-  if (url.pathname === "/api/bosses/status") {
+  if (isStatus) {
     try {
       const { results = [] } = await db
         .prepare("SELECT boss_id, last_defeated_at FROM boss_cooldowns WHERE pilot_id = ?")
@@ -1228,36 +1372,134 @@ async function handleBossRequest(
   if (!reward) return json({ error: "El boss indicado no es válido." }, 400);
 
   const now = Date.now();
-  const rewardId = `boss_${randomHex(12)}`;
-  const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
-  if (rollChance(reward.shipChance)) {
-    drops.push({
-      itemId: `boss_ship_${reward.bossId}_${reward.rank.toLowerCase()}`,
-      itemName: `Nave de combate · Rango ${reward.rank}`,
-      itemType: "nave",
-    });
-  }
-  if (rollChance(reward.itemChance)) {
-    drops.push({
-      itemId: `boss_item_${reward.bossId}_${reward.rank.toLowerCase()}`,
-      itemName: `Objeto especial · Rango ${reward.rank}`,
-      itemType: "objeto",
-    });
-  }
-
   try {
     await ensurePilot(db, account.pilot_id);
+    if (isAttempt) {
+      const previous = await db
+        .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
+        .bind(account.pilot_id, reward.bossId)
+        .first<{ last_defeated_at: number }>();
+      const retryAt = (previous?.last_defeated_at ?? 0) + BOSS_COOLDOWN_MS;
+      if (retryAt > now) {
+        return json(
+          {
+            error: `Boss en cooldown. Disponible en ${Math.max(1, Math.ceil((retryAt - now) / 60_000))} min.`,
+            retryAt,
+          },
+          409,
+        );
+      }
+      await db
+        .prepare(
+          "DELETE FROM boss_attempts WHERE pilot_id = ? AND boss_id = ? AND claimed_at IS NULL AND expires_at <= ?",
+        )
+        .bind(account.pilot_id, reward.bossId, now)
+        .run();
+      const ticket = randomHex(32);
+      const attempt = await db
+        .prepare(
+          `INSERT INTO boss_attempts
+            (token_hash, pilot_id, boss_id, issued_at, expires_at, claimed_at, claim_id)
+          VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
+        )
+        .bind(
+          await sha256Hex(ticket),
+          account.pilot_id,
+          reward.bossId,
+          now,
+          now + BOSS_ATTEMPT_TTL_MS,
+        )
+        .run();
+      if (attempt.meta?.changes !== 1) {
+        return json({ error: "Ya hay un combate activo contra este boss." }, 409);
+      }
+      return json({ ticket, expiresAt: now + BOSS_ATTEMPT_TTL_MS });
+    }
+
+    const ticket = body?.["ticket"];
+    if (typeof ticket !== "string" || !/^[0-9a-f]{64}$/.test(ticket)) {
+      return json({ error: "Falta un ticket de combate válido." }, 403);
+    }
+    const tokenHash = await sha256Hex(ticket);
+    const attempt = await db
+      .prepare(
+        `SELECT issued_at, expires_at, claimed_at FROM boss_attempts
+        WHERE token_hash = ? AND pilot_id = ? AND boss_id = ?`,
+      )
+      .bind(tokenHash, account.pilot_id, reward.bossId)
+      .first<{ issued_at: number; expires_at: number; claimed_at: number | null }>();
+    if (!attempt) return json({ error: "El ticket no pertenece a un combate autorizado." }, 403);
+    if (attempt.claimed_at !== null) {
+      return json({ error: "Este ticket de combate ya fue utilizado." }, 409);
+    }
+    if (attempt.expires_at <= now) return json({ error: "El ticket de combate expiró." }, 410);
+    if (attempt.issued_at + BOSS_MIN_COMBAT_MS > now) {
+      return json({ error: "El combate aún no pudo haber terminado." }, 409);
+    }
+
+    const rewardId = randomHex(32);
+    const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
+    if (rollChance(reward.shipChance)) {
+      drops.push({
+        itemId: `boss_ship_${reward.bossId}_${reward.rank.toLowerCase()}`,
+        itemName: `Nave de combate · Rango ${reward.rank}`,
+        itemType: "nave",
+      });
+    }
+    if (rollChance(reward.itemChance)) {
+      drops.push({
+        itemId: `boss_item_${reward.bossId}_${reward.rank.toLowerCase()}`,
+        itemName: `Objeto especial · Rango ${reward.rank}`,
+        itemType: "objeto",
+      });
+    }
+
     const statements = [
       db
         .prepare(
+          `UPDATE boss_attempts SET claimed_at = ?, claim_id = ?
+          WHERE token_hash = ? AND pilot_id = ? AND boss_id = ? AND claimed_at IS NULL
+            AND expires_at > ? AND issued_at <= ?
+            AND NOT EXISTS (
+              SELECT 1 FROM boss_cooldowns
+              WHERE pilot_id = ? AND boss_id = ? AND last_defeated_at > ?
+            )`,
+        )
+        .bind(
+          now,
+          rewardId,
+          tokenHash,
+          account.pilot_id,
+          reward.bossId,
+          now,
+          now - BOSS_MIN_COMBAT_MS,
+          account.pilot_id,
+          reward.bossId,
+          now - BOSS_COOLDOWN_MS,
+        ),
+      db
+        .prepare(
           `INSERT INTO boss_cooldowns (pilot_id, boss_id, last_defeated_at, last_reward_id)
-          VALUES (?, ?, ?, ?)
+          SELECT ?, ?, ?, ? WHERE EXISTS (
+            SELECT 1 FROM boss_attempts
+            WHERE token_hash = ? AND pilot_id = ? AND boss_id = ? AND claim_id = ?
+          )
           ON CONFLICT(pilot_id, boss_id) DO UPDATE SET
             last_defeated_at = excluded.last_defeated_at,
             last_reward_id = excluded.last_reward_id
           WHERE boss_cooldowns.last_defeated_at <= ?`,
         )
-        .bind(account.pilot_id, reward.bossId, now, rewardId, now - BOSS_COOLDOWN_MS),
+        .bind(
+          account.pilot_id,
+          reward.bossId,
+          now,
+          rewardId,
+          tokenHash,
+          account.pilot_id,
+          reward.bossId,
+          rewardId,
+          now - BOSS_COOLDOWN_MS,
+        ),
       db
         .prepare(
           `UPDATE pilots SET boss_obsidian = boss_obsidian + ?, updated_at = ?
@@ -1271,7 +1513,7 @@ async function handleBossRequest(
         db
           .prepare(
             `INSERT INTO pilot_inventory
-              (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, created_at, updated_at)
+              (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
             SELECT ?, ?, ?, ?, ?, 1, 0, ?, ?
             WHERE EXISTS (
               SELECT 1 FROM boss_cooldowns
@@ -1287,6 +1529,7 @@ async function handleBossRequest(
             drop.itemId,
             drop.itemName,
             drop.itemType,
+            "boss",
             now,
             now,
             account.pilot_id,
@@ -1296,7 +1539,7 @@ async function handleBossRequest(
       ),
     ];
     const results = await db.batch(statements);
-    if (results[0]?.meta?.changes !== 1) {
+    if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
       const previous = await db
         .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
         .bind(account.pilot_id, reward.bossId)
@@ -1306,8 +1549,8 @@ async function handleBossRequest(
       return json({ error: `Boss en cooldown. Disponible en ${minutes} min.`, retryAt }, 409);
     }
     if (
-      results[1]?.meta?.changes !== 1 ||
-      results.slice(2).some((result) => result.meta?.changes !== 1)
+      results[2]?.meta?.changes !== 1 ||
+      results.slice(3).some((result) => result.meta?.changes !== 1)
     ) {
       throw new Error("La recompensa del boss no se pudo aplicar completamente.");
     }
@@ -1457,8 +1700,9 @@ async function handleMarketRequest(
       .first<{ pilot_id: string; obsidian: number; callsign: string }>();
     const inventory = await db
       .prepare(
-        `SELECT id, item_id, item_name, item_type, quantity, is_locked
+        `SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source
       FROM pilot_inventory WHERE pilot_id = ? AND is_locked = 0 AND quantity > 0
+        AND grant_source IN ('starter', 'boss', 'market')
       ORDER BY created_at ASC`,
       )
       .bind(pilotId)
@@ -1479,69 +1723,21 @@ async function handleMarketRequest(
   }
 
   if (url.pathname === "/api/market/sync-inventory" && request.method === "POST") {
-    const body = await readJson(request);
-    const requestedShips = body?.["ships"];
-    if (!Array.isArray(requestedShips) || requestedShips.some((id) => typeof id !== "string")) {
-      return pilotJson(request, pilotId, { error: "El progreso de naves no es válido." }, 400);
-    }
-    const ownedShips = Array.from(
-      new Set(
-        requestedShips.filter(
-          (id): id is string =>
-            typeof id === "string" && id !== "falcon" && /^[a-z0-9-]+$/.test(id),
-        ),
-      ),
+    return pilotJson(
+      request,
+      pilotId,
+      { error: "La sincronización de inventario desde el cliente está deshabilitada." },
+      410,
     );
-    const selectedShip = body?.["selectedShip"];
-    if (
-      ownedShips.some((id) => !VALID_SHIP_IDS.has(id)) ||
-      typeof selectedShip !== "string" ||
-      !VALID_SHIP_IDS.has(selectedShip) ||
-      (selectedShip !== "falcon" && !requestedShips.includes(selectedShip))
-    ) {
-      return pilotJson(request, pilotId, { error: "El progreso de naves no es válido." }, 400);
-    }
-    const selection = await db
-      .prepare(
-        `UPDATE pilots SET selected_ship_id = ?, updated_at = ?
-        WHERE pilot_id = ? AND NOT EXISTS (
-          SELECT 1 FROM pilot_inventory
-          WHERE pilot_id = ? AND item_id = ? AND is_locked = 1
-        )`,
-      )
-      .bind(selectedShip, Date.now(), pilotId, pilotId, selectedShip)
-      .run();
-    if (selection.meta?.changes !== 1) {
-      return pilotJson(
-        request,
-        pilotId,
-        { error: "No puedes seleccionar una nave anunciada." },
-        409,
-      );
-    }
-    const now = Date.now();
-    const statements = ownedShips.flatMap((id) => {
-      const ship = SHIPS.find((item) => item.id === id);
-      if (!ship) return [];
-      return [
-        db
-          .prepare(
-            `INSERT OR IGNORE INTO pilot_inventory
-        (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'nave', 1, 0, ?, ?)`,
-          )
-          .bind(`inv_${randomHex(8)}`, pilotId, ship.id, ship.name, now, now),
-      ];
-    });
-    if (statements.length) await db.batch(statements);
-    return pilotJson(request, pilotId, { success: true });
   }
 
   if (url.pathname === "/api/market/my-ads" && request.method === "GET") {
     const ads = await db
       .prepare(
-        `SELECT * FROM p2p_ads
+        `SELECT p2p_ads.* FROM p2p_ads
+      JOIN pilot_inventory ON pilot_inventory.id = p2p_ads.inventory_id
       WHERE seller_pilot_id = ? AND status != 'CANCELADO'
+        AND pilot_inventory.grant_source IN ('starter', 'boss', 'market')
       ORDER BY created_at DESC`,
       )
       .bind(pilotId)
@@ -1580,8 +1776,9 @@ async function handleMarketRequest(
         .first<{ obsidian: number; selected_ship_id: string }>(),
       db
         .prepare(
-          `SELECT id, item_id, item_name, item_type, quantity, is_locked
-        FROM pilot_inventory WHERE id = ? AND pilot_id = ?`,
+          `SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source
+        FROM pilot_inventory WHERE id = ? AND pilot_id = ?
+          AND grant_source IN ('starter', 'boss', 'market')`,
         )
         .bind(inventoryId, pilotId)
         .first<MarketInventoryRow>(),
@@ -1589,7 +1786,12 @@ async function handleMarketRequest(
     if (!pilot || pilot.obsidian < 1) {
       return pilotJson(request, pilotId, { error: "Saldo insuficiente: se requiere 1 OBS." }, 400);
     }
-    if (!item || item.is_locked !== 0 || item.quantity < 1) {
+    if (
+      !item ||
+      item.is_locked !== 0 ||
+      item.quantity < 1 ||
+      !["starter", "boss", "market"].includes(item.grant_source)
+    ) {
       return pilotJson(
         request,
         pilotId,
@@ -1610,7 +1812,8 @@ async function handleMarketRequest(
         .prepare(
           `SELECT COUNT(*) AS count FROM pilot_inventory
         WHERE pilot_id = ? AND item_type = 'nave' AND item_id != 'falcon'
-          AND is_locked = 0 AND quantity > 0`,
+            AND is_locked = 0 AND quantity > 0
+            AND grant_source IN ('starter', 'boss', 'market')`,
         )
         .bind(pilotId)
         .first<{ count: number }>();

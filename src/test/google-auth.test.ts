@@ -18,9 +18,10 @@ class AuthDatabase {
   readonly accounts = new Map<string, { google_sub: string; email: string; pilot_id: string }>();
   readonly sessions = new Map<string, { wallet_address: string; expires_at: number }>();
   readonly progress = new Map<string, string>();
+  readonly inventory = new Map<string, { pilot_id: string; item_id: string }>();
 
   prepare(query: string) {
-    const { states, accounts, sessions, progress } = this;
+    const { states, accounts, sessions, progress, inventory } = this;
     let values: unknown[] = [];
     const statement: BoundStatement = {
       query,
@@ -75,6 +76,17 @@ class AuthDatabase {
           progress.set(first as string, second as string);
           return { meta: { changes: 1 } };
         }
+        if (query.includes("INSERT OR IGNORE INTO pilot_inventory")) {
+          inventory.set(`${values[1]}:falcon`, {
+            pilot_id: values[1] as string,
+            item_id: "falcon",
+          });
+          return { meta: { changes: 1 } };
+        }
+        if (query.includes("UPDATE pilots SET selected_ship_id")) {
+          const exists = inventory.has(`${values[2]}:${values[4]}`);
+          return { meta: { changes: exists ? 1 : 0 } };
+        }
         if (query.includes("UPDATE player_accounts SET email")) {
           const account = accounts.get(third as string);
           if (account) account.email = first as string;
@@ -115,6 +127,13 @@ class AuthDatabase {
         return null;
       },
       async all<T>() {
+        if (query.includes("SELECT item_id FROM pilot_inventory")) {
+          return {
+            results: [...inventory.values()]
+              .filter((item) => item.pilot_id === values[0])
+              .map((item) => ({ item_id: item.item_id })) as T[],
+          };
+        }
         return { results: [] as T[] };
       },
     };
@@ -347,7 +366,11 @@ describe("Google sign-in", () => {
     };
     expect(session.authenticated).toBe(true);
     expect(session.playerId).toBe(guestPilotId);
-    expect(session.progress).toEqual(savedProgress);
+    expect(session.progress).toEqual({
+      ...savedProgress,
+      ships: ["falcon"],
+      selectedShip: "falcon",
+    });
     expect(database.accounts.size).toBe(1);
 
     const duplicateEmailSignIn = await signIn("google-sub-2", "PILOT@example.com");
