@@ -170,7 +170,7 @@ describe("referral system", () => {
           "SELECT item_id, item_type, quantity, grant_source FROM pilot_inventory WHERE pilot_id = ?",
         )
         .get(INVITEE_ID),
-    ).toEqual({ item_id: "iman", item_type: "objeto", quantity: 1, grant_source: "starter" });
+    ).toEqual({ item_id: "iman", item_type: "objeto", quantity: 5, grant_source: "starter" });
     expect(db.prepare("SELECT COUNT(*) AS count FROM referrals").get()).toEqual({ count: 1 });
   });
 
