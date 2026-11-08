@@ -7,8 +7,14 @@ type Participant={pilot_id:string;side?:string;alliance_id?:string;ship_id:strin
 type Snapshot={war_id:string;status:string;horde:number;participants:Participant[];enemy_hp?:{attacker:number;defender:number};horde_cleared?:{attacker:boolean;defender:boolean}};
 async function api<T>(path:string,body?:Record<string,unknown>):Promise<T>{
  const response=await fetch(path,{method:body?"POST":"GET",credentials:"same-origin",...(body?{headers:{"content-type":"application/json"},body:JSON.stringify(body)}:{})});
- const data=await response.json().catch(()=>null) as any;
- if(!response.ok)throw new Error(data?.error??"No se pudo completar la operación.");
+ const data: unknown = await response.json().catch(() => null);
+ if (!response.ok) {
+  const message =
+   typeof data === "object" && data !== null && "error" in data && typeof data.error === "string"
+    ? data.error
+    : "No se pudo completar la operación.";
+  throw new Error(message);
+ }
  return data as T;
 }
 export function AllianceWars({allianceId,role}:{allianceId:string;role:string}){

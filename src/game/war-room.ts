@@ -7,6 +7,34 @@ import { allianceLevelForWins, canDeclareAgainstLevel, canStartWar, hasExpired, 
 type Statement = { bind(...v: unknown[]): Statement; first<T=Record<string, unknown>>(): Promise<T|null>; all<T=Record<string, unknown>>(): Promise<{results?:T[]}>; run(): Promise<{meta?:{changes?:number}}> };
 type DB = { prepare(q:string): Statement; batch(statements:Statement[]):Promise<{meta?:{changes?:number}}[]> };
 type Env = { DB: DB };
+type WarRecord = {
+  war_id: string;
+  attacker_alliance_id: string;
+  defender_alliance_id: string;
+  status: string;
+  winner_alliance_id: string | null;
+  created_at: number;
+  ended_at: number | null;
+  attacker_hordes_survived: number;
+  defender_hordes_survived: number;
+};
+type AllianceRecord = { alliance_id: string; level: number };
+type WarParticipantRow = { pilot_id: string; alliance_id: string; ship_id: string };
+type WarCountRow = {
+  alliance_id: string;
+  alive: number | string | null;
+  survived: number | string | null;
+};
+type WarStatusParticipantRow = {
+  pilot_id: string;
+  alliance_id: string;
+  ship_id: string;
+  passive_upgrades_json: string | null;
+  is_alive: number;
+  hordes_survived: number;
+  callsign: string;
+};
+type RequestBody = Record<string, unknown>;
 type Side = "attacker" | "defender";
 type Participant = { pilotId:string; allianceId:string; side:Side; shipId:string; hp:number; maxHp:number; alive:boolean; damage:number; armor:number; regen:number; buff:{id:string;label:string;damage:number;armor:number;regen:number} };
 type Runtime = { warId:string; prepStartedAt:number; lastTickAt:number; horde:number; hordeStartedAt:number; hordeCleared:{attacker:boolean;defender:boolean}; enemyHp:{attacker:number;defender:number}; participants:Participant[]; lastAction:Record<string,number>; status:"PREPARING"|"ACTIVE"|"COMPLETED"; };
@@ -21,35 +49,46 @@ const BUFFS=[
 ];
 const json=(v:unknown,s=200)=>new Response(JSON.stringify(v),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const id=()=>crypto.randomUUID().replace(/-/g,"");
+const isRecord = (value: unknown): value is RequestBody =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const stringField = (body: RequestBody, key: string): string | null => {
+  const value = body[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
 
 export class WarRoom extends DurableObject {
   private env:Env;
   constructor(ctx:DurableObjectState,env:Env){super(ctx,env);this.env=env;}
   private async runtime():Promise<Runtime|null>{return (await this.ctx.storage.get<Runtime>("runtime"))??null;}
   private async save(r:Runtime){await this.ctx.storage.put("runtime",r);}
-  private async war(warId:string){return this.env.DB.prepare("SELECT * FROM alliance_wars WHERE war_id=?").bind(warId).first<any>();}
+  private async war(warId:string){return this.env.DB.prepare("SELECT * FROM alliance_wars WHERE war_id=?").bind(warId).first<WarRecord>();}
   private async member(pilotId:string,allianceId:string){return this.env.DB.prepare("SELECT role FROM alliance_members WHERE pilot_id=? AND alliance_id=?").bind(pilotId,allianceId).first<{role:string}>();}
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url), path=url.pathname;
     if(request.method!=="POST" && path!=="/status") return json({error:"Método no permitido."},405);
-    const body=path==="/status"?{}:await request.json().catch(()=>null) as any;
-    if(!body && path!=="/status") return json({error:"Solicitud inválida."},400);
+    const parsed: unknown = path === "/status" ? {} : await request.json().catch(() => null);
+    const body: RequestBody | null = isRecord(parsed) ? parsed : null;
+    if (!body && path !== "/status") return json({error:"Solicitud inválida."},400);
     try{
-      if(path==="/declare") return await this.declare(body);
-      if(path==="/respond") return await this.respond(body);
-      if(path==="/select-ship") return await this.selectShip(body);
-      if(path==="/start") return await this.start(body);
-      if(path==="/action") return await this.action(body);
+      if(path==="/declare") return await this.declare(body!);
+      if(path==="/respond") return await this.respond(body!);
+      if(path==="/select-ship") return await this.selectShip(body!);
+      if(path==="/start") return await this.start(body!);
+      if(path==="/action") return await this.action(body!);
       if(path==="/status") return await this.status(url.searchParams.get("pilot_id")??"",url.searchParams.get("war_id")??"");
       return json({error:"Ruta de guerra no encontrada."},404);
     }catch(error){console.error("WarRoom:",error);return json({error:"No se pudo procesar la operación de guerra."},409);}
   }
-  private async declare(b:any):Promise<Response>{
-    const {warId,actorPilotId,attackerAllianceId,defenderAllianceId}=b??{};
-    if(![warId,actorPilotId,attackerAllianceId,defenderAllianceId].every(x=>typeof x==="string"&&x.length>0)||attackerAllianceId===defenderAllianceId)return json({error:"Datos de guerra inválidos."},400);
+  private async declare(b: RequestBody): Promise<Response> {
+    const warId = stringField(b, "warId");
+    const actorPilotId = stringField(b, "actorPilotId");
+    const attackerAllianceId = stringField(b, "attackerAllianceId");
+    const defenderAllianceId = stringField(b, "defenderAllianceId");
+    if (!warId || !actorPilotId || !attackerAllianceId || !defenderAllianceId || attackerAllianceId === defenderAllianceId)
+      return json({error:"Datos de guerra inválidos."},400);
     const [attacker,defender,leader]=await Promise.all([
-      this.env.DB.prepare("SELECT alliance_id,level FROM alliances WHERE alliance_id=?").bind(attackerAllianceId).first<any>(),
-      this.env.DB.prepare("SELECT alliance_id,level FROM alliances WHERE alliance_id=?").bind(defenderAllianceId).first<any>(),
+      this.env.DB.prepare("SELECT alliance_id,level FROM alliances WHERE alliance_id=?").bind(attackerAllianceId).first<AllianceRecord>(),
+      this.env.DB.prepare("SELECT alliance_id,level FROM alliances WHERE alliance_id=?").bind(defenderAllianceId).first<AllianceRecord>(),
       this.env.DB.prepare("SELECT role FROM alliance_members WHERE pilot_id=? AND alliance_id=?").bind(actorPilotId,attackerAllianceId).first<{role:string}>()
     ]);
     if(!attacker||!defender)return json({error:"No se encontró una de las alianzas."},404);
@@ -80,8 +119,12 @@ export class WarRoom extends DurableObject {
     await this.ctx.storage.setAlarm(now+DECLARE_MS);
     return json({success:true,war_id:warId,status:"DECLARED",expires_at:now+DECLARE_MS});
   }
-  private async respond(b:any):Promise<Response>{
-    const {warId,actorPilotId,decision}=b??{}, w=await this.war(warId);
+  private async respond(b: RequestBody): Promise<Response> {
+    const warId = stringField(b, "warId");
+    const actorPilotId = stringField(b, "actorPilotId");
+    const decision = b.decision;
+    if (!warId || !actorPilotId) return json({error:"Datos de guerra inválidos."},400);
+    const w = await this.war(warId);
     if(!w)return json({error:"La guerra no existe."},404);
     if(w.status!=="DECLARED")return json({error:"La declaración ya no está pendiente."},409);
     if(hasExpired(Date.now(),w.created_at,DECLARE_MS)){await this.env.DB.batch([this.env.DB.prepare("UPDATE alliance_wars SET status='EXPIRED',ended_at=? WHERE war_id=? AND status='DECLARED'").bind(Date.now(),warId),this.env.DB.prepare("DELETE FROM alliance_war_locks WHERE war_id=?").bind(warId)]);return json({error:"La declaración expiró."},410);}
@@ -94,25 +137,32 @@ export class WarRoom extends DurableObject {
     await this.save(r);await this.ctx.storage.setAlarm(now+PREP_MS);
     return json({success:true,status:"PREPARING",expires_at:now+PREP_MS});
   }
-  private async selectShip(b:any):Promise<Response>{
-    const {warId,actorPilotId,shipId}=b??{},w=await this.war(warId);
+  private async selectShip(b: RequestBody): Promise<Response> {
+    const warId = stringField(b, "warId");
+    const actorPilotId = stringField(b, "actorPilotId");
+    const shipId = stringField(b, "shipId");
+    if (!warId || !actorPilotId || !shipId) return json({error:"Datos de guerra inválidos."},400);
+    const w = await this.war(warId);
     if(!w||w.status!=="PREPARING")return json({error:"La guerra no está en preparación."},409);
     const r=await this.runtime();if(!r||hasExpired(Date.now(),r.prepStartedAt,PREP_MS))return json({error:"El periodo de preparación expiró."},410);
     const member=await this.env.DB.prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id=? AND alliance_id IN (?,?)").bind(actorPilotId,w.attacker_alliance_id,w.defender_alliance_id).first<{alliance_id:string}>();
     if(!member)return json({error:"No perteneces a ninguna alianza de esta guerra."},403);
-    if(typeof shipId!=="string"||!SHIPS.some(s=>s.id===shipId))return json({error:"Nave no válida."},400);
+    if(!SHIPS.some(s=>s.id===shipId))return json({error:"Nave no válida."},400);
     const item=await this.env.DB.prepare("SELECT id FROM pilot_inventory WHERE pilot_id=? AND item_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 AND grant_source IN ('starter','boss','market')").bind(actorPilotId,shipId).first();
     if(!item)return json({error:"La nave debe pertenecer al piloto y estar desbloqueada."},409);
     await this.env.DB.prepare("INSERT INTO alliance_war_participants (war_id,pilot_id,alliance_id,ship_id,is_alive,hordes_survived) VALUES (?,?,?,?,1,0) ON CONFLICT(war_id,pilot_id) DO UPDATE SET ship_id=excluded.ship_id,alliance_id=excluded.alliance_id,is_alive=1").bind(warId,actorPilotId,member.alliance_id,shipId).run();
     return json({success:true,ship_id:shipId});
   }
-  private async start(b:any):Promise<Response>{
-    const {warId,actorPilotId}=b??{},w=await this.war(warId);
+  private async start(b: RequestBody): Promise<Response> {
+    const warId = stringField(b, "warId");
+    const actorPilotId = stringField(b, "actorPilotId");
+    if (!warId || !actorPilotId) return json({error:"Datos de guerra inválidos."},400);
+    const w = await this.war(warId);
     if(!w||w.status!=="PREPARING")return json({error:"La guerra no está en preparación."},409);
     const prep=await this.runtime();if(!prep||hasExpired(Date.now(),prep.prepStartedAt,PREP_MS)){await this.env.DB.batch([this.env.DB.prepare("UPDATE alliance_wars SET status='EXPIRED',ended_at=? WHERE war_id=? AND status='PREPARING'").bind(Date.now(),warId),this.env.DB.prepare("DELETE FROM alliance_war_locks WHERE war_id=?").bind(warId)]);return json({error:"El periodo de preparación expiró."},410);}
     const leader=await this.env.DB.prepare("SELECT role FROM alliance_members WHERE pilot_id=? AND alliance_id IN (?,?)").bind(actorPilotId,w.attacker_alliance_id,w.defender_alliance_id).first<{role:string}>();
     if(!leader||leader.role!=="lider")return json({error:"Solo el líder de una de las alianzas puede iniciar el combate."},403);
-    const rows=(await this.env.DB.prepare("SELECT pilot_id,alliance_id,ship_id FROM alliance_war_participants WHERE war_id=? ORDER BY pilot_id").bind(warId).all<any>()).results??[];
+    const rows=(await this.env.DB.prepare("SELECT pilot_id,alliance_id,ship_id FROM alliance_war_participants WHERE war_id=? ORDER BY pilot_id").bind(warId).all<WarParticipantRow>()).results??[];
     const sides={attacker:rows.filter(p=>p.alliance_id===w.attacker_alliance_id),defender:rows.filter(p=>p.alliance_id===w.defender_alliance_id)};
     if(!canStartWar(sides.attacker.length,sides.defender.length))return json({error:"Cada alianza debe seleccionar al menos 3 naves."},409);
     const now=Date.now(),participants:Participant[]=rows.map(p=>{
@@ -130,8 +180,12 @@ export class WarRoom extends DurableObject {
     await this.save(r);await this.ctx.storage.setAlarm(now+5000);
     return json({success:true,status:"ACTIVE",horde:1,participants:participants.map(p=>({pilot_id:p.pilotId,ship_id:p.shipId,side:p.side,buff:p.buff,hp:p.hp,max_hp:p.maxHp}))});
   }
-  private async action(b:any):Promise<Response>{
-    const {warId,actorPilotId,action}=b??{},r=await this.runtime();
+  private async action(b: RequestBody): Promise<Response> {
+    const warId = stringField(b, "warId");
+    const actorPilotId = stringField(b, "actorPilotId");
+    const action = b.action;
+    if (!warId || !actorPilotId) return json({error:"Datos de guerra inválidos."},400);
+    const r = await this.runtime();
     if(!r||r.warId!==warId||r.status!=="ACTIVE")return json({error:"No hay combate activo."},409);
     await this.advance(r);
     const p=r.participants.find(x=>x.pilotId===actorPilotId);
@@ -170,7 +224,7 @@ export class WarRoom extends DurableObject {
   private async finish(r:Runtime):Promise<void>{
     if(r.status!=="ACTIVE")return;
     const w=await this.war(r.warId);if(!w)return;
-    const counts=await this.env.DB.prepare("SELECT alliance_id,SUM(is_alive) AS alive,MAX(hordes_survived) AS survived FROM alliance_war_participants WHERE war_id=? GROUP BY alliance_id").bind(r.warId).all<any>();
+    const counts=await this.env.DB.prepare("SELECT alliance_id,SUM(is_alive) AS alive,MAX(hordes_survived) AS survived FROM alliance_war_participants WHERE war_id=? GROUP BY alliance_id").bind(r.warId).all<WarCountRow>();
     const rows=counts.results??[],a=rows.find(x=>x.alliance_id===w.attacker_alliance_id),d=rows.find(x=>x.alliance_id===w.defender_alliance_id);
     const ah=Number(a?.survived??0),dh=Number(d?.survived??0),aliveA=Number(a?.alive??0),aliveD=Number(d?.alive??0);
     const outcome=resolveWarWinner(ah,dh,aliveA,aliveD);
@@ -203,7 +257,7 @@ export class WarRoom extends DurableObject {
     const member=await this.member(pilotId,w.attacker_alliance_id)||await this.member(pilotId,w.defender_alliance_id);
     if(!member)return json({error:"No tienes acceso a esta guerra."},403);
     const r=await this.runtime();if(r?.status==="ACTIVE"){await this.advance(r);const latest=await this.runtime();return json({war:w,...this.snapshot(latest??r)});}
-    const participants=(await this.env.DB.prepare("SELECT p.pilot_id,p.alliance_id,p.ship_id,p.passive_upgrades_json,p.is_alive,p.hordes_survived,COALESCE(profile.display_name,pilot.callsign,'PILOTO') AS callsign FROM alliance_war_participants p JOIN pilots pilot ON pilot.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE p.war_id=?").bind(warId).all<any>()).results??[];
+    const participants=(await this.env.DB.prepare("SELECT p.pilot_id,p.alliance_id,p.ship_id,p.passive_upgrades_json,p.is_alive,p.hordes_survived,COALESCE(profile.display_name,pilot.callsign,'PILOTO') AS callsign FROM alliance_war_participants p JOIN pilots pilot ON pilot.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE p.war_id=?").bind(warId).all<WarStatusParticipantRow>()).results??[];
     return json({war:w,participants});
   }
   async alarm():Promise<void>{
