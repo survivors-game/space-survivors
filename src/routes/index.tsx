@@ -40,6 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HangarSidebar, type HangarTab } from "@/components/hangar/HangarSidebar";
 import { MarketSection } from "@/components/hangar/MarketSection";
+import { InventorySection } from "@/components/hangar/InventorySection";
 import { Audio } from "@/game/audio";
 import { BOSSES, bossById } from "@/game/data/bosses";
 import { WORLD1_ID } from "@/game/timeline";
@@ -75,6 +76,7 @@ import type {
   P2PPublicListing,
   P2PPilotState,
   P2PPublishInput,
+  P2PInventoryItem,
 } from "@/game/data/market";
 import {
   ProgressStore,
@@ -88,7 +90,7 @@ import {
   type RunSummary,
 } from "@/game/meta/progress";
 import { UPGRADES, hangarBonuses as calcHangarBonuses, upgradeCost } from "@/game/meta/upgrades";
-import type { HudState, RunResult, UpgradeChoice } from "@/game/types";
+import type { HudState, PickupKind, RunResult, UpgradeChoice } from "@/game/types";
 
 type Screen = "MENU" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER";
 type GameMode = "CAMPAIGN" | "ENDLESS";
@@ -138,6 +140,17 @@ async function marketRequest<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(error);
   }
   return payload as T;
+}
+
+function hotbarInventoryFromPilot(inventory: P2PInventoryItem[] | undefined): Record<PickupKind, number> {
+  const counts: Record<PickupKind, number> = { repair: 0, magnet: 0, emp: 0 };
+  for (const item of inventory ?? []) {
+    if (item.isLocked || item.itemType !== "objeto") continue;
+    if (item.itemId === "repair") counts.repair += item.quantity;
+    else if (item.itemId === "iman" || item.itemId === "magnet") counts.magnet += item.quantity;
+    else if (item.itemId === "emp") counts.emp += item.quantity;
+  }
+  return counts;
 }
 
 async function submitLeaderboardUpdate(input: {
@@ -192,6 +205,7 @@ function Index() {
   const [unlockedSectors, setUnlockedSectors] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [marketPilot, setMarketPilot] = useState<P2PPilotState | null>(null);
+  const persistentInventoryRef = useRef<Record<PickupKind, number>>({ repair: 0, magnet: 0, emp: 0 });
   const [marketAds, setMarketAds] = useState<P2PMyAd[]>([]);
   const [marketListings, setMarketListings] = useState<P2PPublicListing[]>([]);
   const [marketListingPage, setMarketListingPage] = useState(1);
@@ -248,6 +262,10 @@ function Index() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    persistentInventoryRef.current = hotbarInventoryFromPilot(marketPilot?.inventory);
+  }, [marketPilot]);
 
   useEffect(() => {
     if (googleSessionLoading) return;
@@ -913,6 +931,7 @@ function Index() {
       durationSec: 1200,
       isEndless: gameMode === "ENDLESS",
       bossCooldowns,
+      inventory: persistentInventoryRef.current,
       callbacks: {
         onLevelUp: (nextChoices, nextRerolls) => {
           setChoices(nextChoices);
@@ -972,6 +991,18 @@ function Index() {
               error instanceof Error ? error.message : "No se pudo validar el combate del boss.",
             );
           }
+        },
+        onItemCollected: (kind) => {
+          void marketRequest<{ success: boolean }>("/api/inventory/collect", {
+            method: "POST", body: JSON.stringify({ kind }),
+          }).then(() => setMarketRefresh((version) => version + 1)).catch((error: unknown) => {
+            const current = engineRef.current;
+            if (current) {
+              current.inventory[kind] = Math.max(0, current.inventory[kind] - 1);
+              setHud(current.getHud());
+            }
+            setNotice(error instanceof Error ? error.message : "No se pudo guardar el objeto recogido.");
+          });
         },
         onChatEvent: (chatEvent) => {
           void fetch("/api/chat/event", {
@@ -1082,6 +1113,21 @@ function Index() {
     if (!progress.stages.includes(id)) return;
     setSelectedStageId(id);
     saveProgress({ ...progress, selectedStage: id });
+  };
+
+  const usePersistentItem = async (kind: PickupKind) => {
+    const engine = engineRef.current;
+    if (!engine || engine.inventory[kind] <= 0) return;
+    try {
+      await marketRequest<{ success: boolean }>("/api/inventory/use", {
+        method: "POST", body: JSON.stringify({ kind }),
+      });
+      engine.inventory[kind] = Math.max(0, engine.inventory[kind] - 1);
+      if (engine.useItem(kind, true)) setHud(engine.getHud());
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo usar el objeto.");
+    }
   };
 
   const startMission = async () => {
@@ -1308,7 +1354,7 @@ function Index() {
       <main className="fixed inset-0 overflow-hidden bg-[#070814] font-pixel text-white">
         <canvas ref={canvasRef} className="w-full h-full block" />
         <TouchControls />
-        <Hotbar inventory={hud?.inventory} onUse={(kind) => engineRef.current?.useItem(kind)} />
+        <Hotbar inventory={hud?.inventory} onUse={(kind) => void usePersistentItem(kind)} />
         <CombatStatsOverlay stats={hud?.playerStats} />
         <WeaponHotbar weapons={hud?.weapons} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
@@ -2480,6 +2526,10 @@ function Index() {
                     />
                   );
                 })}
+              </div>
+            ) : hangarTab === "INVENTORY" ? (
+              <div className="mt-6 lg:col-start-2">
+                <InventorySection inventory={marketPilot?.inventory ?? []} selectedShipId={progress.selectedShip} />
               </div>
             ) : hangarTab === "MARKET" ? (
               <div className="lg:col-start-2">
