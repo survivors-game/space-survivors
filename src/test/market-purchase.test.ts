@@ -556,4 +556,58 @@ describe("P2P purchase flow", () => {
       label: "USDT TRC20",
     });
   });
+
+  it("persists combat pickups in the pilot inventory and consumes them atomically", async () => {
+    const first = await requestJson<{ success: boolean; quantity: number }>(
+      "/api/inventory/collect", "POST", { kind: "magnet" },
+    );
+    expect(first.response.status).toBe(200);
+    expect(first.payload.quantity).toBe(1);
+
+    const second = await requestJson<{ success: boolean; quantity: number }>(
+      "/api/inventory/collect", "POST", { kind: "magnet" },
+    );
+    expect(second.response.status).toBe(200);
+    expect(second.payload.quantity).toBe(2);
+
+    const inventory = await requestJson<{ inventory: { itemId: string; quantity: number }[] }>(
+      "/api/inventory/state",
+    );
+    expect(inventory.payload.inventory).toContainEqual(
+      expect.objectContaining({ itemId: "iman", quantity: 2 }),
+    );
+
+    const used = await requestJson<{ success: boolean; quantity: number }>(
+      "/api/inventory/use", "POST", { kind: "magnet" },
+    );
+    expect(used.response.status).toBe(200);
+    expect(used.payload.quantity).toBe(1);
+
+    const usedAgain = await requestJson<{ success?: boolean; error?: string }>(
+      "/api/inventory/use", "POST", { kind: "magnet" },
+    );
+    expect(usedAgain.response.status).toBe(200);
+    expect(usedAgain.payload.success).toBe(true);
+
+    const exhausted = await requestJson<{ error: string }>(
+      "/api/inventory/use", "POST", { kind: "magnet" },
+    );
+    expect(exhausted.response.status).toBe(409);
+  });
+
+  it("does not add combat pickups to an inventory stack reserved by the market", async () => {
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO pilot_inventory
+      (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
+      VALUES ('inv-locked-magnet', ?, 'iman', 'IMÁN', 'objeto', 3, 1, 'starter', ?, ?)`,
+    ).run(BUYER_ID, now, now);
+    const collected = await requestJson<{ error: string }>(
+      "/api/inventory/collect", "POST", { kind: "magnet" },
+    );
+    expect(collected.response.status).toBe(409);
+    expect(db.prepare("SELECT quantity FROM pilot_inventory WHERE id = 'inv-locked-magnet'").get())
+      .toMatchObject({ quantity: 3 });
+  });
+
 });
