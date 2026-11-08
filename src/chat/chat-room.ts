@@ -38,7 +38,7 @@ interface IncomingEvent {
   pilotId: string;
   callsign: string;
   allianceTag: string | null;
-  type: "boss_kill" | "drop";
+  type: "boss_kill";
   language: ChatLanguage;
   text: string;
 }
@@ -111,7 +111,7 @@ export class ChatRoom extends DurableObject {
         typeof payload.pilotId !== "string" ||
         typeof payload.callsign !== "string" ||
         !isChatLanguage(payload.language) ||
-        !["boss_kill", "drop"].includes(payload.type) ||
+        payload.type !== "boss_kill" ||
         !isValidMessage(payload.text)
       ) {
         return new Response("Invalid chat event.", { status: 400 });
