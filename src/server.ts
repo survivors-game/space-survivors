@@ -4,6 +4,11 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { SHIPS } from "./game/data/ships";
 import { BOSS_COOLDOWN_MS, BOSS_REWARDS } from "./game/data/boss-rewards";
+import {
+  createBossCombatProof,
+  type BossCombatEvidence,
+  type BossCombatEvent,
+} from "./game/meta/boss-combat-proof";
 import { handleChatRequest, type ChatWorkerEnv } from "./chat/chat-api";
 
 type D1Result<T = Record<string, unknown>> = {
@@ -46,8 +51,15 @@ const PILOT_COOKIE = "__Host-ss_pilot";
 const OAUTH_STATE_COOKIE = "__Host-ss_google_state";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
-const BOSS_ATTEMPT_TTL_MS = 2 * 60 * 60 * 1000;
-const BOSS_MIN_COMBAT_MS = 15 * 1000;
+const BOSS_ATTEMPT_TTL_MS = 10 * 60 * 1000;
+const BOSS_COMBAT_PARAMS: Record<
+  string,
+  { hp: number; damage: number; minCombatMs: number; maxHitDamage: number }
+> = {
+  leviathan: { hp: 26_000, damage: 36, minCombatMs: 30_000, maxHitDamage: 6_500 },
+  nemesis: { hp: 9_000, damage: 28, minCombatMs: 45_000, maxHitDamage: 2_250 },
+  colossus: { hp: 19_000, damage: 34, minCombatMs: 60_000, maxHitDamage: 4_750 },
+};
 const ADMIN_EMAIL = "emprendedora.onlinevee@gmail.com";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const LEADERBOARD_KEY = "global:top100";
@@ -1068,7 +1080,12 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           issued_at INTEGER NOT NULL,
           expires_at INTEGER NOT NULL,
           claimed_at INTEGER,
-          claim_id TEXT
+          claim_id TEXT,
+          challenge_seed TEXT NOT NULL DEFAULT '',
+          boss_hp INTEGER NOT NULL DEFAULT 0,
+          boss_damage REAL NOT NULL DEFAULT 0,
+          min_combat_ms INTEGER NOT NULL DEFAULT 0,
+          max_hit_damage REAL NOT NULL DEFAULT 0
         )`,
         `CREATE TABLE IF NOT EXISTS p2p_orders (
           id TEXT PRIMARY KEY,
@@ -1158,6 +1175,22 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
         .all<{ name: string }>();
       if (!(attemptColumns.results ?? []).some((column) => column.name === "claim_id")) {
         await db.prepare("ALTER TABLE boss_attempts ADD COLUMN claim_id TEXT").run();
+      }
+      const currentAttemptColumns = new Set(
+        (await db.prepare("PRAGMA table_info(boss_attempts)").all<{ name: string }>()).results?.map(
+          (column) => column.name,
+        ) ?? [],
+      );
+      for (const [name, definition] of [
+        ["challenge_seed", "TEXT NOT NULL DEFAULT ''"],
+        ["boss_hp", "INTEGER NOT NULL DEFAULT 0"],
+        ["boss_damage", "REAL NOT NULL DEFAULT 0"],
+        ["min_combat_ms", "INTEGER NOT NULL DEFAULT 0"],
+        ["max_hit_damage", "REAL NOT NULL DEFAULT 0"],
+      ] as const) {
+        if (!currentAttemptColumns.has(name)) {
+          await db.prepare(`ALTER TABLE boss_attempts ADD COLUMN ${name} ${definition}`).run();
+        }
       }
       await db
         .prepare(
@@ -1326,9 +1359,12 @@ async function handleBossRequest(
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const isStatus = url.pathname === "/api/bosses/status";
-  const isAttempt = url.pathname === "/api/bosses/attempt";
-  const isClaim = url.pathname === "/api/bosses/claim";
-  if (!isStatus && !isAttempt && !isClaim) {
+  const isStart =
+    url.pathname === "/api/boss/start" ||
+    url.pathname === "/api/bosses/start" ||
+    url.pathname === "/api/bosses/attempt";
+  const isClaim = url.pathname === "/api/boss/claim" || url.pathname === "/api/bosses/claim";
+  if (!isStatus && !isStart && !isClaim) {
     return null;
   }
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
@@ -1366,15 +1402,18 @@ async function handleBossRequest(
     }
   }
 
-  const body = await readJson(request, 1024);
-  const bossId = body?.["bossId"];
+  const body = await readJson(request, isStart ? 1024 : 262_144);
+  if (!body) return json({ error: "El cuerpo de la solicitud no es válido." }, 400);
+  const bossId = body["boss_id"] ?? body["bossId"];
   const reward = BOSS_REWARDS.find((candidate) => candidate.bossId === bossId);
-  if (!reward) return json({ error: "El boss indicado no es válido." }, 400);
+  const params = reward ? BOSS_COMBAT_PARAMS[reward.bossId] : undefined;
 
   const now = Date.now();
   try {
     await ensurePilot(db, account.pilot_id);
-    if (isAttempt) {
+    if (isStart) {
+      if (!reward) return json({ error: "El boss indicado no es válido." }, 400);
+      if (!params) return json({ error: "No hay parámetros para el boss indicado." }, 400);
       const previous = await db
         .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
         .bind(account.pilot_id, reward.bossId)
@@ -1396,11 +1435,13 @@ async function handleBossRequest(
         .bind(account.pilot_id, reward.bossId, now)
         .run();
       const ticket = randomHex(32);
+      const seed = randomHex(32);
       const attempt = await db
         .prepare(
           `INSERT INTO boss_attempts
-            (token_hash, pilot_id, boss_id, issued_at, expires_at, claimed_at, claim_id)
-          VALUES (?, ?, ?, ?, ?, NULL, NULL)`,
+            (token_hash, pilot_id, boss_id, issued_at, expires_at, claimed_at, claim_id,
+              challenge_seed, boss_hp, boss_damage, min_combat_ms, max_hit_damage)
+          VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`,
         )
         .bind(
           await sha256Hex(ticket),
@@ -1408,36 +1449,125 @@ async function handleBossRequest(
           reward.bossId,
           now,
           now + BOSS_ATTEMPT_TTL_MS,
+          seed,
+          params.hp,
+          params.damage,
+          params.minCombatMs,
+          params.maxHitDamage,
         )
         .run();
       if (attempt.meta?.changes !== 1) {
         return json({ error: "Ya hay un combate activo contra este boss." }, 409);
       }
-      return json({ ticket, expiresAt: now + BOSS_ATTEMPT_TTL_MS });
+      return json({
+        token: ticket,
+        seed,
+        issued_at: now,
+        expires_at: now + BOSS_ATTEMPT_TTL_MS,
+        boss: {
+          hp: params.hp,
+          damage: params.damage,
+          min_combat_ms: params.minCombatMs,
+          max_hit_damage: params.maxHitDamage,
+        },
+      });
     }
 
-    const ticket = body?.["ticket"];
-    if (typeof ticket !== "string" || !/^[0-9a-f]{64}$/.test(ticket)) {
-      return json({ error: "Falta un ticket de combate válido." }, 403);
+    const token = body["token"] ?? body["ticket"];
+    if (typeof token !== "string" || !/^[0-9a-f]{64}$/.test(token)) {
+      return json({ error: "Falta un token de combate válido." }, 403);
     }
-    const tokenHash = await sha256Hex(ticket);
+    const tokenHash = await sha256Hex(token);
     const attempt = await db
       .prepare(
-        `SELECT issued_at, expires_at, claimed_at FROM boss_attempts
-        WHERE token_hash = ? AND pilot_id = ? AND boss_id = ?`,
+        `SELECT issued_at, expires_at, claimed_at, challenge_seed, boss_hp, boss_damage,
+          min_combat_ms, max_hit_damage, boss_id FROM boss_attempts
+        WHERE token_hash = ? AND pilot_id = ?`,
       )
-      .bind(tokenHash, account.pilot_id, reward.bossId)
-      .first<{ issued_at: number; expires_at: number; claimed_at: number | null }>();
-    if (!attempt) return json({ error: "El ticket no pertenece a un combate autorizado." }, 403);
+      .bind(tokenHash, account.pilot_id)
+      .first<{
+        issued_at: number;
+        expires_at: number;
+        claimed_at: number | null;
+        challenge_seed: string;
+        boss_hp: number;
+        boss_damage: number;
+        min_combat_ms: number;
+        max_hit_damage: number;
+        boss_id: string;
+      }>();
+    if (!attempt) return json({ error: "El token no pertenece a un combate autorizado." }, 403);
     if (attempt.claimed_at !== null) {
-      return json({ error: "Este ticket de combate ya fue utilizado." }, 409);
+      return json({ error: "Este token de combate ya fue utilizado." }, 409);
     }
-    if (attempt.expires_at <= now) return json({ error: "El ticket de combate expiró." }, 410);
-    if (attempt.issued_at + BOSS_MIN_COMBAT_MS > now) {
-      return json({ error: "El combate aún no pudo haber terminado." }, 409);
+    const claimId = randomHex(32);
+    const consumed = await db
+      .prepare(
+        `UPDATE boss_attempts SET claimed_at = ?, claim_id = ?
+        WHERE token_hash = ? AND pilot_id = ? AND claimed_at IS NULL`,
+      )
+      .bind(now, claimId, tokenHash, account.pilot_id)
+      .run();
+    if (consumed.meta?.changes !== 1) {
+      return json({ error: "Este token de combate ya fue utilizado." }, 409);
     }
 
-    const rewardId = randomHex(32);
+    if (attempt.expires_at <= now) return json({ error: "El token de combate expiró." }, 410);
+    if (!reward || !params || attempt.boss_id !== bossId) {
+      return json({ error: "El boss no coincide con el combate autorizado." }, 400);
+    }
+    const result = body["result"];
+    if (result !== "victory" && result !== "defeat") {
+      return json({ error: "El resultado del combate no es válido." }, 400);
+    }
+
+    const evidence = parseBossEvidence(body);
+    if (!evidence) return json({ error: "Los datos del combate no son válidos." }, 400);
+    const durationMs = evidence.ended_at - evidence.started_at;
+    const serverDurationMs = now - attempt.issued_at;
+    if (
+      evidence.started_at !== attempt.issued_at ||
+      durationMs < attempt.min_combat_ms ||
+      durationMs > BOSS_ATTEMPT_TTL_MS ||
+      serverDurationMs < attempt.min_combat_ms ||
+      serverDurationMs > BOSS_ATTEMPT_TTL_MS ||
+      evidence.ended_at > now + 10_000 ||
+      evidence.ended_at < now - 30_000 ||
+      Math.abs(durationMs - serverDurationMs) > 30_000
+    ) {
+      return json({ error: "La duración del combate no cumple los límites permitidos." }, 400);
+    }
+    if (attempt.challenge_seed.length !== 64 || attempt.boss_hp <= 0) {
+      return json({ error: "El intento no contiene parámetros de combate válidos." }, 409);
+    }
+    const transcriptError = validateBossEvidence(evidence, attempt);
+    if (transcriptError) return json({ error: transcriptError }, 400);
+    if (typeof body["proof"] !== "string" || !/^[0-9a-f]{64}$/.test(body["proof"])) {
+      return json({ error: "Falta la prueba criptográfica del combate." }, 400);
+    }
+    const expectedProof = await createBossCombatProof(attempt.challenge_seed, evidence);
+    if (body["proof"] !== expectedProof) {
+      return json({ error: "La prueba criptográfica no corresponde al combate." }, 400);
+    }
+    if (result === "victory" && evidence.damage_dealt < attempt.boss_hp) {
+      return json({ error: "El daño registrado no alcanza la vida del boss." }, 400);
+    }
+    if (result === "victory" && evidence.events.some((event) => event.type === "player_death")) {
+      return json({ error: "Una derrota del jugador no puede declararse como victoria." }, 400);
+    }
+    if (result === "defeat") {
+      return json({ success: true, result, bossId: reward.bossId, rewards: [] });
+    }
+
+    const cooldown = await db
+      .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
+      .bind(account.pilot_id, reward.bossId)
+      .first<{ last_defeated_at: number }>();
+    if (cooldown && cooldown.last_defeated_at + BOSS_COOLDOWN_MS > now) {
+      return json({ error: "El boss está en cooldown." }, 409);
+    }
+
+    const rewardId = claimId;
     const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
     if (rollChance(reward.shipChance)) {
       drops.push({
@@ -1457,32 +1587,14 @@ async function handleBossRequest(
     const statements = [
       db
         .prepare(
-          `UPDATE boss_attempts SET claimed_at = ?, claim_id = ?
-          WHERE token_hash = ? AND pilot_id = ? AND boss_id = ? AND claimed_at IS NULL
-            AND expires_at > ? AND issued_at <= ?
-            AND NOT EXISTS (
-              SELECT 1 FROM boss_cooldowns
-              WHERE pilot_id = ? AND boss_id = ? AND last_defeated_at > ?
-            )`,
-        )
-        .bind(
-          now,
-          rewardId,
-          tokenHash,
-          account.pilot_id,
-          reward.bossId,
-          now,
-          now - BOSS_MIN_COMBAT_MS,
-          account.pilot_id,
-          reward.bossId,
-          now - BOSS_COOLDOWN_MS,
-        ),
-      db
-        .prepare(
           `INSERT INTO boss_cooldowns (pilot_id, boss_id, last_defeated_at, last_reward_id)
           SELECT ?, ?, ?, ? WHERE EXISTS (
             SELECT 1 FROM boss_attempts
-            WHERE token_hash = ? AND pilot_id = ? AND boss_id = ? AND claim_id = ?
+            WHERE token_hash = ? AND pilot_id = ? AND boss_id = ?
+              AND claimed_at = ? AND claim_id = ? AND expires_at > ?
+          ) AND NOT EXISTS (
+            SELECT 1 FROM boss_cooldowns
+            WHERE pilot_id = ? AND boss_id = ? AND last_defeated_at > ?
           )
           ON CONFLICT(pilot_id, boss_id) DO UPDATE SET
             last_defeated_at = excluded.last_defeated_at,
@@ -1497,7 +1609,12 @@ async function handleBossRequest(
           tokenHash,
           account.pilot_id,
           reward.bossId,
-          rewardId,
+          now,
+          claimId,
+          now,
+          account.pilot_id,
+          reward.bossId,
+          now - BOSS_COOLDOWN_MS,
           now - BOSS_COOLDOWN_MS,
         ),
       db
@@ -1539,7 +1656,7 @@ async function handleBossRequest(
       ),
     ];
     const results = await db.batch(statements);
-    if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
+    if (results[0]?.meta?.changes !== 1) {
       const previous = await db
         .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
         .bind(account.pilot_id, reward.bossId)
@@ -1549,8 +1666,8 @@ async function handleBossRequest(
       return json({ error: `Boss en cooldown. Disponible en ${minutes} min.`, retryAt }, 409);
     }
     if (
-      results[2]?.meta?.changes !== 1 ||
-      results.slice(3).some((result) => result.meta?.changes !== 1)
+      results[1]?.meta?.changes !== 1 ||
+      results.slice(2).some((result) => result.meta?.changes !== 1)
     ) {
       throw new Error("La recompensa del boss no se pudo aplicar completamente.");
     }
@@ -1565,6 +1682,119 @@ async function handleBossRequest(
     console.error("No se pudo aplicar la recompensa del boss:", error);
     return json({ error: "No se pudo guardar la recompensa del boss." }, 503);
   }
+}
+
+function parseBossEvidence(body: Record<string, unknown>): BossCombatEvidence | null {
+  const startedAt = body["started_at"];
+  const endedAt = body["ended_at"];
+  const damageDealt = body["damage_dealt"];
+  const damageReceived = body["damage_received"];
+  const hits = body["hits"];
+  const rawEvents = body["events"];
+  if (
+    !Number.isSafeInteger(startedAt) ||
+    !Number.isSafeInteger(endedAt) ||
+    typeof damageDealt !== "number" ||
+    !Number.isFinite(damageDealt) ||
+    typeof damageReceived !== "number" ||
+    !Number.isFinite(damageReceived) ||
+    !Number.isSafeInteger(hits) ||
+    !Array.isArray(rawEvents) ||
+    rawEvents.length > 512
+  ) {
+    return null;
+  }
+  const events: BossCombatEvent[] = [];
+  for (const rawEvent of rawEvents) {
+    if (!rawEvent || typeof rawEvent !== "object" || Array.isArray(rawEvent)) return null;
+    const event = rawEvent as Record<string, unknown>;
+    const type = event["type"];
+    const at = event["at"];
+    const damage = event["damage"];
+    const count = event["count"];
+    if (
+      (type !== "boss_hit" &&
+        type !== "minion_kill" &&
+        type !== "player_hit" &&
+        type !== "player_death") ||
+      !Number.isSafeInteger(at) ||
+      typeof damage !== "number" ||
+      !Number.isFinite(damage) ||
+      !Number.isSafeInteger(count) ||
+      (count as number) < 1
+    ) {
+      return null;
+    }
+    events.push({ type, at: at as number, damage, count: count as number });
+  }
+  return {
+    started_at: startedAt as number,
+    ended_at: endedAt as number,
+    damage_dealt: damageDealt,
+    damage_received: damageReceived,
+    hits: hits as number,
+    events,
+  };
+}
+
+function validateBossEvidence(
+  evidence: BossCombatEvidence,
+  attempt: {
+    boss_hp: number;
+    boss_damage: number;
+    max_hit_damage: number;
+  },
+): string | null {
+  if (
+    evidence.damage_dealt <= 0 ||
+    evidence.damage_received <= 0 ||
+    evidence.hits < 1 ||
+    evidence.hits > 512
+  ) {
+    return "El combate debe registrar daño, hits y daño recibido.";
+  }
+  const durationMs = evidence.ended_at - evidence.started_at;
+  let previousAt = -1;
+  let bossHitCount = 0;
+  let bossDamage = 0;
+  let receivedDamage = 0;
+  for (const event of evidence.events) {
+    if (event.at < previousAt || event.at < 0 || event.at > durationMs || event.damage < 0) {
+      return "La secuencia de eventos del combate no es válida.";
+    }
+    previousAt = event.at;
+    if (event.type === "boss_hit") {
+      if (event.damage <= 0 || event.damage > event.count * attempt.max_hit_damage) {
+        return "Un hit excede el daño máximo permitido para el boss.";
+      }
+      bossHitCount += event.count;
+      bossDamage += event.damage;
+    } else if (event.type === "player_hit") {
+      if (event.damage <= 0) return "El daño recibido registrado no es válido.";
+      if (event.count > 1 && event.damage / event.count <= 0) {
+        return "Los hits recibidos no son válidos.";
+      }
+      receivedDamage += event.damage;
+    } else if (event.damage !== 0) {
+      return "El evento no puede registrar daño.";
+    }
+  }
+  const tolerance = Math.max(0.01, evidence.damage_dealt * 0.001);
+  const receivedTolerance = Math.max(0.01, evidence.damage_received * 0.001);
+  if (
+    bossHitCount !== evidence.hits ||
+    Math.abs(bossDamage - evidence.damage_dealt) > tolerance ||
+    Math.abs(receivedDamage - evidence.damage_received) > receivedTolerance
+  ) {
+    return "Los totales de daño no coinciden con la secuencia de hits.";
+  }
+  if (evidence.damage_dealt > evidence.hits * attempt.max_hit_damage) {
+    return "Los hits registrados no pueden producir el daño declarado.";
+  }
+  if (evidence.damage_received > Math.max(100_000, attempt.boss_damage * 10_000)) {
+    return "El daño recibido excede los límites razonables del combate.";
+  }
+  return null;
 }
 
 function rollChance(probability: number): boolean {
@@ -1675,7 +1905,10 @@ async function handleMarketRequest(
   if (isAdminPath) return json({ error: "Método no permitido." }, 405);
 
   if (!account) {
-    return json({ error: "Inicia sesión con Google para consultar tu piloto y usar el mercado." }, 401);
+    return json(
+      { error: "Inicia sesión con Google para consultar tu piloto y usar el mercado." },
+      401,
+    );
   }
 
   if (!isSameOriginPost(request, url) && request.method !== "GET") {

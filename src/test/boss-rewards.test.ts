@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import server from "@/server";
 import { BOSS_COOLDOWN_MS, BOSS_REWARDS } from "@/game/data/boss-rewards";
+import { createBossCombatProof, type BossCombatEvidence } from "@/game/meta/boss-combat-proof";
 
 const PILOT_ID = "plt_0123456789abcdef01234567";
 
@@ -9,19 +10,23 @@ type MockStatement = {
   values: unknown[];
 };
 
+type StoredAttempt = {
+  pilotId: string;
+  bossId: string;
+  issuedAt: number;
+  expiresAt: number;
+  claimedAt: number | null;
+  claimId: string | null;
+  seed: string;
+  hp: number;
+  damage: number;
+  minCombatMs: number;
+  maxHitDamage: number;
+};
+
 function createDatabase() {
   const cooldowns = new Map<string, { lastDefeatedAt: number; rewardId: string }>();
-  const attempts = new Map<
-    string,
-    {
-      pilotId: string;
-      bossId: string;
-      issuedAt: number;
-      expiresAt: number;
-      claimedAt: number | null;
-      claimId: string | null;
-    }
-  >();
+  const attempts = new Map<string, StoredAttempt>();
   const inventory = new Map<
     string,
     { itemId: string; itemName: string; itemType: string; quantity: number; grantSource: string }
@@ -42,7 +47,18 @@ function createDatabase() {
         },
         async run() {
           if (query.includes("INSERT INTO boss_attempts")) {
-            const [tokenHash, pilotId, bossId, issuedAt, expiresAt] = values;
+            const [
+              tokenHash,
+              pilotId,
+              bossId,
+              issuedAt,
+              expiresAt,
+              seed,
+              hp,
+              damage,
+              minCombatMs,
+              maxHitDamage,
+            ] = values;
             attempts.set(String(tokenHash), {
               pilotId: String(pilotId),
               bossId: String(bossId),
@@ -50,7 +66,19 @@ function createDatabase() {
               expiresAt: Number(expiresAt),
               claimedAt: null,
               claimId: null,
+              seed: String(seed),
+              hp: Number(hp),
+              damage: Number(damage),
+              minCombatMs: Number(minCombatMs),
+              maxHitDamage: Number(maxHitDamage),
             });
+          } else if (query.includes("UPDATE boss_attempts SET claimed_at")) {
+            const attempt = attempts.get(String(values[2]));
+            if (!attempt || attempt.pilotId !== values[3] || attempt.claimedAt !== null) {
+              return { meta: { changes: 0 } };
+            }
+            attempt.claimedAt = Number(values[0]);
+            attempt.claimId = String(values[1]);
           } else if (query.includes("INSERT OR IGNORE INTO pilot_inventory")) {
             inventory.set("falcon", {
               itemId: "falcon",
@@ -90,13 +118,17 @@ function createDatabase() {
           }
           if (query.includes("FROM boss_attempts")) {
             const attempt = attempts.get(String(values[0]));
-            if (!attempt || attempt.pilotId !== values[1] || attempt.bossId !== values[2]) {
-              return null;
-            }
+            if (!attempt || attempt.pilotId !== values[1]) return null;
             return {
               issued_at: attempt.issuedAt,
               expires_at: attempt.expiresAt,
               claimed_at: attempt.claimedAt,
+              challenge_seed: attempt.seed,
+              boss_hp: attempt.hp,
+              boss_damage: attempt.damage,
+              min_combat_ms: attempt.minCombatMs,
+              max_hit_damage: attempt.maxHitDamage,
+              boss_id: attempt.bossId,
             } as T;
           }
           return null;
@@ -104,7 +136,15 @@ function createDatabase() {
         async all<T>() {
           if (query.includes("PRAGMA table_info")) {
             return {
-              results: [{ name: "grant_source" }, { name: "claim_id" }] as T[],
+              results: [
+                { name: "grant_source" },
+                { name: "claim_id" },
+                { name: "challenge_seed" },
+                { name: "boss_hp" },
+                { name: "boss_damage" },
+                { name: "min_combat_ms" },
+                { name: "max_hit_damage" },
+              ] as T[],
             };
           }
           if (query.includes("FROM boss_cooldowns")) {
@@ -128,33 +168,18 @@ function createDatabase() {
     },
     async batch(statements: unknown[]) {
       const results = (statements as MockStatement[]).map(({ query, values }) => {
-        if (query.includes("UPDATE boss_attempts SET claimed_at")) {
-          const attempt = attempts.get(String(values[2]));
-          const now = Number(values[0]);
-          const cooldown = cooldowns.get(String(values[8]));
-          if (
-            !attempt ||
-            attempt.pilotId !== values[3] ||
-            attempt.bossId !== values[4] ||
-            attempt.claimedAt !== null ||
-            attempt.expiresAt <= now ||
-            attempt.issuedAt > Number(values[6]) ||
-            (cooldown && cooldown.lastDefeatedAt > Number(values[9]))
-          ) {
-            return { meta: { changes: 0 } };
-          }
-          attempt.claimedAt = now;
-          attempt.claimId = String(values[1]);
-          return { meta: { changes: 1 } };
-        }
         if (query.includes("INSERT INTO boss_cooldowns")) {
           const attempt = attempts.get(String(values[4]));
           const rewardId = String(values[3]);
           const existing = cooldowns.get(String(values[1]));
           if (
             !attempt ||
-            attempt.claimId !== String(values[7]) ||
-            (existing && existing.lastDefeatedAt > Number(values[8]))
+            attempt.pilotId !== values[5] ||
+            attempt.bossId !== values[6] ||
+            attempt.claimedAt !== Number(values[7]) ||
+            attempt.claimId !== String(values[8]) ||
+            attempt.expiresAt <= Number(values[9]) ||
+            (existing && existing.lastDefeatedAt > Number(values[13]))
           ) {
             return { meta: { changes: 0 } };
           }
@@ -212,11 +237,67 @@ function makeRequest(path: string, method: "GET" | "POST" = "GET", body?: Record
   });
 }
 
-async function requestBossAttempt(db: ReturnType<typeof createDatabase>["db"], bossId: string) {
-  const response = await server.fetch(makeRequest("/api/bosses/attempt", "POST", { bossId }), {
+async function startBoss(db: ReturnType<typeof createDatabase>["db"], bossId: string) {
+  const response = await server.fetch(makeRequest("/api/boss/start", "POST", { boss_id: bossId }), {
     DB: db,
   });
-  return { response, body: (await response.json()) as { ticket?: string; error?: string } };
+  return {
+    response,
+    body: (await response.json()) as {
+      token?: string;
+      seed?: string;
+      issued_at?: number;
+      boss?: { hp: number; min_combat_ms: number; max_hit_damage: number };
+      error?: string;
+    },
+  };
+}
+
+function createEvidence(
+  issuedAt: number,
+  durationMs: number,
+  hp: number,
+  damageReceived = 36,
+): BossCombatEvidence {
+  const perHit = hp / 4;
+  const events: BossCombatEvidence["events"] = [
+    { type: "boss_hit", at: 5_000, damage: perHit, count: 1 },
+    { type: "player_hit", at: 10_000, damage: damageReceived, count: 1 },
+    { type: "boss_hit", at: 15_000, damage: perHit, count: 1 },
+    { type: "minion_kill", at: 20_000, damage: 0, count: 2 },
+    { type: "boss_hit", at: 25_000, damage: perHit, count: 1 },
+    { type: "boss_hit", at: Math.min(30_000, durationMs), damage: perHit, count: 1 },
+  ];
+  events.sort((a, b) => a.at - b.at);
+  return {
+    started_at: issuedAt,
+    ended_at: issuedAt + durationMs,
+    damage_dealt: hp,
+    damage_received: damageReceived,
+    hits: 4,
+    events,
+  };
+}
+
+async function claimBoss(
+  db: ReturnType<typeof createDatabase>["db"],
+  bossId: string,
+  token: string,
+  seed: string,
+  result: "victory" | "defeat",
+  evidence: BossCombatEvidence,
+) {
+  const proof = await createBossCombatProof(seed, evidence);
+  return server.fetch(
+    makeRequest("/api/boss/claim", "POST", {
+      boss_id: bossId,
+      token,
+      result,
+      ...evidence,
+      proof,
+    }),
+    { DB: db },
+  );
 }
 
 beforeEach(() => {
@@ -228,81 +309,185 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("boss rewards and cooldowns", () => {
-  it("uses progressive rewards, one-use combat tickets, and one-hour cooldowns", async () => {
+describe("server-validated boss combat", () => {
+  it("uses server parameters and awards progressive rewards for valid victories", async () => {
     const { db, cooldowns, inventory, getBossObsidian } = createDatabase();
-    const expected = [
-      { bossId: "leviathan", world: 1, obsidian: 3, shipChance: 0.15, itemChance: 0.1, rank: "D" },
-      { bossId: "nemesis", world: 2, obsidian: 5, shipChance: 0.12, itemChance: 0.1, rank: "C" },
-      { bossId: "colossus", world: 3, obsidian: 8, shipChance: 0.1, itemChance: 0.08, rank: "B" },
-    ];
-    expect(BOSS_REWARDS).toEqual(expected);
+    expect(BOSS_REWARDS.map(({ bossId }) => bossId)).toEqual(["leviathan", "nemesis", "colossus"]);
 
-    const missingTicket = await server.fetch(
-      makeRequest("/api/bosses/claim", "POST", { bossId: "leviathan", ticket: "a".repeat(64) }),
-      { DB: db },
-    );
-    expect(missingTicket.status).toBe(403);
+    for (const reward of BOSS_REWARDS) {
+      const { response: startResponse, body: attempt } = await startBoss(db, reward.bossId);
+      expect(startResponse.status).toBe(200);
+      expect(attempt.token).toMatch(/^[0-9a-f]{64}$/);
+      expect(attempt.seed).toMatch(/^[0-9a-f]{64}$/);
+      expect(attempt.boss?.hp).toBeGreaterThan(0);
+      expect(attempt.boss?.min_combat_ms).toBeGreaterThan(0);
 
-    for (const reward of expected) {
-      const { response: attemptResponse, body: attempt } = await requestBossAttempt(
+      const durationMs = attempt.boss!.min_combat_ms + 1_000;
+      vi.advanceTimersByTime(durationMs);
+      const evidence = createEvidence(attempt.issued_at!, durationMs, attempt.boss!.hp);
+      const response = await claimBoss(
         db,
         reward.bossId,
-      );
-      expect(attemptResponse.status).toBe(200);
-      expect(attempt.ticket).toMatch(/^[0-9a-f]{64}$/);
-
-      const earlyClaim = await server.fetch(
-        makeRequest("/api/bosses/claim", "POST", { bossId: reward.bossId, ticket: attempt.ticket }),
-        { DB: db },
-      );
-      expect(earlyClaim.status).toBe(409);
-
-      vi.advanceTimersByTime(15_000);
-      const response = await server.fetch(
-        makeRequest("/api/bosses/claim", "POST", { bossId: reward.bossId, ticket: attempt.ticket }),
-        { DB: db },
+        attempt.token!,
+        attempt.seed!,
+        "victory",
+        evidence,
       );
       expect(response.status).toBe(200);
-      const result = (await response.json()) as {
+      const body = (await response.json()) as {
         obsidian: number;
         rewards: { itemName: string; itemType: string }[];
       };
-      expect(result.obsidian).toBe(reward.obsidian);
-      expect(result.rewards.length).toBeGreaterThanOrEqual(0);
-      expect(result.rewards.length).toBeLessThanOrEqual(2);
-      expect(result.rewards.every((drop) => drop.itemName.includes(`Rango ${reward.rank}`))).toBe(
+      expect(body.obsidian).toBe(reward.obsidian);
+      expect(body.rewards.length).toBeLessThanOrEqual(2);
+      expect(body.rewards.every((drop) => drop.itemName.includes(`Rango ${reward.rank}`))).toBe(
         true,
       );
 
-      const replay = await server.fetch(
-        makeRequest("/api/bosses/claim", "POST", { bossId: reward.bossId, ticket: attempt.ticket }),
-        { DB: db },
+      const replay = await claimBoss(
+        db,
+        reward.bossId,
+        attempt.token!,
+        attempt.seed!,
+        "victory",
+        evidence,
       );
       expect(replay.status).toBe(409);
     }
 
+    const cooldownBlocked = await startBoss(db, "leviathan");
+    expect(cooldownBlocked.response.status).toBe(409);
     expect(getBossObsidian()).toBe(16);
-    expect(
-      [...inventory.values()].every(
-        (item) => item.grantSource === "starter" || item.grantSource === "boss",
-      ),
-    ).toBe(true);
-    expect([...cooldowns.keys()].sort()).toEqual(expected.map((reward) => reward.bossId).sort());
-
-    const statusResponse = await server.fetch(makeRequest("/api/bosses/status"), { DB: db });
-    expect(statusResponse.status).toBe(200);
-    const status = (await statusResponse.json()) as { cooldowns: Record<string, number> };
-    for (const { bossId } of expected) {
-      expect(status.cooldowns[bossId]).toBe(
-        cooldowns.get(bossId)!.lastDefeatedAt + BOSS_COOLDOWN_MS,
+    expect([...inventory.values()].every((item) => item.grantSource !== "legacy")).toBe(true);
+    expect([...cooldowns.keys()].sort()).toEqual(BOSS_REWARDS.map(({ bossId }) => bossId).sort());
+    const status = await server.fetch(makeRequest("/api/bosses/status"), { DB: db });
+    const { cooldowns: cooldownMap } = (await status.json()) as {
+      cooldowns: Record<string, number>;
+    };
+    for (const reward of BOSS_REWARDS) {
+      expect(cooldownMap[reward.bossId]).toBe(
+        cooldowns.get(reward.bossId)!.lastDefeatedAt + BOSS_COOLDOWN_MS,
       );
     }
+  });
 
-    const blocked = await requestBossAttempt(db, "leviathan");
-    expect(blocked.response.status).toBe(409);
-    expect(blocked.body.error).toMatch(/cooldown/i);
-    expect(getBossObsidian()).toBe(16);
+  it("rejects expired, reused, too-short, and insufficient-damage claims and consumes failed proofs", async () => {
+    const { db, attempts, getBossObsidian } = createDatabase();
+    const expired = await startBoss(db, "leviathan");
+    vi.advanceTimersByTime(10 * 60 * 1000 + 1);
+    const expiredEvidence = createEvidence(
+      expired.body.issued_at!,
+      10 * 60 * 1000,
+      expired.body.boss!.hp,
+    );
+    const expiredClaim = await claimBoss(
+      db,
+      "leviathan",
+      expired.body.token!,
+      expired.body.seed!,
+      "victory",
+      expiredEvidence,
+    );
+    expect(expiredClaim.status).toBe(410);
+
+    const tooShort = await startBoss(db, "leviathan");
+    const shortEvidence = createEvidence(tooShort.body.issued_at!, 20_000, tooShort.body.boss!.hp);
+    const shortClaim = await claimBoss(
+      db,
+      "leviathan",
+      tooShort.body.token!,
+      tooShort.body.seed!,
+      "victory",
+      shortEvidence,
+    );
+    expect(shortClaim.status).toBe(400);
+
+    vi.advanceTimersByTime(31_000);
+    const insufficient = await startBoss(db, "nemesis");
+    const durationMs = insufficient.body.boss!.min_combat_ms + 1_000;
+    vi.advanceTimersByTime(durationMs);
+    const weakEvidence = createEvidence(
+      insufficient.body.issued_at!,
+      durationMs,
+      insufficient.body.boss!.hp / 2,
+    );
+    const insufficientClaim = await claimBoss(
+      db,
+      "nemesis",
+      insufficient.body.token!,
+      insufficient.body.seed!,
+      "victory",
+      weakEvidence,
+    );
+    expect(insufficientClaim.status).toBe(400);
+    expect(getBossObsidian()).toBe(0);
+    expect([...attempts.values()].every((attempt) => attempt.claimedAt !== null)).toBe(true);
+  });
+
+  it("records a valid defeat as consumed without granting a reward", async () => {
+    const { db, cooldowns, getBossObsidian, inventory, attempts } = createDatabase();
+    const { body: attempt } = await startBoss(db, "leviathan");
+    const durationMs = attempt.boss!.min_combat_ms + 1_000;
+    vi.advanceTimersByTime(durationMs);
+    const evidence = createEvidence(attempt.issued_at!, durationMs, attempt.boss!.hp / 2);
+    const response = await claimBoss(
+      db,
+      "leviathan",
+      attempt.token!,
+      attempt.seed!,
+      "defeat",
+      evidence,
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).result).toBe("defeat");
+    expect(getBossObsidian()).toBe(0);
+    expect(cooldowns.size).toBe(0);
+    expect(inventory.size).toBe(1);
+    expect([...attempts.values()][0]!.claimedAt).not.toBeNull();
+  });
+
+  it("rejects tampered transcripts and consumes the attempt", async () => {
+    const { db, attempts } = createDatabase();
+    const { body: attempt } = await startBoss(db, "leviathan");
+    const durationMs = attempt.boss!.min_combat_ms + 1_000;
+    vi.advanceTimersByTime(durationMs);
+    const evidence = createEvidence(attempt.issued_at!, durationMs, attempt.boss!.hp);
+    const response = await server.fetch(
+      makeRequest("/api/boss/claim", "POST", {
+        boss_id: "leviathan",
+        token: attempt.token,
+        result: "victory",
+        ...evidence,
+        proof: "0".repeat(64),
+      }),
+      { DB: db },
+    );
+    expect(response.status).toBe(400);
+    expect([...attempts.values()][0]!.claimedAt).not.toBeNull();
+  });
+
+  it("consumes a valid token submitted for a different boss", async () => {
+    const { db, attempts } = createDatabase();
+    const { body: attempt } = await startBoss(db, "leviathan");
+    vi.advanceTimersByTime(attempt.boss!.min_combat_ms + 1_000);
+    const evidence = createEvidence(
+      attempt.issued_at!,
+      attempt.boss!.min_combat_ms + 1_000,
+      attempt.boss!.hp,
+    );
+    const proof = await createBossCombatProof(attempt.seed!, evidence);
+    const response = await server.fetch(
+      makeRequest("/api/boss/claim", "POST", {
+        boss_id: "nemesis",
+        token: attempt.token,
+        result: "victory",
+        ...evidence,
+        proof,
+      }),
+      { DB: db },
+    );
+    expect(response.status).toBe(400);
+    expect([...attempts.values()][0]!.claimedAt).not.toBeNull();
   });
 });
 

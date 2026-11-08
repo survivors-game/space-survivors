@@ -1,0 +1,14 @@
+ALTER TABLE boss_attempts
+ADD COLUMN challenge_seed TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE boss_attempts
+ADD COLUMN boss_hp INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE boss_attempts
+ADD COLUMN boss_damage REAL NOT NULL DEFAULT 0;
+
+ALTER TABLE boss_attempts
+ADD COLUMN min_combat_ms INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE boss_attempts
+ADD COLUMN max_hit_damage REAL NOT NULL DEFAULT 0;

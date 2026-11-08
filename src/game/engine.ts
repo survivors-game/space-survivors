@@ -36,6 +36,11 @@ import type { ShipDef } from "./data/ships";
 import type { StageDef } from "./data/stages";
 import { ENEMIES, enemyById } from "./data/enemies";
 import { bossById } from "./data/bosses";
+import type {
+  BossCombatEvidence,
+  BossCombatEvent,
+  BossCombatEventType,
+} from "./meta/boss-combat-proof";
 import { BOSS_COOLDOWN_MS } from "./data/boss-rewards";
 import { WEAPONS, dronePos, droneCount, fieldRadius, weaponById } from "./data/weapons";
 import { PASSIVES, passiveById } from "./data/passives";
@@ -61,12 +66,31 @@ import {
 
 export type EngineState = "PLAYING" | "LEVEL_UP" | "PAUSED" | "DYING" | "WINNING" | "ENDED";
 
+export interface BossAttempt {
+  token: string;
+  seed: string;
+  issued_at: number;
+  expires_at: number;
+  boss: {
+    hp: number;
+    damage: number;
+    min_combat_ms: number;
+    max_hit_damage: number;
+  };
+}
+
 export interface EngineCallbacks {
   onLevelUp: (choices: UpgradeChoice[], rerolls: number) => void;
   onEnd: (r: RunResult) => void;
   onPauseChange: (paused: boolean) => void;
-  onBossStarted?: (bossId: string) => Promise<string>;
-  onBossDefeated?: (bossId: string, ticket: string) => void;
+  onBossStarted?: (bossId: string) => Promise<BossAttempt>;
+  onBossDefeated?: (
+    bossId: string,
+    token: string,
+    seed: string,
+    result: "victory" | "defeat",
+    evidence: BossCombatEvidence,
+  ) => void;
   onChatEvent?: (
     event:
       | { type: "boss_kill"; bossName: string; shipName: string }
@@ -151,6 +175,13 @@ export class Engine {
   boss: Enemy | null = null;
   private bossSpawnPending = false;
   private bossAttemptToken: string | null = null;
+  private bossAttemptSeed = "";
+  private bossAttemptIssuedAt = 0;
+  private bossFightStartedAt = 0;
+  private bossDamageDealt = 0;
+  private bossDamageReceived = 0;
+  private bossHitCount = 0;
+  private bossCombatEvents: BossCombatEvent[] = [];
   pendingLevelUps = 0;
   choices: UpgradeChoice[] = [];
   bannerState: HudState["banner"] = null;
@@ -1071,17 +1102,26 @@ export class Engine {
   }
 
   private async spawnBoss(id: string) {
-    const ticket = await this.cb.onBossStarted?.(id);
-    if (!ticket) throw new Error("El servidor no autorizó el combate contra el boss.");
+    const attempt = await this.cb.onBossStarted?.(id);
+    if (!attempt?.token || !attempt.seed) {
+      throw new Error("El servidor no autorizó el combate contra el boss.");
+    }
     const def = bossById(id);
     const pos = this.spawnRing();
     const e = this.spawnEnemyAt("destroyer", pos.x, pos.y);
     if (!e) throw new Error("No se pudo reservar el enemigo del boss.");
-    this.bossAttemptToken = ticket;
+    this.bossAttemptToken = attempt.token;
+    this.bossAttemptSeed = attempt.seed;
+    this.bossAttemptIssuedAt = attempt.issued_at;
+    this.bossFightStartedAt = Date.now();
+    this.bossDamageDealt = 0;
+    this.bossDamageReceived = 0;
+    this.bossHitCount = 0;
+    this.bossCombatEvents = [];
     e.boss = def;
     e.elite = false;
-    e.maxHp = e.hp = Math.round(def.hp * this.bossScale);
-    e.dmg = def.dmg * this.stage.dmgMult;
+    e.maxHp = e.hp = attempt.boss.hp;
+    e.dmg = attempt.boss.damage;
     e.speed = def.speed;
     e.radius = def.radius;
     e.phase = 0;
@@ -1092,6 +1132,38 @@ export class Engine {
     Audio.SFX.boss();
     Audio.setMusic(2);
     this.shake(CONFIG.camera.bossSpawnShake);
+  }
+
+  private recordBossCombatEvent(type: BossCombatEventType, damage = 0, count = 1) {
+    if (!this.bossAttemptToken) return;
+    const at = Math.max(0, Math.floor((Date.now() - this.bossFightStartedAt) / 5_000) * 5_000);
+    const existing = this.bossCombatEvents.find((event) => event.type === type && event.at === at);
+    if (existing) {
+      existing.damage += damage;
+      existing.count += count;
+      return;
+    }
+    if (this.bossCombatEvents.length < 512) {
+      this.bossCombatEvents.push({ type, at, damage, count });
+    }
+  }
+
+  private settleBossAttempt(result: "victory" | "defeat") {
+    if (!this.bossAttemptToken) return;
+    const token = this.bossAttemptToken;
+    const seed = this.bossAttemptSeed;
+    const elapsed = Math.max(0, Date.now() - this.bossFightStartedAt);
+    const evidence: BossCombatEvidence = {
+      started_at: this.bossAttemptIssuedAt,
+      ended_at: this.bossAttemptIssuedAt + elapsed,
+      damage_dealt: this.bossDamageDealt,
+      damage_received: this.bossDamageReceived,
+      hits: this.bossHitCount,
+      events: this.bossCombatEvents,
+    };
+    this.bossAttemptToken = null;
+    this.bossAttemptSeed = "";
+    this.cb.onBossDefeated?.(this.boss?.boss?.id ?? "", token, seed, result, evidence);
   }
 
   /* ------------------------------ weapons & stats ------------------------------ */
@@ -1324,6 +1396,11 @@ export class Engine {
     e.hp -= dmg;
     e.hitFlash = 0.08;
     this.damageDealt += dmg;
+    if (e.boss && this.bossAttemptToken) {
+      this.bossDamageDealt += dmg;
+      this.bossHitCount++;
+      this.recordBossCombatEvent("boss_hit", dmg);
+    }
     if (Settings.get().damageNumbers && (dmg >= 4 || crit)) {
       const n = this.dmgNums.spawn();
       if (n) {
@@ -1367,6 +1444,7 @@ export class Engine {
       Audio.SFX.bigExplode();
       return;
     }
+    this.recordBossCombatEvent("minion_kill");
     const d = e.def;
     this.kills++;
     this.killsByType[d.id] = (this.killsByType[d.id] ?? 0) + 1;
@@ -1401,9 +1479,7 @@ export class Engine {
     this.killsByType[def.id] = (this.killsByType[def.id] ?? 0) + 1;
     this.bossesDefeated.push(def.id);
     this.bossCooldowns[def.id] = Date.now() + BOSS_COOLDOWN_MS;
-    const ticket = this.bossAttemptToken;
-    this.bossAttemptToken = null;
-    if (ticket) this.cb.onBossDefeated?.(def.id, ticket);
+    this.settleBossAttempt("victory");
     this.creditsRaw += def.credits;
     this.explosion(e.x, e.y, 90, def.color);
     this.emit(e.x, e.y, 60, {
@@ -1519,6 +1595,8 @@ export class Engine {
     }
     p.hp -= final;
     this.damageTaken += final;
+    this.bossDamageReceived += final;
+    this.recordBossCombatEvent("player_hit", final);
     p.iframe = CONFIG.player.invulnAfterHit;
     p.hitT = 0.25;
     Audio.SFX.hurt();
@@ -1537,11 +1615,15 @@ export class Engine {
     }
     p.hp -= amt;
     this.damageTaken += amt;
+    this.bossDamageReceived += amt;
+    this.recordBossCombatEvent("player_hit", amt);
     if (p.hp <= 0) this.die();
   }
 
   private die() {
     if (this.state !== "PLAYING") return;
+    this.recordBossCombatEvent("player_death");
+    this.settleBossAttempt("defeat");
     this.player.hp = 0;
     this.state = "DYING";
     this.endTimer = 2;

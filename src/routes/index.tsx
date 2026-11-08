@@ -46,7 +46,8 @@ import { PASSIVES, passiveById } from "@/game/data/passives";
 import { SHIPS, shipById } from "@/game/data/ships";
 import { STAGES, stageById } from "@/game/data/stages";
 import { WEAPONS } from "@/game/data/weapons";
-import { Engine } from "@/game/engine";
+import { Engine, type BossAttempt } from "@/game/engine";
+import { createBossCombatProof } from "@/game/meta/boss-combat-proof";
 import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
 import { spriteUrl } from "@/game/sprites";
@@ -611,35 +612,35 @@ function Index() {
         },
         onPauseChange: setPaused,
         onBossStarted: async (bossId) => {
-          const result = await marketRequest<{ ticket: string }>("/api/bosses/attempt", {
+          const result = await marketRequest<BossAttempt>("/api/boss/start", {
             method: "POST",
-            body: JSON.stringify({ bossId }),
+            body: JSON.stringify({ boss_id: bossId }),
           });
-          return result.ticket;
+          return result;
         },
-        onBossDefeated: (bossId, ticket) => {
-          void marketRequest<{
-            obsidian: number;
-            rewards: { itemType: "nave" | "objeto"; itemName: string }[];
-          }>("/api/bosses/claim", {
-            method: "POST",
-            body: JSON.stringify({ bossId, ticket }),
-          })
-            .then((result) => {
-              setMarketRefresh((version) => version + 1);
-              const drops = result.rewards.map((reward) => reward.itemName);
-              setNotice(
-                `RECOMPENSA DE BOSS: +${result.obsidian} OBS${drops.length ? ` · ${drops.join(" · ")}` : ""}`,
-              );
-            })
-            .catch((error: unknown) => {
-              console.error("No se pudo reclamar la recompensa del boss:", error);
-              setNotice(
-                error instanceof Error
-                  ? error.message
-                  : "No se pudo reclamar la recompensa del boss.",
-              );
+        onBossDefeated: async (bossId, token, seed, outcome, evidence) => {
+          try {
+            const proof = await createBossCombatProof(seed, evidence);
+            const result = await marketRequest<{
+              obsidian: number;
+              rewards: { itemType: "nave" | "objeto"; itemName: string }[];
+            }>("/api/boss/claim", {
+              method: "POST",
+              body: JSON.stringify({ boss_id: bossId, token, result: outcome, ...evidence, proof }),
             });
+            setMarketRefresh((version) => version + 1);
+            const drops = result.rewards.map((reward) => reward.itemName);
+            setNotice(
+              outcome === "victory"
+                ? `RECOMPENSA DE BOSS: +${result.obsidian} OBS${drops.length ? ` · ${drops.join(" · ")}` : ""}`
+                : "COMBATE REGISTRADO: SIN RECOMPENSA",
+            );
+          } catch (error: unknown) {
+            console.error("No se pudo validar el combate del boss:", error);
+            setNotice(
+              error instanceof Error ? error.message : "No se pudo validar el combate del boss.",
+            );
+          }
         },
         onChatEvent: (chatEvent) => {
           void fetch("/api/chat/event", {
