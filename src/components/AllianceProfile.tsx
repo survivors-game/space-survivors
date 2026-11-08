@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AllianceWars } from "@/components/AllianceWars";
 
 type AllianceMember = {
   pilot_id: string;
@@ -247,6 +248,7 @@ export function AllianceProfile({
               DISOLVER ALIANZA
             </Button>
           ) : null}
+          <AllianceWars allianceId={alliance.alliance_id} role={alliance.role} />
         </section>
       ) : (
         <section className="border border-cyan-500/20 bg-[#0b0d1c]/75 p-4 sm:p-6">
