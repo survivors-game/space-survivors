@@ -127,7 +127,7 @@ export function GameChat() {
             typeof message.callsign !== "string" ||
             typeof message.text !== "string" ||
             message.language !== language ||
-            !["chat", "boss_kill", "drop"].includes(message.type)
+            !["chat", "boss_kill"].includes(message.type)
           ) {
             return;
           }
@@ -295,7 +295,7 @@ export function GameChat() {
             ref={listRef}
             style={{ fontSize: `${fontSize}px`, lineHeight: `${Math.ceil(fontSize * 1.45)}px` }}
           >
-            {messages.map((message) => (
+            {messages.map((message, messageIndex) => (
               <p className="text-white" key={`${message.id}-${message.type}`}>
                 <span className="relative mr-1 inline-block">
                   <button
@@ -315,7 +315,8 @@ export function GameChat() {
                   {message.allianceTag ? (
                     <span className="ml-1 font-bold text-fuchsia-300">[{message.allianceTag}]</span>
                   ) : null}
-                  {selectedPlayer?.pilotId === message.pilotId ? (
+                  {selectedPlayer?.pilotId === message.pilotId &&
+                  messages.findIndex((item) => item.pilotId === message.pilotId) === messageIndex ? (
                     <span className="absolute left-0 top-full z-20 mt-1 flex min-w-36 flex-col border border-slate-600 bg-slate-800 p-1 shadow-xl">
                       {canInvite && message.pilotId !== myPilotId ? (
                         <button
