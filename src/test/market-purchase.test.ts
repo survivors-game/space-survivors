@@ -7,6 +7,9 @@ const BUYER_ID = "plt_aaaaaaaaaaaaaaaaaaaaaaaa";
 const SELLER_ID = "plt_bbbbbbbbbbbbbbbbbbbbbbbb";
 const SESSION_TOKEN = "market-test-session";
 const SESSION_HASH = createHash("sha256").update(SESSION_TOKEN).digest("hex");
+const SELLER_TOKEN = "market-seller-session";
+const SELLER_SESSION_HASH = createHash("sha256").update(SELLER_TOKEN).digest("hex");
+const PUBLISH_INVENTORY_ID = "inv-publish-item";
 const db = new DatabaseSync(":memory:");
 
 function createD1Adapter() {
@@ -75,7 +78,12 @@ async function requestJson<T>(
   return { response, payload: (await response.json()) as T };
 }
 
-async function createListing(sellerId = SELLER_ID, status = "ACTIVO", itemId = "boss-ship") {
+async function createListing(
+  sellerId = SELLER_ID,
+  status = "ACTIVO",
+  itemId = "boss-ship",
+  country = "CO",
+) {
   const now = Date.now();
   db.prepare(
     `INSERT OR IGNORE INTO pilots (pilot_id, callsign, obsidian, created_at, updated_at)
@@ -94,10 +102,13 @@ async function createListing(sellerId = SELLER_ID, status = "ACTIVO", itemId = "
   db.prepare(
     `INSERT INTO p2p_ads
     (id, seller_pilot_id, inventory_id, item_id, item_name, item_type,
-      price, currency, payment_methods, payment_details, status, fee_paid, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'BOSS SHIP', 'nave', 100, 'COP',
-      '["NEQUI"]', 'seller private payment data', ?, 1, ?, ?)`,
-  ).run(`listing-${itemId}`, sellerId, `inv-${itemId}`, itemId, status, now, now);
+      price, price_minor, currency, currency_code, country_code,
+      payment_methods, payment_details, payment_data_json,
+      status, fee_paid, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'BOSS SHIP', 'nave', 100, 10000, 'COP', 'COP', ?,
+      '["NEQUI"]', 'seller private payment data', '{"NEQUI":"seller private payment data"}',
+      ?, 1, ?, ?)`,
+  ).run(`listing-${itemId}`, sellerId, `inv-${itemId}`, itemId, country, status, now, now);
   return `listing-${itemId}`;
 }
 
@@ -135,21 +146,50 @@ describe("P2P purchase flow", () => {
       `INSERT INTO pilots (pilot_id, callsign, obsidian, created_at, updated_at)
       VALUES (?, 'SELLER', 5, ?, ?)`,
     ).run(SELLER_ID, now, now);
+    db.prepare(
+      `INSERT INTO player_accounts (google_sub, email, pilot_id, created_at, updated_at)
+      VALUES ('seller-sub', 'seller@example.com', ?, ?, ?)`,
+    ).run(SELLER_ID, now, now);
+    db.prepare(
+      `INSERT INTO auth_sessions (token_hash, wallet_address, created_at, expires_at)
+      VALUES (?, 'google:seller-sub', ?, ?)`,
+    ).run(SELLER_SESSION_HASH, now, now + 60_000);
+    db.prepare(
+      `INSERT INTO pilot_inventory
+      (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
+      VALUES (?, ?, 'publish-item', 'PUBLISH ITEM', 'objeto', 1, 0, 'boss', ?, ?)`,
+    ).run(PUBLISH_INVENTORY_ID, SELLER_ID, now, now);
   });
 
   afterAll(() => db.close());
+
+  const publishAd = (body: Record<string, unknown>, token = SELLER_TOKEN) =>
+    requestJson<{ success?: boolean; adId?: string; error?: string }>(
+      "/api/market/publish",
+      "POST",
+      body,
+      token,
+    );
+
+  const validPublishInput = (overrides: Record<string, unknown> = {}) => ({
+    inventoryId: PUBLISH_INVENTORY_ID,
+    country: "CO",
+    priceMinor: 150_000,
+    paymentMethods: [{ method: "NEQUI", details: "nequi@example.com" }],
+    ...overrides,
+  });
 
   it("completes a purchase and transfers the item exactly once", async () => {
     const listingId = await createListing();
     const bought = await requestJson<{
       order_id: string;
       payment_details: string;
-      payment_methods: string[];
-    }>("/api/market/buy", "POST", { listing_id: listingId });
+      payment_method: { method: string; label: string };
+    }>("/api/market/buy", "POST", { listing_id: listingId, payment_method: "NEQUI" });
 
     expect(bought.response.status).toBe(200);
     expect(bought.payload.payment_details).toBe("seller private payment data");
-    expect(bought.payload.payment_methods).toEqual(["NEQUI"]);
+    expect(bought.payload.payment_method.method).toBe("NEQUI");
     expect(
       db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"],
     ).toBe(4);
@@ -178,6 +218,7 @@ describe("P2P purchase flow", () => {
     const listingId = await createListing();
     const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
       listing_id: listingId,
+      payment_method: "NEQUI",
     });
 
     const cancelled = await requestJson<{ status: string }>("/api/market/cancel", "POST", {
@@ -200,14 +241,20 @@ describe("P2P purchase flow", () => {
 
   it("rejects buying one's own listing", async () => {
     const listingId = await createListing(BUYER_ID);
-    const result = await requestJson("/api/market/buy", "POST", { listing_id: listingId });
+    const result = await requestJson("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
     expect(result.response.status).toBe(400);
     expect(db.prepare("SELECT COUNT(*) AS count FROM p2p_orders").get()?.["count"]).toBe(0);
   });
 
   it("rejects inactive listings", async () => {
     const listingId = await createListing(SELLER_ID, "PAUSADO");
-    const result = await requestJson("/api/market/buy", "POST", { listing_id: listingId });
+    const result = await requestJson("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
     expect(result.response.status).toBe(409);
     expect(db.prepare("SELECT COUNT(*) AS count FROM p2p_orders").get()?.["count"]).toBe(0);
   });
@@ -216,15 +263,24 @@ describe("P2P purchase flow", () => {
     const listingId = await createListing();
     db.prepare("UPDATE pilots SET obsidian = 0 WHERE pilot_id = ?").run(BUYER_ID);
 
-    const result = await requestJson("/api/market/buy", "POST", { listing_id: listingId });
+    const result = await requestJson("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
     expect(result.response.status).toBe(400);
     expect(db.prepare("SELECT COUNT(*) AS count FROM p2p_orders").get()?.["count"]).toBe(0);
   });
 
   it("prevents duplicate pending orders and duplicate commission charges", async () => {
     const listingId = await createListing();
-    const first = await requestJson("/api/market/buy", "POST", { listing_id: listingId });
-    const second = await requestJson("/api/market/buy", "POST", { listing_id: listingId });
+    const first = await requestJson("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
+    const second = await requestJson("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
 
     expect(first.response.status).toBe(200);
     expect(second.response.status).toBe(409);
@@ -244,25 +300,183 @@ describe("P2P purchase flow", () => {
 
     const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
       listing_id: listingId,
+      payment_method: "NEQUI",
     });
-    const sellerToken = "seller-test-session";
-    const sellerHash = createHash("sha256").update(sellerToken).digest("hex");
-    const now = Date.now();
-    db.prepare(
-      `INSERT INTO player_accounts (google_sub, email, pilot_id, created_at, updated_at)
-      VALUES ('seller-sub', 'seller@example.com', ?, ?, ?)`,
-    ).run(SELLER_ID, now, now);
-    db.prepare(
-      `INSERT INTO auth_sessions (token_hash, wallet_address, created_at, expires_at)
-      VALUES (?, 'google:seller-sub', ?, ?)`,
-    ).run(sellerHash, now, now + 60_000);
     const sellerHistory = await requestJson<{ orders: { payment_details: string | null }[] }>(
       "/api/market/history",
       "GET",
       undefined,
-      sellerToken,
+      SELLER_TOKEN,
     );
     expect(sellerHistory.payload.orders[0]?.payment_details).toBeNull();
     expect(bought.payload.order_id).toBeTruthy();
+  });
+
+  it("filters public listings by country without exposing private payment fields", async () => {
+    await createListing(SELLER_ID, "ACTIVO", "colombia-ship", "CO");
+    await createListing(SELLER_ID, "ACTIVO", "brazil-ship", "BR");
+
+    const result = await requestJson<{ listings: Record<string, unknown>[] }>(
+      "/api/market/listings?country=BR",
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.payload.listings).toHaveLength(1);
+    expect(result.payload.listings[0]).toMatchObject({ country: "BR" });
+    expect(result.payload.listings[0]).not.toHaveProperty("payment_details");
+    expect(result.payload.listings[0]).not.toHaveProperty("payment_data_json");
+  });
+
+  it("supports multiple payment methods and exposes their details only to the seller", async () => {
+    const published = await publishAd(
+      validPublishInput({
+        paymentMethods: [
+          { method: "PSE", details: "pse@example.com" },
+          { method: "NEQUI", details: "+57 300 000 0000" },
+        ],
+      }),
+    );
+    expect(published.response.status).toBe(200);
+
+    const sellerAds = await requestJson<{ ads: { paymentData: Record<string, string> }[] }>(
+      "/api/market/my-ads",
+      "GET",
+      undefined,
+      SELLER_TOKEN,
+    );
+    expect(sellerAds.payload.ads[0]?.paymentData).toEqual({
+      PSE: "pse@example.com",
+      NEQUI: "+57 300 000 0000",
+    });
+
+    const publicAds = await requestJson<{
+      listings: { payment_methods: { label: string }[]; payment_data?: unknown }[];
+    }>("/api/market/listings?country=CO");
+    expect(publicAds.payload.listings[0]?.payment_methods.map((method) => method.label)).toEqual([
+      "PSE",
+      "Nequi",
+    ]);
+    expect(publicAds.payload.listings[0]).not.toHaveProperty("payment_data");
+    const buyerAds = await requestJson<{ ads: unknown[] }>("/api/market/my-ads");
+    expect(buyerAds.payload.ads).toEqual([]);
+  });
+
+  it("rejects fractional and out-of-range minor-unit prices", async () => {
+    const invalidPrices: Array<{ country: string; priceMinor: number; methods: unknown[] }> = [
+      { country: "CO", priceMinor: 100.5, methods: [{ method: "NEQUI", details: "x" }] },
+      { country: "CO", priceMinor: 500_000_001, methods: [{ method: "NEQUI", details: "x" }] },
+      { country: "CO", priceMinor: 99, methods: [{ method: "NEQUI", details: "x" }] },
+      { country: "CO", priceMinor: 0, methods: [{ method: "NEQUI", details: "x" }] },
+      { country: "CO", priceMinor: -1, methods: [{ method: "NEQUI", details: "x" }] },
+      {
+        country: "VE",
+        priceMinor: 5_000_000_001,
+        methods: [{ method: "PAGO_MOVIL", details: "x" }],
+      },
+      { country: "PE", priceMinor: 49, methods: [{ method: "YAPE", details: "x" }] },
+      { country: "BR", priceMinor: 2_000_001, methods: [{ method: "PIX", details: "x" }] },
+      {
+        country: "CU",
+        priceMinor: 1_000_001,
+        methods: [{ method: "BANK_TRANSFER", details: "x" }],
+      },
+      { country: "OTHER", priceMinor: 0, methods: [{ method: "BINANCE_PAY", details: "x" }] },
+      { country: "VE", priceMinor: 100, methods: [{ method: "PSE", details: "x" }] },
+      { country: "US", priceMinor: 100, methods: [{ method: "PIX", details: "x" }] },
+    ];
+
+    for (const invalid of invalidPrices) {
+      const result = await publishAd(
+        validPublishInput({
+          country: invalid.country,
+          priceMinor: invalid.priceMinor,
+          paymentMethods: invalid.methods,
+        }),
+      );
+      expect(result.response.status).toBe(400);
+    }
+    expect(
+      db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(SELLER_ID)?.["obsidian"],
+    ).toBe(5);
+  });
+
+  it("strips HTML from payment data and enforces the per-method length limit", async () => {
+    const published = await publishAd(
+      validPublishInput({
+        paymentMethods: [{ method: "PSE", details: "<b>Cuenta</b> <script>alert(1)</script>" }],
+      }),
+    );
+    expect(published.response.status).toBe(200);
+
+    const sellerAds = await requestJson<{ ads: { paymentData: Record<string, string> }[] }>(
+      "/api/market/my-ads",
+      "GET",
+      undefined,
+      SELLER_TOKEN,
+    );
+    expect(sellerAds.payload.ads[0]?.paymentData["PSE"]).toBe("Cuenta alert(1)");
+    expect(sellerAds.payload.ads[0]?.paymentData["PSE"]).not.toMatch(/[<>]/);
+
+    const tooLong = await publishAd(
+      validPublishInput({
+        inventoryId: "inv-publish-item-overflow",
+        paymentMethods: [{ method: "NEQUI", details: "x".repeat(501) }],
+      }),
+    );
+    expect(tooLong.response.status).toBe(400);
+  });
+
+  it("reveals only the selected payment details to the buyer after order creation", async () => {
+    const published = await publishAd(
+      validPublishInput({
+        paymentMethods: [
+          { method: "PSE", details: "checkout at pse.example" },
+          { method: "NEQUI", details: "private phone number" },
+        ],
+      }),
+    );
+    expect(published.response.status).toBe(200);
+    const bought = await requestJson<{
+      payment_method: { method: string };
+      payment_details: string;
+    }>("/api/market/buy", "POST", {
+      listing_id: published.payload.adId,
+      payment_method: "PSE",
+    });
+    expect(bought.response.status).toBe(200);
+    expect(bought.payload.payment_method.method).toBe("PSE");
+    expect(bought.payload.payment_details).toBe("checkout at pse.example");
+    expect(bought.payload.payment_details).not.toContain("private phone number");
+
+    const history = await requestJson<{
+      orders: { payment_method: { method: string } | null; payment_details: string | null }[];
+    }>("/api/market/history");
+    expect(history.payload.orders[0]?.payment_method?.method).toBe("PSE");
+    expect(history.payload.orders[0]?.payment_details).toBe("checkout at pse.example");
+  });
+
+  it("requires a supported network for USDT payment methods", async () => {
+    const missingNetwork = await publishAd(
+      validPublishInput({
+        country: "OTHER",
+        paymentMethods: [{ method: "USDT", details: "wallet-address" }],
+      }),
+    );
+    expect(missingNetwork.response.status).toBe(400);
+
+    const published = await publishAd(
+      validPublishInput({
+        country: "OTHER",
+        paymentMethods: [{ method: "USDT", network: "TRC20", details: "wallet-address" }],
+      }),
+    );
+    expect(published.response.status).toBe(200);
+    const catalog = await requestJson<{
+      listings: { payment_methods: { method: string; network?: string }[] }[];
+    }>("/api/market/listings?country=OTHER");
+    expect(catalog.payload.listings[0]?.payment_methods).toContainEqual({
+      method: "USDT",
+      network: "TRC20",
+      label: "USDT TRC20",
+    });
   });
 });

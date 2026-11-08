@@ -62,8 +62,10 @@ import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { MISSIONS } from "@/game/meta/missions";
 import type {
   P2PHistoryOrder,
+  P2PCountry,
   P2PItemType,
   P2PMyAd,
+  P2PPayMethod,
   P2PPurchaseOrder,
   P2PPublicListing,
   P2PPilotState,
@@ -272,12 +274,14 @@ function Index() {
     async (
       page: number,
       itemType: P2PItemType | "",
+      country: P2PCountry | "",
       sort: "newest" | "price_asc" | "price_desc",
     ) => {
       setMarketError("");
       try {
         const params = new URLSearchParams({ page: String(page), sort });
         if (itemType) params.set("item_type", itemType);
+        if (country) params.set("country", country);
         const result = await marketRequest<{
           listings: P2PPublicListing[];
           page: number;
@@ -512,12 +516,16 @@ function Index() {
     }
   };
 
-  const buyMarketListing = async (listingId: string): Promise<P2PPurchaseOrder> => {
+  const buyMarketListing = async (
+    listingId: string,
+    method: P2PPayMethod,
+    network?: string,
+  ): Promise<P2PPurchaseOrder> => {
     setMarketError("");
     try {
       const order = await marketRequest<P2PPurchaseOrder>("/api/market/buy", {
         method: "POST",
-        body: JSON.stringify({ listing_id: listingId }),
+        body: JSON.stringify({ listing_id: listingId, payment_method: method, network }),
       });
       setMarketRefresh((version) => version + 1);
       return order;

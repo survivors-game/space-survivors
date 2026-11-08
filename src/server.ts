@@ -5,6 +5,19 @@ import { renderErrorPage } from "./lib/error-page";
 import { SHIPS } from "./game/data/ships";
 import { BOSS_COOLDOWN_MS, BOSS_REWARDS } from "./game/data/boss-rewards";
 import {
+  P2P_COUNTRIES,
+  P2P_PRICE_LIMITS,
+  P2P_USDT_NETWORKS,
+  paymentMethodKey,
+  paymentMethodLabel,
+  type P2PCountry,
+  type P2PCurrency,
+  type P2PPayMethod,
+  type P2PPaymentMethodChoice,
+  type P2PPublicPaymentMethod,
+  type P2PUsdtNetwork,
+} from "./game/data/market";
+import {
   createBossCombatProof,
   type BossCombatEvidence,
   type BossCombatEvent,
@@ -1009,8 +1022,12 @@ type MarketAdRow = {
   item_type: "nave" | "objeto";
   price: number;
   currency: "COP" | "USD";
+  price_minor: number | null;
+  currency_code: P2PCurrency | null;
+  country_code: P2PCountry;
   payment_methods: string;
   payment_details: string;
+  payment_data_json: string | null;
   status: "ACTIVO" | "PAUSADO" | "CANCELADO" | "VENDIDO";
   fee_paid: number;
   created_at: number;
@@ -1018,7 +1035,19 @@ type MarketAdRow = {
 };
 
 const VALID_PILOT_ID = /^plt_[0-9a-f]{24}$/;
-const VALID_PAY_METHODS = new Set(["NEQUI", "DAVIPLATA", "TRANSFERENCIA", "PAYPAL"]);
+const LEGACY_PAYMENT_METHODS = new Set(["NEQUI", "DAVIPLATA", "TRANSFERENCIA", "PAYPAL"]);
+const VALID_PAYMENT_METHODS = new Set([
+  "PSE",
+  "NEQUI",
+  "DAVIPLATA",
+  "BANCOLOMBIA_TRANSFER",
+  "PAGO_MOVIL",
+  "BANK_TRANSFER",
+  "YAPE",
+  "PIX",
+  "BINANCE_PAY",
+  "USDT",
+]);
 const VALID_SHIP_IDS = new Set(SHIPS.map((ship) => ship.id));
 
 async function ensureMarketSchema(db: D1Database): Promise<void> {
@@ -1055,10 +1084,14 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           item_id TEXT NOT NULL,
           item_name TEXT NOT NULL,
           item_type TEXT NOT NULL CHECK (item_type IN ('nave', 'objeto')),
-          price REAL NOT NULL CHECK (price > 0),
+          price INTEGER NOT NULL CHECK (price > 0),
+          price_minor INTEGER,
           currency TEXT NOT NULL CHECK (currency IN ('COP', 'USD')),
+          currency_code TEXT,
+          country_code TEXT NOT NULL DEFAULT 'CO',
           payment_methods TEXT NOT NULL,
           payment_details TEXT NOT NULL,
+          payment_data_json TEXT,
           status TEXT NOT NULL CHECK (status IN ('ACTIVO', 'PAUSADO', 'CANCELADO', 'VENDIDO')),
           fee_paid INTEGER NOT NULL DEFAULT 1,
           created_at INTEGER NOT NULL,
@@ -1097,6 +1130,7 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           ad_id TEXT NOT NULL REFERENCES p2p_ads(id),
           buyer_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           status TEXT NOT NULL DEFAULT 'ABIERTA',
+          payment_method TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )`,
@@ -1272,6 +1306,57 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           END`,
       ];
       for (const statement of schema) await db.prepare(statement).run();
+      const adColumns = new Set(
+        (await db.prepare("PRAGMA table_info(p2p_ads)").all<{ name: string }>()).results?.map(
+          (column) => column.name,
+        ) ?? [],
+      );
+      for (const [name, definition] of [
+        ["price_minor", "INTEGER"],
+        ["currency_code", "TEXT"],
+        ["country_code", "TEXT NOT NULL DEFAULT 'CO'"],
+        ["payment_data_json", "TEXT"],
+      ] as const) {
+        if (!adColumns.has(name)) {
+          await db.prepare(`ALTER TABLE p2p_ads ADD COLUMN ${name} ${definition}`).run();
+        }
+      }
+      const orderColumns = await db
+        .prepare("PRAGMA table_info(p2p_orders)")
+        .all<{ name: string }>();
+      if (!(orderColumns.results ?? []).some((column) => column.name === "payment_method")) {
+        await db.prepare("ALTER TABLE p2p_orders ADD COLUMN payment_method TEXT").run();
+      }
+      await db
+        .prepare(
+          `UPDATE p2p_ads
+          SET price_minor = CAST(ROUND(price * 100) AS INTEGER),
+            currency_code = currency,
+            country_code = CASE WHEN currency = 'USD' THEN 'OTHER' ELSE 'CO' END
+          WHERE price_minor IS NULL OR currency_code IS NULL`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE INDEX IF NOT EXISTS idx_p2p_ads_country_status_price
+          ON p2p_ads(country_code, status, price_minor)`,
+        )
+        .run();
+      const legacyPaymentAds = await db
+        .prepare(
+          `SELECT id, payment_methods, payment_details FROM p2p_ads
+          WHERE payment_data_json IS NULL`,
+        )
+        .all<{ id: string; payment_methods: string; payment_details: string }>();
+      for (const ad of legacyPaymentAds.results ?? []) {
+        const details = Object.fromEntries(
+          decodeMethods(ad.payment_methods).map((method) => [method, ad.payment_details]),
+        );
+        await db
+          .prepare("UPDATE p2p_ads SET payment_data_json = ? WHERE id = ?")
+          .bind(JSON.stringify(details), ad.id)
+          .run();
+      }
       const inventoryColumns = await db
         .prepare("PRAGMA table_info(pilot_inventory)")
         .all<{ name: string }>();
@@ -1436,7 +1521,169 @@ function decodeMethods(value: string): string[] {
   }
 }
 
+function sanitizePaymentDetails(value: string): string {
+  return Array.from(value.replace(/<[^>]*>/g, ""))
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return !((code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127);
+    })
+    .join("")
+    .trim();
+}
+
+function paymentDataForAd(
+  row: Pick<MarketAdRow, "payment_data_json" | "payment_methods" | "payment_details">,
+): Record<string, string> {
+  if (row.payment_data_json) {
+    try {
+      const parsed: unknown = JSON.parse(row.payment_data_json);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return Object.fromEntries(
+          Object.entries(parsed).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string",
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("Los datos de pago almacenados no son JSON válido:", error);
+    }
+  }
+  return Object.fromEntries(
+    decodeMethods(row.payment_methods).map((method) => [method, row.payment_details]),
+  );
+}
+
+function publicPaymentMethodFromKey(key: string): P2PPublicPaymentMethod | null {
+  if (key.startsWith("USDT:")) {
+    const network = key.slice("USDT:".length);
+    if (!P2P_USDT_NETWORKS.includes(network as P2PUsdtNetwork)) return null;
+    return {
+      method: "USDT",
+      network: network as P2PUsdtNetwork,
+      label: paymentMethodLabel("USDT", network as P2PUsdtNetwork),
+    };
+  }
+  if (key === "PAYPAL") {
+    return { method: "PAYPAL", label: paymentMethodLabel("PAYPAL") };
+  }
+  if (key === "TRANSFERENCIA") {
+    return { method: "TRANSFERENCIA", label: "Transferencia bancaria (anuncio anterior)" };
+  }
+  const method = key;
+  if (!VALID_PAYMENT_METHODS.has(method)) return null;
+  return {
+    method: method as P2PPayMethod,
+    label: paymentMethodLabel(method as P2PPayMethod),
+  };
+}
+
+function publicPaymentMethodKey(method: P2PPublicPaymentMethod): string {
+  if (method.method === "PAYPAL" || method.method === "TRANSFERENCIA") return method.method;
+  return paymentMethodKey(method.method, method.network);
+}
+
+function publicPaymentMethods(
+  row: Pick<MarketAdRow, "payment_data_json" | "payment_methods" | "payment_details">,
+): P2PPublicPaymentMethod[] {
+  const data = paymentDataForAd(row);
+  const keys = Object.keys(data);
+  const legacyKeys = keys.length ? keys : decodeMethods(row.payment_methods);
+  return legacyKeys
+    .map(publicPaymentMethodFromKey)
+    .filter((method): method is P2PPublicPaymentMethod => method !== null);
+}
+
+function paymentChoiceKey(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const choice = value as Record<string, unknown>;
+  const method = choice["method"];
+  const network = choice["network"];
+  if (typeof method !== "string" || !VALID_PAYMENT_METHODS.has(method)) return null;
+  if (method === "USDT") {
+    if (typeof network !== "string" || !P2P_USDT_NETWORKS.includes(network as P2PUsdtNetwork)) {
+      return null;
+    }
+    return paymentMethodKey("USDT", network as P2PUsdtNetwork);
+  }
+  if (network !== undefined) return null;
+  return paymentMethodKey(method as P2PPayMethod);
+}
+
+function validatePaymentChoices(
+  country: P2PCountry,
+  values: unknown,
+): { methods: P2PPaymentMethodChoice[]; paymentData: Record<string, string> } | null {
+  if (!Array.isArray(values) || values.length === 0 || values.length > 10) return null;
+  const countryMethods = new Set(P2P_COUNTRIES[country].methods.map((method) => method.id));
+  const methods: P2PPaymentMethodChoice[] = [];
+  const paymentData: Record<string, string> = {};
+  for (const value of values) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const choice = value as Record<string, unknown>;
+    const key = paymentChoiceKey(choice);
+    const method = choice["method"];
+    const network = choice["network"];
+    const details = choice["details"];
+    if (
+      !key ||
+      typeof method !== "string" ||
+      !countryMethods.has(method as P2PPayMethod) ||
+      typeof details !== "string" ||
+      details.length > 500
+    ) {
+      return null;
+    }
+    const sanitizedDetails = sanitizePaymentDetails(details);
+    if (!sanitizedDetails || sanitizedDetails.length > 500 || key in paymentData) return null;
+    paymentData[key] = sanitizedDetails;
+    methods.push({
+      method: method as P2PPayMethod,
+      ...(typeof network === "string" ? { network: network as P2PUsdtNetwork } : {}),
+      details: sanitizedDetails,
+    });
+  }
+  return { methods, paymentData };
+}
+
+function readPaymentChoice(
+  country: P2PCountry,
+  methodValue: unknown,
+  networkValue: unknown,
+): { key: string; method: P2PPublicPaymentMethod } | null {
+  if (typeof methodValue !== "string") return null;
+  const choice = {
+    method: methodValue,
+    ...(networkValue === undefined ? {} : { network: networkValue }),
+  };
+  const key = paymentChoiceKey(choice);
+  const countryMethods = P2P_COUNTRIES[country].methods.map((method) => method.id);
+  if (key && countryMethods.includes(methodValue as P2PPayMethod)) {
+    return {
+      key,
+      method: {
+        method: methodValue as P2PPayMethod,
+        ...(typeof networkValue === "string" ? { network: networkValue as P2PUsdtNetwork } : {}),
+        label: paymentMethodLabel(
+          methodValue as P2PPayMethod,
+          typeof networkValue === "string" ? (networkValue as P2PUsdtNetwork) : undefined,
+        ),
+      },
+    };
+  }
+  if (
+    (methodValue === "PAYPAL" || methodValue === "TRANSFERENCIA") &&
+    networkValue === undefined &&
+    LEGACY_PAYMENT_METHODS.has(methodValue) &&
+    publicPaymentMethodFromKey(methodValue)
+  ) {
+    return { key: methodValue, method: publicPaymentMethodFromKey(methodValue)! };
+  }
+  return null;
+}
+
 function serializeAd(row: MarketAdRow) {
+  const country = (P2P_COUNTRIES[row.country_code] ? row.country_code : "CO") as P2PCountry;
+  const paymentData = paymentDataForAd(row);
   return {
     id: row.id,
     sellerPilotId: row.seller_pilot_id,
@@ -1444,10 +1691,14 @@ function serializeAd(row: MarketAdRow) {
     itemId: row.item_id,
     itemName: row.item_name,
     itemType: row.item_type,
-    price: row.price,
-    currency: row.currency,
-    paymentMethods: decodeMethods(row.payment_methods),
-    paymentDetails: row.payment_details,
+    country,
+    priceMinor: row.price_minor ?? Math.round(row.price * 100),
+    currency: row.currency_code ?? row.currency,
+    paymentMethods: publicPaymentMethods(row),
+    paymentDetails: sanitizePaymentDetails(row.payment_details),
+    paymentData: Object.fromEntries(
+      Object.entries(paymentData).map(([key, details]) => [key, sanitizePaymentDetails(details)]),
+    ),
     status: row.status,
     feePaid: row.fee_paid,
     createdAt: row.created_at,
@@ -2043,23 +2294,28 @@ async function handleMarketRequest(
     if (typeParam && typeParam !== "nave" && typeParam !== "objeto") {
       return pilotJson(request, pilotId, { error: "El filtro de artículo no es válido." }, 400);
     }
+    const countryParam = url.searchParams.get("country");
+    if (countryParam && !Object.hasOwn(P2P_COUNTRIES, countryParam)) {
+      return pilotJson(request, pilotId, { error: "El filtro de país no es válido." }, 400);
+    }
     const sort = url.searchParams.get("sort") ?? "newest";
     if (sort !== "newest" && sort !== "price_asc" && sort !== "price_desc") {
       return pilotJson(request, pilotId, { error: "El orden solicitado no es válido." }, 400);
     }
     const whereType = typeParam ? "AND ad.item_type = ?" : "";
-    const bindings = typeParam ? [typeParam] : [];
+    const whereCountry = countryParam ? "AND ad.country_code = ?" : "";
+    const bindings = [...(typeParam ? [typeParam] : []), ...(countryParam ? [countryParam] : [])];
     const orderBy =
       sort === "price_asc"
-        ? "ad.price ASC, ad.created_at DESC"
+        ? "ad.price_minor ASC, ad.created_at DESC"
         : sort === "price_desc"
-          ? "ad.price DESC, ad.created_at DESC"
+          ? "ad.price_minor DESC, ad.created_at DESC"
           : "ad.created_at DESC";
     const [listings, total] = await Promise.all([
       db
         .prepare(
-          `SELECT ad.id AS listing_id, ad.item_id, ad.item_name, ad.item_type,
-            ad.price, ad.currency AS price_currency,
+          `SELECT ad.*, ad.id AS listing_id, ad.item_id, ad.item_name, ad.item_type,
+            ad.price_minor, ad.currency_code AS price_currency, ad.country_code AS country,
             COALESCE(NULLIF(profile.display_name, ''), pilot.callsign, 'PILOTO') AS seller_callsign,
             ad.created_at
           FROM p2p_ads ad
@@ -2073,20 +2329,19 @@ async function handleMarketRequest(
               WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
             )
             ${whereType}
+            ${whereCountry}
           ORDER BY ${orderBy}
           LIMIT 20 OFFSET ?`,
         )
         .bind(...bindings, (page - 1) * 20)
-        .all<{
-          listing_id: string;
-          item_id: string;
-          item_name: string;
-          item_type: "nave" | "objeto";
-          price: number;
-          price_currency: "COP" | "USD";
-          seller_callsign: string;
-          created_at: number;
-        }>(),
+        .all<
+          MarketAdRow & {
+            listing_id: string;
+            price_currency: P2PCurrency;
+            country: P2PCountry;
+            seller_callsign: string;
+          }
+        >(),
       db
         .prepare(
           `SELECT COUNT(*) AS count FROM p2p_ads ad
@@ -2097,13 +2352,25 @@ async function handleMarketRequest(
               SELECT 1 FROM p2p_orders pending
               WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
             )
-            ${whereType}`,
+            ${whereType}
+            ${whereCountry}`,
         )
         .bind(...bindings)
         .first<{ count: number }>(),
     ]);
     return pilotJson(request, pilotId, {
-      listings: listings.results ?? [],
+      listings: (listings.results ?? []).map((listing) => ({
+        listing_id: listing.listing_id,
+        item_id: listing.item_id,
+        item_name: listing.item_name,
+        item_type: listing.item_type,
+        country: listing.country,
+        price_minor: listing.price_minor ?? Math.round(listing.price * 100),
+        price_currency: listing.price_currency,
+        payment_methods: publicPaymentMethods(listing),
+        seller_callsign: listing.seller_callsign,
+        created_at: listing.created_at,
+      })),
       page,
       pageSize: 20,
       total: total?.count ?? 0,
@@ -2119,16 +2386,48 @@ async function handleMarketRequest(
     }
     const ad = await db
       .prepare(
-        `SELECT ad.id, ad.seller_pilot_id, ad.inventory_id
+        `SELECT ad.id, ad.seller_pilot_id, ad.inventory_id, ad.payment_methods,
+          ad.payment_details, ad.payment_data_json, ad.country_code
         FROM p2p_ads ad WHERE ad.id = ? AND ad.status = 'ACTIVO'`,
       )
       .bind(listingId)
-      .first<{ id: string; seller_pilot_id: string; inventory_id: string }>();
+      .first<{
+        id: string;
+        seller_pilot_id: string;
+        inventory_id: string;
+        payment_methods: string;
+        payment_details: string;
+        payment_data_json: string | null;
+        country_code: P2PCountry;
+      }>();
     if (!ad) {
       return pilotJson(request, pilotId, { error: "El anuncio ya no está disponible." }, 409);
     }
     if (ad.seller_pilot_id === pilotId) {
       return pilotJson(request, pilotId, { error: "No puedes comprar tu propio anuncio." }, 400);
+    }
+    const country = (P2P_COUNTRIES[ad.country_code] ? ad.country_code : "CO") as P2PCountry;
+    const selectedMethod = readPaymentChoice(country, body?.["payment_method"], body?.["network"]);
+    if (!selectedMethod) {
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "El método de pago seleccionado no es válido." },
+        400,
+      );
+    }
+    const paymentData = paymentDataForAd(ad);
+    const offeredMethods = publicPaymentMethods(ad);
+    if (
+      !offeredMethods.some((method) => publicPaymentMethodKey(method) === selectedMethod.key) ||
+      typeof paymentData[selectedMethod.key] !== "string"
+    ) {
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "El vendedor no acepta ese método de pago para este anuncio." },
+        400,
+      );
     }
     const buyer = await db
       .prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?")
@@ -2148,11 +2447,12 @@ async function handleMarketRequest(
     try {
       const order = await db
         .prepare(
-          `INSERT INTO p2p_orders (id, ad_id, buyer_pilot_id, status, created_at, updated_at)
-          VALUES (?, ?, ?, 'PENDIENTE', ?, ?)
-          RETURNING id`,
+          `INSERT INTO p2p_orders
+          (id, ad_id, buyer_pilot_id, status, payment_method, created_at, updated_at)
+        VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?)
+        RETURNING id`,
         )
-        .bind(orderId, listingId, pilotId, now, now)
+        .bind(orderId, listingId, pilotId, selectedMethod.key, now, now)
         .first<{ id: string }>();
       if (!order) {
         return pilotJson(
@@ -2174,7 +2474,7 @@ async function handleMarketRequest(
 
     const orderDetails = await db
       .prepare(
-        `SELECT ad.price, ad.currency, ad.payment_methods, ad.payment_details
+        `SELECT ad.price_minor, ad.currency_code
         FROM p2p_orders order_row
         JOIN p2p_ads ad ON ad.id = order_row.ad_id
         WHERE order_row.id = ? AND order_row.buyer_pilot_id = ?
@@ -2182,20 +2482,18 @@ async function handleMarketRequest(
       )
       .bind(orderId, pilotId)
       .first<{
-        price: number;
-        currency: "COP" | "USD";
-        payment_methods: string;
-        payment_details: string;
+        price_minor: number;
+        currency_code: P2PCurrency;
       }>();
     if (!orderDetails) {
       throw new Error("La orden recién creada no contiene los datos de pago.");
     }
     return pilotJson(request, pilotId, {
       order_id: orderId,
-      payment_methods: decodeMethods(orderDetails.payment_methods),
-      payment_details: orderDetails.payment_details,
-      price: orderDetails.price,
-      price_currency: orderDetails.currency,
+      payment_method: selectedMethod.method,
+      payment_details: sanitizePaymentDetails(paymentData[selectedMethod.key]!),
+      price_minor: orderDetails.price_minor,
+      price_currency: orderDetails.currency_code,
       commission_obsidian: 1,
     });
   }
@@ -2284,12 +2582,10 @@ async function handleMarketRequest(
     const orders = await db
       .prepare(
         `SELECT order_row.id AS order_id, ad.item_id, ad.item_name, ad.item_type,
-          ad.price, ad.currency AS price_currency, order_row.status,
+          ad.price, ad.price_minor, ad.currency, ad.currency_code AS price_currency,
+          ad.country_code AS country, ad.payment_methods, ad.payment_details,
+          ad.payment_data_json, order_row.payment_method, order_row.status,
           order_row.created_at, order_row.updated_at,
-          CASE WHEN order_row.buyer_pilot_id = ? AND order_row.status = 'PENDIENTE'
-            THEN ad.payment_methods ELSE NULL END AS payment_methods,
-          CASE WHEN order_row.buyer_pilot_id = ? AND order_row.status = 'PENDIENTE'
-            THEN ad.payment_details ELSE NULL END AS payment_details,
           CASE WHEN order_row.buyer_pilot_id = ? THEN 'COMPRADOR' ELSE 'VENDEDOR' END AS role,
           CASE WHEN order_row.buyer_pilot_id = ?
             THEN COALESCE(NULLIF(seller_profile.display_name, ''), seller.callsign, 'PILOTO')
@@ -2305,27 +2601,59 @@ async function handleMarketRequest(
         ORDER BY order_row.created_at DESC
         LIMIT 100`,
       )
-      .bind(pilotId, pilotId, pilotId, pilotId, pilotId, pilotId)
+      .bind(pilotId, pilotId, pilotId, pilotId)
       .all<{
         order_id: string;
         item_id: string;
         item_name: string;
         item_type: "nave" | "objeto";
         price: number;
-        price_currency: "COP" | "USD";
+        price_minor: number | null;
+        currency: "COP" | "USD";
+        price_currency: P2PCurrency | null;
+        country: P2PCountry;
+        payment_methods: string;
+        payment_details: string;
+        payment_data_json: string | null;
+        payment_method: string | null;
         status: string;
         created_at: number;
         updated_at: number;
         role: "COMPRADOR" | "VENDEDOR";
         counterpart: string;
-        payment_methods: string | null;
-        payment_details: string | null;
       }>();
     return pilotJson(request, pilotId, {
-      orders: (orders.results ?? []).map((order) => ({
-        ...order,
-        payment_methods: order.payment_methods ? decodeMethods(order.payment_methods) : null,
-      })),
+      orders: (orders.results ?? []).map((order) => {
+        const country = (P2P_COUNTRIES[order.country] ? order.country : "CO") as P2PCountry;
+        const showPayment = order.role === "COMPRADOR" && order.status === "PENDIENTE";
+        const details = paymentDataForAd(order);
+        const selectedKey =
+          order.payment_method ?? (showPayment ? decodeMethods(order.payment_methods)[0] : null);
+        return {
+          order_id: order.order_id,
+          item_id: order.item_id,
+          item_name: order.item_name,
+          item_type: order.item_type,
+          country,
+          price_minor: order.price_minor ?? Math.round(order.price * 100),
+          price_currency: order.price_currency ?? order.currency,
+          status: order.status,
+          created_at: order.created_at,
+          updated_at: order.updated_at,
+          role: order.role,
+          counterpart: order.counterpart,
+          payment_method:
+            showPayment && selectedKey ? publicPaymentMethodFromKey(selectedKey) : null,
+          payment_details:
+            showPayment && selectedKey
+              ? sanitizePaymentDetails(
+                  order.payment_method
+                    ? (details[selectedKey] ?? "")
+                    : (details[selectedKey] ?? order.payment_details),
+                )
+              : null,
+        };
+      }),
     });
   }
 
@@ -2387,23 +2715,27 @@ async function handleMarketRequest(
   if (url.pathname === "/api/market/publish" && request.method === "POST") {
     const body = await readJson(request);
     const inventoryId = body?.["inventoryId"];
-    const price = body?.["price"];
-    const currency = body?.["currency"];
-    const methods = body?.["methods"];
-    const paymentDetails = body?.["paymentDetails"];
+    const countryValue = body?.["country"];
+    const priceMinor = body?.["priceMinor"];
+    const country =
+      typeof countryValue === "string" && Object.hasOwn(P2P_COUNTRIES, countryValue)
+        ? (countryValue as P2PCountry)
+        : null;
+    const currency = country ? P2P_COUNTRIES[country].currency : null;
+    const paymentChoices = country
+      ? validatePaymentChoices(country, body?.["paymentMethods"])
+      : null;
+    const limits = currency ? P2P_PRICE_LIMITS[currency] : null;
     if (
       typeof inventoryId !== "string" ||
       inventoryId.length > 64 ||
-      typeof price !== "number" ||
-      !Number.isFinite(price) ||
-      price <= 0 ||
-      (currency !== "COP" && currency !== "USD") ||
-      !Array.isArray(methods) ||
-      methods.length === 0 ||
-      methods.some((method) => typeof method !== "string" || !VALID_PAY_METHODS.has(method)) ||
-      typeof paymentDetails !== "string" ||
-      paymentDetails.trim().length === 0 ||
-      paymentDetails.length > 500
+      !country ||
+      typeof priceMinor !== "number" ||
+      !Number.isSafeInteger(priceMinor) ||
+      !limits ||
+      priceMinor < limits.min ||
+      priceMinor > limits.max ||
+      !paymentChoices
     ) {
       return pilotJson(request, pilotId, { error: "Los datos del anuncio no son válidos." }, 400);
     }
@@ -2495,9 +2827,11 @@ async function handleMarketRequest(
         db
           .prepare(
             `INSERT INTO p2p_ads
-          (id, seller_pilot_id, inventory_id, item_id, item_name, item_type, price,
-            currency, payment_methods, payment_details, status, fee_paid, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', 1, ?, ?)`,
+          (id, seller_pilot_id, inventory_id, item_id, item_name, item_type,
+            price, price_minor, currency, currency_code, country_code,
+            payment_methods, payment_details, payment_data_json,
+            status, fee_paid, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', 1, ?, ?)`,
           )
           .bind(
             adId,
@@ -2506,10 +2840,18 @@ async function handleMarketRequest(
             item.item_id,
             item.item_name,
             item.item_type,
-            price,
+            priceMinor,
+            priceMinor,
+            currency === "COP" || currency === "USD" ? currency : "COP",
             currency,
-            JSON.stringify(Array.from(new Set(methods))),
-            paymentDetails.trim(),
+            country,
+            JSON.stringify(
+              paymentChoices.methods.map((choice) =>
+                paymentMethodKey(choice.method, choice.network),
+              ),
+            ),
+            paymentChoices.methods[0]!.details,
+            JSON.stringify(paymentChoices.paymentData),
             now,
             now,
           ),

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { P2PMyAd } from "@/game/data/market";
+import { formatP2PPrice, P2P_COUNTRIES, type P2PMyAd } from "@/game/data/market";
 
 interface MarketListingsProps {
   ads: P2PMyAd[];
@@ -94,12 +94,20 @@ export function MarketListings({ ads, isLoading, onToggleAd, onCancelAd }: Marke
               </p>
             </div>
             <span className="font-arcade whitespace-nowrap text-[8px] tabular-nums text-[#ffd700]">
-              {ad.price.toLocaleString()} {ad.currency}
+              {formatP2PPrice(ad.priceMinor, ad.currency)}
             </span>
           </div>
           <p className="mt-3 text-[8px] uppercase tracking-widest text-white/40">
-            {ad.paymentMethods.join(" · ")}
+            {P2P_COUNTRIES[ad.country].label} ·{" "}
+            {ad.paymentMethods.map((method) => method.label).join(" · ")}
           </p>
+          <div className="mt-3 space-y-1 border-t border-white/10 pt-3">
+            {Object.entries(ad.paymentData).map(([method, details]) => (
+              <p key={method} className="break-words text-[9px] text-white/65">
+                <span className="text-cyan-100">{method}:</span> {details}
+              </p>
+            ))}
+          </div>
           <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-3">
             <AdActions
               ad={ad}

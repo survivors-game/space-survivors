@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  P2P_COUNTRIES,
   P2P_FEE_OBSIDIAN,
-  P2P_PAY_METHODS,
-  type P2PCurrency,
-  type P2PInventoryItem,
+  P2P_PRICE_LIMITS,
+  P2P_USDT_NETWORKS,
+  formatP2PPrice,
+  parseP2PPriceToMinor,
+  type P2PCountry,
   type P2PPayMethod,
+  type P2PPaymentMethodChoice,
+  type P2PInventoryItem,
   type P2PPublishInput,
+  type P2PUsdtNetwork,
 } from "@/game/data/market";
 
 interface MarketSellProps {
@@ -16,13 +22,6 @@ interface MarketSellProps {
   isLoading: boolean;
   onPublish: (input: P2PPublishInput) => Promise<void>;
 }
-
-const METHOD_LABELS: Record<P2PPayMethod, string> = {
-  NEQUI: "NEQUI",
-  DAVIPLATA: "DAVIPLATA",
-  TRANSFERENCIA: "TRANSFERENCIA BANCARIA",
-  PAYPAL: "PAYPAL",
-};
 
 export function MarketSell({
   inventory,
@@ -40,9 +39,10 @@ export function MarketSell({
   );
   const [inventoryId, setInventoryId] = useState("");
   const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState<P2PCurrency>("COP");
-  const [methods, setMethods] = useState<P2PPayMethod[]>(["NEQUI"]);
-  const [paymentDetails, setPaymentDetails] = useState("");
+  const [country, setCountry] = useState<P2PCountry>("CO");
+  const [selectedMethods, setSelectedMethods] = useState<P2PPayMethod[]>(["NEQUI"]);
+  const [network, setNetwork] = useState<P2PUsdtNetwork | "">("");
+  const [paymentDetails, setPaymentDetails] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -51,37 +51,56 @@ export function MarketSell({
     }
   }, [inventoryId, sellableInventory]);
 
-  const numericPrice = Number(price);
-  const invalidPrice = price.trim() === "" || !Number.isFinite(numericPrice) || numericPrice <= 0;
+  const config = P2P_COUNTRIES[country];
+  const currency = config.currency;
+  const limits = P2P_PRICE_LIMITS[currency];
+  const priceMinor = parseP2PPriceToMinor(price);
+  const usdtSelected = country === "OTHER" && selectedMethods.includes("USDT");
+  const activeChoices: P2PPaymentMethodChoice[] = [];
+  selectedMethods.forEach((method) => {
+    if (method === "USDT") {
+      if (network) {
+        activeChoices.push({ method, network, details: paymentDetails[`USDT:${network}`] ?? "" });
+      }
+      return;
+    }
+    activeChoices.push({ method, details: paymentDetails[method] ?? "" });
+  });
+  const validPrice = priceMinor !== null && priceMinor >= limits.min && priceMinor <= limits.max;
   const canPublish =
     !!inventoryId &&
-    !invalidPrice &&
-    methods.length > 0 &&
-    paymentDetails.trim().length > 0 &&
+    validPrice &&
+    activeChoices.length === selectedMethods.length &&
+    activeChoices.length > 0 &&
+    activeChoices.every(
+      (choice) => choice.details.trim().length > 0 && choice.details.length <= 500,
+    ) &&
     obsidian !== null &&
     obsidian >= P2P_FEE_OBSIDIAN.publish &&
     !isLoading &&
     !submitting;
 
   const toggleMethod = (method: P2PPayMethod) => {
-    setMethods((current) =>
+    setSelectedMethods((current) =>
       current.includes(method) ? current.filter((value) => value !== method) : [...current, method],
     );
   };
 
   const publish = async () => {
-    if (!canPublish) return;
+    if (!canPublish || priceMinor === null) return;
     setSubmitting(true);
     try {
       await onPublish({
         inventoryId,
-        price: numericPrice,
-        currency,
-        methods,
-        paymentDetails: paymentDetails.trim(),
+        country,
+        priceMinor,
+        paymentMethods: activeChoices.map((choice) => ({
+          ...choice,
+          details: choice.details.trim(),
+        })),
       });
       setPrice("");
-      setPaymentDetails("");
+      setPaymentDetails({});
     } catch {
       return;
     } finally {
@@ -116,67 +135,119 @@ export function MarketSell({
           </select>
         </label>
 
-        <div className="grid gap-4 sm:grid-cols-[1fr_150px]">
-          <label className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45">
-            PRECIO
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-              className="h-11 border border-white/15 bg-[#0b0d1c] px-3 text-xs text-[#ffd700] outline-none focus:border-cyan-300/70"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45">
-            MONEDA
-            <select
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value as P2PCurrency)}
-              className="h-11 border border-white/15 bg-[#0b0d1c] px-3 text-xs text-white outline-none focus:border-cyan-300/70"
-            >
-              <option value="COP">COP</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-        </div>
-        {invalidPrice && price.trim() ? (
+        <label className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45">
+          PAÍS
+          <select
+            value={country}
+            onChange={(event) => {
+              const next = event.target.value as P2PCountry;
+              setCountry(next);
+              setSelectedMethods([]);
+              setPaymentDetails({});
+              setNetwork("");
+            }}
+            className="h-11 border border-white/15 bg-[#0b0d1c] px-3 text-xs text-white outline-none focus:border-cyan-300/70"
+          >
+            {Object.entries(P2P_COUNTRIES).map(([code, value]) => (
+              <option key={code} value={code}>
+                {value.label} · {value.currency}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45">
+          PRECIO EN {currency} · INGRESA LA UNIDAD NATURAL
+          <input
+            type="text"
+            inputMode="decimal"
+            value={price}
+            onChange={(event) => setPrice(event.target.value)}
+            placeholder={currency === "COP" || currency === "VES" ? "1,500" : "10.50"}
+            className="h-11 border border-white/15 bg-[#0b0d1c] px-3 text-xs text-[#ffd700] outline-none focus:border-cyan-300/70"
+          />
+          {priceMinor !== null ? (
+            <span className="text-[8px] text-white/35">
+              Se publicará como {formatP2PPrice(priceMinor, currency)} · {priceMinor} centavos
+            </span>
+          ) : null}
+        </label>
+        {price && !validPrice ? (
           <p role="alert" className="text-[10px] uppercase tracking-wider text-[#ff9ab9]">
-            Introduce un precio mayor que cero.
+            Precio inválido. Rango: {formatP2PPrice(limits.min, currency)} a{" "}
+            {formatP2PPrice(limits.max, currency)}, con máximo dos decimales.
           </p>
         ) : null}
 
         <fieldset className="grid gap-2">
           <legend className="mb-2 text-[9px] uppercase tracking-widest text-white/45">
-            MÉTODOS DE PAGO
+            MÉTODOS DE PAGO ACEPTADOS
           </legend>
           <div className="grid gap-2 sm:grid-cols-2">
-            {P2P_PAY_METHODS.map((method) => (
+            {config.methods.map(({ id, label }) => (
               <label
-                key={method}
+                key={id}
                 className="flex min-h-10 items-center gap-2 border border-white/10 px-3 text-[9px] uppercase tracking-widest text-white/65"
               >
                 <input
                   type="checkbox"
-                  checked={methods.includes(method)}
-                  onChange={() => toggleMethod(method)}
+                  checked={selectedMethods.includes(id)}
+                  onChange={() => toggleMethod(id)}
                   className="accent-cyan-300"
                 />
-                {METHOD_LABELS[method]}
+                {label}
               </label>
             ))}
           </div>
         </fieldset>
-        <label className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45">
-          DATOS PARA EL PAGO
-          <textarea
-            maxLength={500}
-            value={paymentDetails}
-            onChange={(event) => setPaymentDetails(event.target.value)}
-            placeholder="Indica cómo completar el pago acordado."
-            className="min-h-20 resize-y border border-white/15 bg-[#0b0d1c] px-3 py-2 text-xs text-white outline-none placeholder:text-white/25 focus:border-cyan-300/70"
-          />
-        </label>
+
+        {usdtSelected ? (
+          <label className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45">
+            RED USDT
+            <select
+              value={network}
+              onChange={(event) => setNetwork(event.target.value as P2PUsdtNetwork | "")}
+              className="h-11 border border-white/15 bg-[#0b0d1c] px-3 text-xs text-white"
+            >
+              <option value="">Selecciona la red</option>
+              {P2P_USDT_NETWORKS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {activeChoices.map((choice) => {
+          const key = choice.method === "USDT" ? `USDT:${choice.network}` : choice.method;
+          const label =
+            choice.method === "USDT"
+              ? `USDT ${choice.network}`
+              : (config.methods.find((option) => option.id === choice.method)?.label ??
+                choice.method);
+          return (
+            <label
+              key={key}
+              className="flex flex-col gap-2 text-[9px] uppercase tracking-widest text-white/45"
+            >
+              DATOS DE PAGO · {label}
+              <textarea
+                maxLength={500}
+                value={paymentDetails[key] ?? ""}
+                onChange={(event) =>
+                  setPaymentDetails((current) => ({ ...current, [key]: event.target.value }))
+                }
+                placeholder="Número de cuenta, teléfono, correo o wallet."
+                className="min-h-20 resize-y border border-white/15 bg-[#0b0d1c] px-3 py-2 text-xs text-white outline-none placeholder:text-white/25 focus:border-cyan-300/70"
+              />
+              <span className="text-right text-[8px] normal-case text-white/30">
+                {(paymentDetails[key] ?? "").length}/500 caracteres · texto plano
+              </span>
+            </label>
+          );
+        })}
+
         <p className="text-[9px] uppercase tracking-widest text-white/45">
           COMISIÓN DE PUBLICACIÓN ·{" "}
           <span className="text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">

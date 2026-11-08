@@ -13,6 +13,8 @@ import type {
   P2PPilotState,
   P2PPublishInput,
   P2PItemType,
+  P2PCountry,
+  P2PPayMethod,
 } from "@/game/data/market";
 
 type MarketTab = "COMPRAR" | "VENDER" | "MIS LISTADOS" | "HISTORIAL";
@@ -41,9 +43,10 @@ export interface MarketActions {
   onLoadListings: (
     page: number,
     itemType: P2PItemType | "",
+    country: P2PCountry | "",
     sort: "newest" | "price_asc" | "price_desc",
   ) => Promise<void>;
-  onBuy: (listingId: string) => Promise<P2PPurchaseOrder>;
+  onBuy: (listingId: string, method: P2PPayMethod, network?: string) => Promise<P2PPurchaseOrder>;
   onConfirmOrder: (orderId: string) => Promise<void>;
   onCancelOrder: (orderId: string) => Promise<void>;
 }

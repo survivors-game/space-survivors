@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { P2PHistoryOrder, P2PPayMethod } from "@/game/data/market";
+import { formatP2PPrice, P2P_COUNTRIES, type P2PHistoryOrder } from "@/game/data/market";
 
 interface MarketHistoryProps {
   orders: P2PHistoryOrder[];
@@ -8,13 +8,6 @@ interface MarketHistoryProps {
   onConfirm: (orderId: string) => Promise<void>;
   onCancel: (orderId: string) => Promise<void>;
 }
-
-const METHOD_LABELS: Record<P2PPayMethod, string> = {
-  NEQUI: "NEQUI",
-  DAVIPLATA: "DAVIPLATA",
-  TRANSFERENCIA: "TRANSFERENCIA BANCARIA",
-  PAYPAL: "PAYPAL",
-};
 
 export function MarketHistory({ orders, isLoading, onConfirm, onCancel }: MarketHistoryProps) {
   const [busyOrder, setBusyOrder] = useState("");
@@ -66,12 +59,13 @@ export function MarketHistory({ orders, isLoading, onConfirm, onCancel }: Market
             <div>
               <h3 className="font-arcade text-[8px] uppercase text-white">{order.item_name}</h3>
               <p className="mt-2 text-[8px] uppercase tracking-widest text-white/45">
-                {order.role} · {order.counterpart} · {new Date(order.created_at).toLocaleString()}
+                {order.role} · {order.counterpart} · {P2P_COUNTRIES[order.country].label} ·{" "}
+                {new Date(order.created_at).toLocaleString()}
               </p>
             </div>
             <div className="text-right">
               <p className="font-arcade text-[8px] text-[#ffd700]">
-                {order.price.toLocaleString()} {order.price_currency}
+                {formatP2PPrice(order.price_minor, order.price_currency)}
               </p>
               <p className="mt-2 text-[8px] uppercase tracking-widest text-cyan-100">
                 {order.status}
@@ -80,9 +74,7 @@ export function MarketHistory({ orders, isLoading, onConfirm, onCancel }: Market
           </div>
           {order.role === "COMPRADOR" && order.status === "PENDIENTE" ? (
             <div className="space-y-2 border-t border-white/10 pt-3">
-              <p className="text-[8px] uppercase text-white/45">
-                {order.payment_methods?.map((method) => METHOD_LABELS[method]).join(" · ")}
-              </p>
+              <p className="text-[8px] uppercase text-white/45">{order.payment_method?.label}</p>
               <p className="break-words text-xs text-white">{order.payment_details}</p>
             </div>
           ) : null}

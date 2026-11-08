@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   P2P_FEE_OBSIDIAN,
+  P2P_COUNTRIES,
+  formatP2PPrice,
   type P2PPurchaseOrder,
-  type P2PPublicListing,
   type P2PPayMethod,
+  type P2PPublicListing,
+  type P2PCountry,
   type P2PItemType,
 } from "@/game/data/market";
 
@@ -15,18 +18,16 @@ interface MarketBuyProps {
   page: number;
   pages: number;
   isLoading: boolean;
-  onLoadListings: (page: number, itemType: P2PItemType | "", sort: ListingSort) => Promise<void>;
-  onBuy: (listingId: string) => Promise<P2PPurchaseOrder>;
+  onLoadListings: (
+    page: number,
+    itemType: P2PItemType | "",
+    country: P2PCountry | "",
+    sort: ListingSort,
+  ) => Promise<void>;
+  onBuy: (listingId: string, method: P2PPayMethod, network?: string) => Promise<P2PPurchaseOrder>;
   onConfirm: (orderId: string) => Promise<void>;
   onCancel: (orderId: string) => Promise<void>;
 }
-
-const METHOD_LABELS: Record<P2PPayMethod, string> = {
-  NEQUI: "NEQUI",
-  DAVIPLATA: "DAVIPLATA",
-  TRANSFERENCIA: "TRANSFERENCIA BANCARIA",
-  PAYPAL: "PAYPAL",
-};
 
 export function MarketBuy({
   listings,
@@ -39,22 +40,24 @@ export function MarketBuy({
   onCancel,
 }: MarketBuyProps) {
   const [itemType, setItemType] = useState<P2PItemType | "">("");
+  const [country, setCountry] = useState<P2PCountry | "">("");
   const [sort, setSort] = useState<ListingSort>("newest");
   const [busyListing, setBusyListing] = useState("");
   const [busyOrder, setBusyOrder] = useState(false);
   const [order, setOrder] = useState<P2PPurchaseOrder | null>(null);
+  const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   const loadPage = useCallback(
     async (targetPage: number) => {
       setError("");
       try {
-        await onLoadListings(targetPage, itemType, sort);
+        await onLoadListings(targetPage, itemType, country, sort);
       } catch (reason) {
         setError(reason instanceof Error ? reason.message : "No se pudieron cargar los anuncios.");
       }
     },
-    [itemType, onLoadListings, sort],
+    [country, itemType, onLoadListings, sort],
   );
 
   useEffect(() => {
@@ -62,10 +65,17 @@ export function MarketBuy({
   }, [loadPage]);
 
   const buy = async (listingId: string) => {
+    const listing = listings.find((candidate) => candidate.listing_id === listingId);
+    if (!listing) return;
+    const choiceKey =
+      selectedMethods[listingId] ??
+      `${listing.payment_methods[0]?.method ?? ""}:${listing.payment_methods[0]?.network ?? ""}`;
+    const [method, network] = choiceKey.split(":");
+    if (!method) return;
     setBusyListing(listingId);
     setError("");
     try {
-      setOrder(await onBuy(listingId));
+      setOrder(await onBuy(listingId, method as P2PPayMethod, network || undefined));
       await loadPage(page);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo iniciar la compra.");
@@ -117,6 +127,25 @@ export function MarketBuy({
             <option value="nave">NAVES</option>
             <option value="objeto">OBJETOS</option>
           </select>
+          <label className="sr-only" htmlFor="market-country">
+            Filtrar por país
+          </label>
+          <select
+            id="market-country"
+            value={country}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (!next || Object.hasOwn(P2P_COUNTRIES, next)) setCountry(next as P2PCountry | "");
+            }}
+            className="h-10 border border-white/15 bg-[#0b0d1c] px-3 text-[9px] uppercase text-white"
+          >
+            <option value="">TODOS LOS PAÍSES</option>
+            {Object.entries(P2P_COUNTRIES).map(([code, value]) => (
+              <option key={code} value={code}>
+                {value.label}
+              </option>
+            ))}
+          </select>
           <label className="sr-only" htmlFor="market-sort">
             Ordenar anuncios
           </label>
@@ -156,11 +185,11 @@ export function MarketBuy({
             Transfiere el pago al vendedor y confirma solo cuando lo hayas realizado.
           </p>
           <p className="text-[9px] uppercase text-cyan-100">
-            MÉTODOS · {order.payment_methods.map((method) => METHOD_LABELS[method]).join(" · ")}
+            MÉTODO · {order.payment_method.label}
           </p>
           <p className="break-words text-xs text-white">{order.payment_details}</p>
           <p className="font-arcade text-[9px] text-[#ffd700]">
-            {order.price.toLocaleString()} {order.price_currency} · COMISIÓN PAGADA:{" "}
+            {formatP2PPrice(order.price_minor, order.price_currency)} · COMISIÓN PAGADA:{" "}
             {order.commission_obsidian} OBS
           </p>
           <div className="flex flex-wrap gap-2">
@@ -202,16 +231,45 @@ export function MarketBuy({
                     {listing.item_name}
                   </h3>
                   <p className="mt-2 text-[8px] uppercase tracking-widest text-white/45">
-                    {listing.item_type} · VENDEDOR: {listing.seller_callsign}
+                    {listing.item_type} · {P2P_COUNTRIES[listing.country].label} · VENDEDOR:{" "}
+                    {listing.seller_callsign}
+                  </p>
+                  <p className="mt-2 text-[8px] uppercase tracking-widest text-white/40">
+                    ACEPTA · {listing.payment_methods.map((method) => method.label).join(" · ")}
                   </p>
                 </div>
                 <span className="font-arcade whitespace-nowrap text-[8px] text-[#ffd700]">
-                  {listing.price.toLocaleString()} {listing.price_currency}
+                  {formatP2PPrice(listing.price_minor, listing.price_currency)}
                 </span>
               </div>
+              <label className="mt-3 flex flex-col gap-2 text-[8px] uppercase text-white/45">
+                MÉTODO PARA ESTA ORDEN
+                <select
+                  value={
+                    selectedMethods[listing.listing_id] ??
+                    `${listing.payment_methods[0]?.method ?? ""}:${listing.payment_methods[0]?.network ?? ""}`
+                  }
+                  onChange={(event) =>
+                    setSelectedMethods((current) => ({
+                      ...current,
+                      [listing.listing_id]: event.target.value,
+                    }))
+                  }
+                  className="h-9 border border-white/15 bg-[#0b0d1c] px-2 text-[8px] uppercase text-white"
+                >
+                  {listing.payment_methods.map((method) => (
+                    <option
+                      key={`${method.method}:${method.network ?? ""}`}
+                      value={`${method.method}:${method.network ?? ""}`}
+                    >
+                      {method.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Button
                 type="button"
-                disabled={isLoading || !!busyListing || !!order}
+                disabled={isLoading || !!busyListing || !!order || !listing.payment_methods.length}
                 onClick={() => void buy(listing.listing_id)}
                 className="mt-4 w-full rounded-none bg-cyan-300 text-[8px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
               >
