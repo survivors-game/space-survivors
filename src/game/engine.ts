@@ -1907,13 +1907,9 @@ export class Engine {
     // 3. Recoger objetos especiales pendientes y aplicar sus efectos.
     this.pickups.forEachAlive((k) => {
       k.alive = false;
-      if (k.kind === "repair") {
-        this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.35);
-      } else {
-        // Los objetos especiales pendientes se guardan en el inventario.
-        this.inventory[k.kind] += 1;
-        this.cb.onItemCollected?.(k.kind);
-      }
+      // Todos los objetos recogidos al cerrar una horda se guardan permanentemente.
+      this.inventory[k.kind] += 1;
+      this.cb.onItemCollected?.(k.kind);
       // EMP: no queda ningún enemigo vivo que dañar en este punto.
     });
     // 4. Eliminar proyectiles enemigos.
