@@ -94,8 +94,7 @@ export interface EngineCallbacks {
   onBossHelpState?: (state: BossHelpState) => void;
   onChatEvent?: (
     event:
-      | { type: "boss_kill"; bossName: string; shipName: string }
-      | { type: "drop"; itemName: string },
+      | { type: "boss_kill"; bossName: string; shipName: string },
   ) => void;
 }
 
@@ -2796,9 +2795,6 @@ export class Engine {
       k.alive = false;
       Audio.SFX.pickup();
       this.inventory[k.kind] += 1;
-      const itemName =
-        k.kind === "repair" ? "REPARACIÓN" : k.kind === "magnet" ? "IMÁN" : "PULSO EMP";
-      this.cb.onChatEvent?.({ type: "drop", itemName });
     });
   }
 
