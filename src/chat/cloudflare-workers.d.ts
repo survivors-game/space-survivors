@@ -5,6 +5,9 @@ declare module "cloudflare:workers" {
 
   export interface DurableObjectState {
     storage: {
+      get<T = unknown>(key: string): Promise<T | undefined>;
+      put<T>(key: string, value: T): Promise<void>;
+      setAlarm(scheduledTime: number | Date): Promise<void>;
       sql: {
         exec<T = Record<string, unknown>>(
           query: string,

@@ -103,11 +103,9 @@ const stringField = (body: RequestBody, key: string): string | null => {
   return typeof value === "string" && value.length > 0 ? value : null;
 };
 
-export class WarRoom extends DurableObject {
-  private env: Env;
+export class WarRoom extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.env = env;
   }
   private async runtime(): Promise<Runtime | null> {
     return (await this.ctx.storage.get<Runtime>("runtime")) ?? null;
@@ -241,7 +239,7 @@ export class WarRoom extends DurableObject {
   private async respond(b: RequestBody): Promise<Response> {
     const warId = stringField(b, "warId");
     const actorPilotId = stringField(b, "actorPilotId");
-    const decision = b.decision;
+    const decision = b["decision"];
     if (!warId || !actorPilotId) return json({ error: "Datos de guerra inválidos." }, 400);
     const w = await this.war(warId);
     if (!w) return json({ error: "La guerra no existe." }, 404);
@@ -432,7 +430,7 @@ export class WarRoom extends DurableObject {
   private async action(b: RequestBody): Promise<Response> {
     const warId = stringField(b, "warId");
     const actorPilotId = stringField(b, "actorPilotId");
-    const action = b.action;
+    const action = b["action"];
     if (!warId || !actorPilotId) return json({ error: "Datos de guerra inválidos." }, 400);
     const r = await this.runtime();
     if (!r || r.warId !== warId || r.status !== "ACTIVE")
@@ -479,12 +477,12 @@ export class WarRoom extends DurableObject {
       }
     }
     if (now - r.hordeStartedAt >= HORDE_MS) {
+      const war = await this.war(r.warId);
+      if (!war) throw new Error("Guerra no encontrada durante el avance.");
       for (const side of ["attacker", "defender"] as Side[]) {
         if (r.participants.some((p) => p.side === side && p.alive)) {
           const allianceId =
-            side === "attacker"
-              ? (await this.war(r.warId)).attacker_alliance_id
-              : (await this.war(r.warId)).defender_alliance_id;
+            side === "attacker" ? war.attacker_alliance_id : war.defender_alliance_id;
           await this.env.DB.prepare(
             "UPDATE alliance_war_participants SET hordes_survived=hordes_survived+1 WHERE war_id=? AND alliance_id=? AND is_alive=1",
           )
