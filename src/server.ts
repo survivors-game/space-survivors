@@ -1020,6 +1020,9 @@ async function handleSocialRequest(
   if (isRedeem && !isSameOriginPost(request, url)) {
     return json({ error: "Solicitud no autorizada." }, 403);
   }
+  if (isLeaderboard && request.method === "GET" && !env?.DB) {
+    return json({ entries: [] }, 200);
+  }
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
   const db = env.DB;
@@ -1232,18 +1235,18 @@ async function handleLeaderboardRequest(
   if (url.pathname !== "/api/leaderboard" && url.pathname !== "/api/leaderboard/update") {
     return null;
   }
-  if (!env?.LEADERBOARD) {
-    return json({ error: "La clasificación no está disponible en este Worker." }, 503);
-  }
-
   if (url.pathname === "/api/leaderboard" && request.method === "GET") {
+    if (!env?.LEADERBOARD) return json({ entries: [] }, 200);
     try {
       const entries = await readLeaderboard(env.LEADERBOARD);
       return json({ entries });
     } catch (error) {
       console.error("No se pudo leer la clasificación:", error);
-      return json({ error: "No se pudo cargar la clasificación." }, 503);
+      return json({ entries: [] }, 200);
     }
+  }
+  if (!env?.LEADERBOARD) {
+    return json({ error: "La clasificación no está disponible en este Worker." }, 503);
   }
   if (url.pathname !== "/api/leaderboard/update" || request.method !== "POST") {
     return json({ error: "Método de clasificación no permitido." }, 405);
@@ -1415,6 +1418,9 @@ async function handleAuthRequest(
 ): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/auth/")) return null;
+  if (url.pathname === "/api/auth/session" && request.method === "GET" && !env?.DB) {
+    return json({ authenticated: false }, 200);
+  }
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
   const db = env.DB;
