@@ -39,7 +39,6 @@ export function AllianceWars({allianceId,role}:{allianceId:string;role:string}){
   catch(e){setError(e instanceof Error?e.message:"Operación no completada.");}
   finally{setBusy(false);}
  };
- const myParticipant=snapshot?.participants?.find(p=>p.pilot_id);
  return <section className="mt-6 border-t border-cyan-400/20 pt-5">
   <div className="flex flex-wrap items-center justify-between gap-2">
    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">GUERRAS DE ALIANZA</h3>
@@ -80,6 +79,7 @@ export function AllianceWars({allianceId,role}:{allianceId:string;role:string}){
       <p className="text-[10px] text-white/50">ENEMIGOS: {snapshot?.enemy_hp?.[side]??"—"}</p>
      </div>)}
     </div>
+    <ul className="space-y-1">{snapshot?.participants.map(p=><li key={p.pilot_id} className="flex flex-wrap justify-between gap-2 text-[9px] text-white/55"><span>{p.ship_id.toUpperCase()} · {p.side==="attacker"?active.attacker_name:active.defender_name} · {p.buff?.label??"MEJORA"}</span><span>{p.alive?"ACTIVA":"DESTRUIDA"} · {p.hp??0}/{p.max_hp??0} PS</span></li>)}</ul>
     <p className="text-[9px] text-white/45">Las naves y el resultado se calculan en el servidor. Dispara para atacar la horda rival.</p>
     <Button disabled={busy} onClick={()=>void act("/api/alliance/war/action",{war_id:active.war_id,action:"fire"},"DISPARO REGISTRADO")} className="h-9 rounded-none bg-cyan-400 text-[9px] font-bold uppercase text-[#070814]">DISPARAR</Button>
    </div>:null}
