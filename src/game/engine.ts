@@ -92,10 +92,7 @@ export interface EngineCallbacks {
     evidence: BossCombatEvidence,
   ) => void;
   onBossHelpState?: (state: BossHelpState) => void;
-  onChatEvent?: (
-    event:
-      | { type: "boss_kill"; bossName: string; shipName: string },
-  ) => void;
+  onChatEvent?: (event: { type: "boss_kill"; bossName: string; shipName: string }) => void;
 }
 
 export interface BossHelpState {
