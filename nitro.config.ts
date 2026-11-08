@@ -10,7 +10,7 @@ export default defineConfig({
       const contents = await readFile(workerEntry, "utf8");
       await writeFile(
         workerEntry,
-        `${contents}\nexport { ChatRoom, BossHelpRoom } from "./_ssr/ssr.mjs";\n`,
+        `${contents}\nexport { ChatRoom, BossHelpRoom, WarRoom } from "./_ssr/ssr.mjs";\n`,
         "utf8",
       );
     },

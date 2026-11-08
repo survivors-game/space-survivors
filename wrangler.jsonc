@@ -23,11 +23,13 @@
     "bindings": [
       { "name": "CHAT_ROOM", "class_name": "ChatRoom" },
       { "name": "BOSS_HELP", "class_name": "BossHelpRoom" },
+      { "name": "WAR_ROOM", "class_name": "WarRoom" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ChatRoom"] },
     { "tag": "v2", "new_sqlite_classes": ["BossHelpRoom"] },
+    { "tag": "v3", "new_sqlite_classes": ["WarRoom"] },
   ],
   "assets": {
     "binding": "ASSETS",
