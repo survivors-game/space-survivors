@@ -1,0 +1,213 @@
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+
+type Referral = {
+  callsign: string;
+  boss_obsidian: number;
+  created_at: number;
+};
+
+interface ReferralProfileProps {
+  onRedeemed: () => void;
+}
+
+export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
+  const [referralCode, setReferralCode] = useState("");
+  const [hasRedeemed, setHasRedeemed] = useState(false);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [draftCode, setDraftCode] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [redeeming, setRedeeming] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [codeResponse, referralsResponse] = await Promise.all([
+          fetch("/api/referral/my-code", { credentials: "same-origin", cache: "no-store" }),
+          fetch("/api/referral/mine", { credentials: "same-origin", cache: "no-store" }),
+        ]);
+        const [codePayload, referralsPayload] = (await Promise.all([
+          codeResponse.json(),
+          referralsResponse.json(),
+        ])) as [
+          { referral_code?: string; has_redeemed?: boolean; error?: string },
+          { referrals?: Referral[]; error?: string },
+        ];
+        if (
+          !codeResponse.ok ||
+          !codePayload.referral_code ||
+          !referralsResponse.ok ||
+          !Array.isArray(referralsPayload.referrals)
+        ) {
+          throw new Error(
+            codePayload.error ??
+              referralsPayload.error ??
+              "No se pudieron cargar tus invitaciones.",
+          );
+        }
+        if (active) {
+          setReferralCode(codePayload.referral_code);
+          setHasRedeemed(codePayload.has_redeemed === true);
+          setReferrals(referralsPayload.referrals);
+          setError("");
+        }
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Error de conexión.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const redeem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!draftCode.trim() || redeeming || hasRedeemed) return;
+    setRedeeming(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/referral/redeem", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ referral_code: draftCode }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error ?? "No se pudo canjear el código.");
+      }
+      setHasRedeemed(true);
+      setDraftCode("");
+      setMessage("Código canjeado: recibiste 5 OBS, 100 CR y 1 Imán.");
+      onRedeemed();
+      const referralsResponse = await fetch("/api/referral/mine", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const referralsPayload = (await referralsResponse.json()) as { referrals?: Referral[] };
+      if (referralsResponse.ok && Array.isArray(referralsPayload.referrals)) {
+        setReferrals(referralsPayload.referrals);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo canjear el código.");
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      setMessage("Código copiado.");
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo copiar el código.");
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <section className="border border-cyan-500/20 bg-[#0b0d1c]/75 p-4 sm:p-6">
+        <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+          Mi código de invitación
+        </h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <code className="border border-cyan-400/25 bg-[#070814] px-4 py-3 text-sm font-bold tracking-[0.18em] text-cyan-100">
+            {loading ? "CARGANDO..." : referralCode || "—"}
+          </code>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading || !referralCode}
+            onClick={() => void copyCode()}
+            className="h-10 rounded-none border-cyan-400/30 text-[9px] uppercase tracking-wider text-cyan-100"
+          >
+            Copiar
+          </Button>
+        </div>
+      </section>
+
+      <section className="border border-cyan-500/20 bg-[#0b0d1c]/75 p-4 sm:p-6">
+        <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+          Ingresar código de invitación
+        </h2>
+        {hasRedeemed ? (
+          <p className="text-xs text-cyan-100">Ya canjeaste un código de invitación</p>
+        ) : (
+          <form
+            className="flex flex-col gap-3 sm:flex-row"
+            onSubmit={(event) => void redeem(event)}
+          >
+            <input
+              aria-label="Código de invitación"
+              autoComplete="off"
+              className="h-11 min-w-0 flex-1 border border-cyan-400/30 bg-[#070814] px-3 text-xs uppercase text-white outline-none focus:border-cyan-300 disabled:opacity-50"
+              disabled={loading || redeeming}
+              maxLength={9}
+              onChange={(event) => setDraftCode(event.target.value.toUpperCase())}
+              placeholder="SG-XXXXXX"
+              value={draftCode}
+            />
+            <Button
+              type="submit"
+              disabled={loading || redeeming || !draftCode.trim()}
+              className="h-11 rounded-none bg-[#00f0ff] px-5 text-[9px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
+            >
+              {redeeming ? "CANJEANDO..." : "Canjear"}
+            </Button>
+          </form>
+        )}
+        {error ? <p className="mt-3 text-xs text-rose-300">{error}</p> : null}
+        {message ? <p className="mt-3 text-xs text-emerald-300">{message}</p> : null}
+      </section>
+
+      <section className="border border-cyan-500/20 bg-[#0b0d1c]/75 p-4 sm:p-6">
+        <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+          Mis Referidos
+        </h2>
+        {loading ? (
+          <p className="py-4 text-center text-xs text-slate-400">Cargando referidos...</p>
+        ) : referrals.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-400">Aún no has invitado a nadie</p>
+        ) : (
+          <div className="max-h-80 overflow-auto">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="sticky top-0 bg-[#0b0d1c] text-[9px] uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="px-2 py-2">Nombre de usuario</th>
+                  <th className="px-2 py-2 text-right">Nivel de Boss</th>
+                  <th className="px-2 py-2 text-right">Fecha de registro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {referrals.map((referral, index) => (
+                  <tr
+                    className="border-t border-slate-700/70"
+                    key={`${referral.callsign}-${index}`}
+                  >
+                    <td className="px-2 py-2 text-white">{referral.callsign}</td>
+                    <td className="px-2 py-2 text-right text-fuchsia-300">
+                      {referral.boss_obsidian.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-2 text-right text-slate-300">
+                      {new Date(referral.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

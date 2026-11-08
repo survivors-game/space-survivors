@@ -56,6 +56,7 @@ import { CombatStatsOverlay } from "@/components/game/CombatStatsOverlay";
 import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { GameChat } from "@/components/GameChat";
 import { Leaderboard } from "@/components/Leaderboard";
+import { ReferralProfile } from "@/components/ReferralProfile";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -154,6 +155,21 @@ async function submitLeaderboardUpdate(input: {
   if (!response.ok) {
     throw new Error(payload?.error ?? "No se pudo actualizar la clasificación.");
   }
+}
+
+async function refreshAccountProgress(): Promise<void> {
+  const response = await fetch("/api/auth/progress", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const payload = (await response.json().catch(() => null)) as {
+    progress?: unknown;
+    error?: string;
+  } | null;
+  if (!response.ok || !payload?.progress) {
+    throw new Error(payload?.error ?? "No se pudo actualizar el progreso del piloto.");
+  }
+  ProgressStore.set(sanitize(payload.progress));
 }
 
 function Index() {
@@ -2003,6 +2019,23 @@ function Index() {
                     CERRAR SESIÓN
                   </Button>
                 </section>
+                <ReferralProfile
+                  onRedeemed={() => {
+                    void Promise.all([
+                      refreshAccountProgress(),
+                      marketRequest<P2PPilotState>("/api/market/pilot-state"),
+                    ])
+                      .then(([, pilot]) => setMarketPilot(pilot))
+                      .catch((error: unknown) => {
+                        console.error("No se pudo actualizar el estado tras el canje:", error);
+                        setNotice(
+                          error instanceof Error
+                            ? error.message
+                            : "No se pudo actualizar el progreso del piloto.",
+                        );
+                      });
+                  }}
+                />
                 <section>
                   <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
                     ESTADÍSTICAS HISTÓRICAS

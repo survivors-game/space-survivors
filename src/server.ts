@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { SHIPS } from "./game/data/ships";
 import { BOSS_COOLDOWN_MS, BOSS_REWARDS } from "./game/data/boss-rewards";
+import { defaultProgress } from "./game/meta/progress";
 import {
   P2P_COUNTRIES,
   P2P_PRICE_LIMITS,
@@ -76,6 +77,13 @@ const BOSS_COMBAT_PARAMS: Record<
 const ADMIN_EMAIL = "emprendedora.onlinevee@gmail.com";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const LEADERBOARD_KEY = "global:top100";
+const INVITEE_OBS_REWARD = 5;
+const INVITEE_CR_REWARD = 100;
+const INVITEE_ITEM = "iman";
+const INVITEE_ITEM_QTY = 1;
+const REFERRER_OBS_REWARD = 3;
+const REFERRAL_CODE_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const DEFAULT_REFERRAL_PROGRESS = JSON.stringify(defaultProgress());
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 let schemaPromise: Promise<void> | undefined;
 let marketSchemaPromise: Promise<void> | undefined;
@@ -383,6 +391,256 @@ async function readJson(
       : null;
   } catch {
     return null;
+  }
+}
+
+function randomReferralCode(): string {
+  let suffix = "";
+  while (suffix.length < 6) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(8))) {
+      if (byte < 252) suffix += REFERRAL_CODE_ALPHABET[byte % REFERRAL_CODE_ALPHABET.length];
+      if (suffix.length === 6) break;
+    }
+  }
+  return `SG-${suffix}`;
+}
+
+async function ensurePilotReferralCode(db: D1Database, pilotId: string): Promise<string> {
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    const pilot = await db
+      .prepare("SELECT referral_code FROM pilots WHERE pilot_id = ?")
+      .bind(pilotId)
+      .first<{ referral_code: string | null }>();
+    if (!pilot) throw new Error("No se encontró el piloto para asignar su código de invitación.");
+    if (pilot.referral_code) return pilot.referral_code;
+
+    const code = randomReferralCode();
+    const result = await db
+      .prepare(
+        `UPDATE pilots SET referral_code = ?
+        WHERE pilot_id = ? AND referral_code IS NULL
+          AND NOT EXISTS (SELECT 1 FROM pilots WHERE referral_code = ?)`,
+      )
+      .bind(code, pilotId, code)
+      .run();
+    if (result.meta?.changes === 1) return code;
+  }
+  throw new Error("No se pudo generar un código de invitación único.");
+}
+
+async function handleReferralRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  const isMine = url.pathname === "/api/referral/mine";
+  const isLeaderboard = url.pathname === "/api/referral/leaderboard";
+  const isMyCode = url.pathname === "/api/referral/my-code";
+  const isRedeem = url.pathname === "/api/referral/redeem";
+  if (!url.pathname.startsWith("/api/referral/")) return null;
+  if (!isMine && !isLeaderboard && !isMyCode && !isRedeem) {
+    return json({ error: "Ruta de invitaciones no encontrada." }, 404);
+  }
+  if ((isRedeem && request.method !== "POST") || (!isRedeem && request.method !== "GET")) {
+    return json({ error: "Método de invitaciones no permitido." }, 405);
+  }
+  if (isRedeem && !isSameOriginPost(request, url)) {
+    return json({ error: "Solicitud no autorizada." }, 403);
+  }
+  if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
+
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await ensureMarketSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar el sistema de invitaciones:", error);
+    return json({ error: "No se pudo preparar el sistema de invitaciones." }, 503);
+  }
+
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con Google para usar las invitaciones." }, 401);
+
+  try {
+    if (isMyCode) {
+      const pilot = await db
+        .prepare("SELECT referral_code, referred_by FROM pilots WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ referral_code: string; referred_by: string | null }>();
+      if (!pilot) return json({ error: "No se encontró el piloto." }, 404);
+      return json({ referral_code: pilot.referral_code, has_redeemed: pilot.referred_by !== null });
+    }
+
+    if (isMine) {
+      const { results = [] } = await db
+        .prepare(
+          `SELECT COALESCE(NULLIF(profile.display_name, ''), referred.callsign, 'PILOTO') AS callsign,
+            referred.boss_obsidian, referred.created_at
+          FROM referrals referral
+          JOIN pilots referred ON referred.pilot_id = referral.referred_pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id = referred.pilot_id
+          WHERE referral.referrer_pilot_id = ?
+          ORDER BY referred.created_at DESC, referred.pilot_id`,
+        )
+        .bind(account.pilot_id)
+        .all<{ callsign: string; boss_obsidian: number; created_at: number }>();
+      return json({ referrals: results });
+    }
+
+    if (isLeaderboard) {
+      const { results = [] } = await db
+        .prepare(
+          `SELECT COALESCE(NULLIF(profile.display_name, ''), referrer.callsign, 'PILOTO') AS callsign,
+            COUNT(*) AS total_referrals
+          FROM referrals referral
+          JOIN pilots referrer ON referrer.pilot_id = referral.referrer_pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id = referrer.pilot_id
+          GROUP BY referral.referrer_pilot_id
+          HAVING COUNT(*) > 0
+          ORDER BY total_referrals DESC, callsign ASC, referral.referrer_pilot_id ASC
+          LIMIT 100`,
+        )
+        .all<{ callsign: string; total_referrals: number }>();
+      return json({ entries: results });
+    }
+
+    if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+    const body = await readJson(request, 1024);
+    const submittedCode = body?.["referral_code"];
+    if (typeof submittedCode !== "string" || submittedCode.trim().length > 32) {
+      return json({ error: "Ingresa un código de invitación válido." }, 400);
+    }
+    const referralCode = submittedCode.trim().toUpperCase();
+    if (!/^SG-[A-Z0-9]{6}$/.test(referralCode)) {
+      return json({ error: "El código debe tener el formato SG-XXXXXX." }, 400);
+    }
+
+    const invitee = await db
+      .prepare("SELECT referred_by FROM pilots WHERE pilot_id = ?")
+      .bind(account.pilot_id)
+      .first<{ referred_by: string | null }>();
+    if (!invitee) return json({ error: "No se encontró el piloto." }, 404);
+    if (invitee.referred_by !== null) {
+      return json({ error: "Ya canjeaste un código de invitación." }, 409);
+    }
+    const referrer = await db
+      .prepare("SELECT pilot_id FROM pilots WHERE referral_code = ?")
+      .bind(referralCode)
+      .first<{ pilot_id: string }>();
+    if (!referrer) return json({ error: "El código de invitación no existe." }, 404);
+    if (referrer.pilot_id === account.pilot_id) {
+      return json({ error: "No puedes canjear tu propio código de invitación." }, 400);
+    }
+
+    const now = Date.now();
+    const referralId = randomHex(16);
+    const results = await db.batch([
+      db
+        .prepare(
+          `UPDATE pilots SET referred_by = ?, updated_at = ?
+          WHERE pilot_id = ? AND referred_by IS NULL`,
+        )
+        .bind(referrer.pilot_id, now, account.pilot_id),
+      db
+        .prepare(
+          `INSERT INTO referrals (referral_id, referrer_pilot_id, referred_pilot_id, redeemed_at)
+          SELECT ?, ?, ?, ?
+          WHERE EXISTS (
+            SELECT 1 FROM pilots WHERE pilot_id = ? AND referred_by = ?
+          ) AND NOT EXISTS (
+            SELECT 1 FROM referrals WHERE referred_pilot_id = ?
+          )`,
+        )
+        .bind(
+          referralId,
+          referrer.pilot_id,
+          account.pilot_id,
+          now,
+          account.pilot_id,
+          referrer.pilot_id,
+          account.pilot_id,
+        ),
+      db
+        .prepare(
+          `UPDATE pilots SET obsidian = obsidian + ?, updated_at = ?
+          WHERE pilot_id = ? AND EXISTS (
+            SELECT 1 FROM referrals WHERE referral_id = ?
+          )`,
+        )
+        .bind(INVITEE_OBS_REWARD, now, account.pilot_id, referralId),
+      db
+        .prepare(
+          `UPDATE pilots SET obsidian = obsidian + ?, updated_at = ?
+          WHERE pilot_id = ? AND EXISTS (
+            SELECT 1 FROM referrals WHERE referral_id = ?
+          )`,
+        )
+        .bind(REFERRER_OBS_REWARD, now, referrer.pilot_id, referralId),
+      db
+        .prepare(
+          `INSERT INTO player_progress (pilot_id, progress_json, updated_at)
+          SELECT ?, json_set(?, '$.credits', ?), ?
+          WHERE EXISTS (SELECT 1 FROM referrals WHERE referral_id = ?)
+          ON CONFLICT(pilot_id) DO UPDATE SET
+            progress_json = json_set(
+              CASE WHEN json_valid(player_progress.progress_json)
+                THEN player_progress.progress_json ELSE ? END,
+              '$.credits',
+              COALESCE(CAST(json_extract(
+                CASE WHEN json_valid(player_progress.progress_json)
+                  THEN player_progress.progress_json ELSE ? END,
+                '$.credits'
+              ) AS INTEGER), 0) + ?
+            ),
+            updated_at = excluded.updated_at`,
+        )
+        .bind(
+          account.pilot_id,
+          DEFAULT_REFERRAL_PROGRESS,
+          INVITEE_CR_REWARD,
+          now,
+          referralId,
+          DEFAULT_REFERRAL_PROGRESS,
+          DEFAULT_REFERRAL_PROGRESS,
+          INVITEE_CR_REWARD,
+        ),
+      db
+        .prepare(
+          `INSERT INTO pilot_inventory
+            (id, pilot_id, item_id, item_name, item_type, quantity, is_locked,
+              grant_source, created_at, updated_at)
+          SELECT ?, ?, ?, 'IMÁN', 'objeto', ?, 0, 'starter', ?, ?
+          WHERE EXISTS (SELECT 1 FROM referrals WHERE referral_id = ?)
+          ON CONFLICT(pilot_id, item_id) DO UPDATE SET
+            quantity = pilot_inventory.quantity + excluded.quantity,
+            grant_source = 'starter', updated_at = excluded.updated_at`,
+        )
+        .bind(
+          `inv_${referralId}_${INVITEE_ITEM}`,
+          account.pilot_id,
+          INVITEE_ITEM,
+          INVITEE_ITEM_QTY,
+          now,
+          now,
+          referralId,
+        ),
+    ]);
+
+    if (results[1]?.meta?.changes !== 1) {
+      return json({ error: "Ya canjeaste un código de invitación." }, 409);
+    }
+    return json({
+      success: true,
+      rewards: {
+        invitee_obs: INVITEE_OBS_REWARD,
+        invitee_cr: INVITEE_CR_REWARD,
+        invitee_item: INVITEE_ITEM,
+        referrer_obs: REFERRER_OBS_REWARD,
+      },
+    });
+  } catch (error) {
+    console.error("No se pudo procesar la invitación:", error);
+    return json({ error: "No se pudo completar el canje. Inténtalo de nuevo." }, 503);
   }
 }
 
@@ -795,6 +1053,14 @@ async function handleAuthRequest(
       }
     }
 
+    try {
+      await ensureMarketSchema(db);
+      await ensurePilotReferralCode(db, account.pilot_id);
+    } catch (error) {
+      console.error("No se pudo asignar el código de invitación del piloto:", error);
+      return googleRedirect(`${url.origin}/?google_error=account_conflict`);
+    }
+
     const token = randomHex(32);
     const tokenHash = await sha256Hex(token);
     const expiresAt = Date.now() + SESSION_TTL_MS;
@@ -1059,10 +1325,19 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           callsign TEXT NOT NULL DEFAULT 'PILOTO',
           obsidian INTEGER NOT NULL DEFAULT 5 CHECK (obsidian >= 0),
           boss_obsidian INTEGER NOT NULL DEFAULT 0 CHECK (boss_obsidian >= 0),
+          referral_code TEXT,
+          referred_by TEXT REFERENCES pilots(pilot_id),
           welcome_claimed INTEGER NOT NULL DEFAULT 1,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL,
           selected_ship_id TEXT NOT NULL DEFAULT 'falcon'
+        )`,
+        `CREATE TABLE IF NOT EXISTS referrals (
+          referral_id TEXT PRIMARY KEY,
+          referrer_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          referred_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          redeemed_at INTEGER NOT NULL,
+          UNIQUE(referred_pilot_id)
         )`,
         `CREATE TABLE IF NOT EXISTS pilot_inventory (
           id TEXT PRIMARY KEY,
@@ -1306,6 +1581,30 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           END`,
       ];
       for (const statement of schema) await db.prepare(statement).run();
+      const pilotColumns = new Set(
+        (await db.prepare("PRAGMA table_info(pilots)").all<{ name: string }>()).results?.map(
+          (column) => column.name,
+        ) ?? [],
+      );
+      if (!pilotColumns.has("referral_code")) {
+        await db.prepare("ALTER TABLE pilots ADD COLUMN referral_code TEXT").run();
+      }
+      if (!pilotColumns.has("referred_by")) {
+        await db
+          .prepare("ALTER TABLE pilots ADD COLUMN referred_by TEXT REFERENCES pilots(pilot_id)")
+          .run();
+      }
+      await db
+        .prepare(
+          "CREATE UNIQUE INDEX IF NOT EXISTS idx_pilots_referral_code ON pilots(referral_code)",
+        )
+        .run();
+      const pilotsWithoutCodes = await db
+        .prepare("SELECT pilot_id FROM pilots WHERE referral_code IS NULL")
+        .all<{ pilot_id: string }>();
+      for (const pilot of pilotsWithoutCodes.results ?? []) {
+        await ensurePilotReferralCode(db, pilot.pilot_id);
+      }
       const adColumns = new Set(
         (await db.prepare("PRAGMA table_info(p2p_ads)").all<{ name: string }>()).results?.map(
           (column) => column.name,
@@ -3035,6 +3334,8 @@ export default {
       if (chatResponse) return chatResponse;
       const authResponse = await handleAuthRequest(request, workerEnv);
       if (authResponse) return authResponse;
+      const referralResponse = await handleReferralRequest(request, workerEnv);
+      if (referralResponse) return referralResponse;
       const leaderboardResponse = await handleLeaderboardRequest(request, workerEnv);
       if (leaderboardResponse) return leaderboardResponse;
       const bossResponse = await handleBossRequest(request, workerEnv);
@@ -3050,6 +3351,7 @@ export default {
       if (
         pathname.startsWith("/api/auth/") ||
         pathname.startsWith("/api/chat/") ||
+        pathname.startsWith("/api/referral/") ||
         pathname.startsWith("/api/leaderboard") ||
         pathname.startsWith("/api/bosses/") ||
         pathname.startsWith("/api/market/") ||

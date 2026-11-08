@@ -115,7 +115,13 @@ class AuthDatabase {
           return (account ?? null) as T | null;
         }
         if (query.includes("FROM pilots")) {
-          return { obsidian: 15, boss_obsidian: 0, callsign: "PILOTO" } as T;
+          return {
+            obsidian: 15,
+            boss_obsidian: 0,
+            callsign: "PILOTO",
+            referral_code: "SG-ABC123",
+            referred_by: null,
+          } as T;
         }
         if (query.includes("FROM player_profiles")) {
           return { display_name: "TEST PILOT" } as T;
