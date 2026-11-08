@@ -2510,6 +2510,9 @@ function Index() {
                 onObsidianChange={(obsidian) =>
                   setMarketPilot((pilot) => (pilot ? { ...pilot, obsidian } : pilot))
                 }
+                bossHelpInvite={bossHelpInvite}
+                onJoinBossHelp={() => void joinBossHelp()}
+                onDismissBossHelp={dismissBossHelpInvite}
               />
             ) : (
               <div className="mt-6 space-y-8 lg:col-start-2">
