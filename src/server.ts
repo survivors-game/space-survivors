@@ -574,7 +574,7 @@ async function handleSocialRequest(
       if (action === "ships" && request.method === "GET") {
         const ships = await db
           .prepare(
-            "SELECT item_id,item_name FROM pilot_inventory WHERE pilot_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 AND grant_source IN ('starter','boss','market') ORDER BY created_at",
+            "SELECT item_id,item_name FROM pilot_inventory WHERE pilot_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 ORDER BY created_at",
           )
           .bind(pilotId)
           .all();
@@ -1781,7 +1781,6 @@ async function handleAuthRequest(
           SELECT 1 FROM pilot_inventory
           WHERE pilot_id = ? AND item_id = ? AND item_type = 'nave'
             AND quantity > 0 AND is_locked = 0
-            AND grant_source IN ('starter', 'boss', 'market')
         )`,
       )
       .bind(selectedShip, Date.now(), account.pilot_id, account.pilot_id, selectedShip)
@@ -2052,6 +2051,7 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
               )
               THEN RAISE(ABORT, 'market ad cannot be cancelled') END;
           END`,
+        `DROP TRIGGER IF EXISTS market_buy_order_guard`,
         `CREATE TRIGGER IF NOT EXISTS market_buy_order_guard
           BEFORE INSERT ON p2p_orders
           WHEN NEW.status = 'PENDIENTE'
@@ -2065,7 +2065,10 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
                 AND ad.seller_pilot_id != NEW.buyer_pilot_id
                 AND item.pilot_id = ad.seller_pilot_id
                 AND item.quantity > 0
-                AND item.grant_source IN ('starter', 'boss', 'market')
+                AND item.item_id NOT IN ('obsidian', 'falcon')
+                AND NOT (item.item_type = 'nave' AND item.item_id = (
+                  SELECT selected_ship_id FROM pilots WHERE pilot_id = ad.seller_pilot_id
+                ))
                 AND buyer.obsidian >= 1
             ) THEN RAISE(ABORT, 'market purchase is not eligible') END;
           END`,
@@ -2276,19 +2279,19 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
         .run();
       await db
         .prepare(
-          `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
-          WHERE status IN ('ACTIVO', 'PAUSADO') AND EXISTS (
-            SELECT 1 FROM pilot_inventory
-            WHERE pilot_inventory.id = p2p_ads.inventory_id
-              AND pilot_inventory.grant_source = 'legacy'
-          )`,
-        )
-        .bind(Date.now())
-        .run();
-      await db
-        .prepare(
           `UPDATE pilot_inventory SET is_locked = 0
-          WHERE grant_source = 'legacy' AND is_locked = 1`,
+          WHERE grant_source = 'legacy' AND is_locked = 1
+            AND NOT EXISTS (
+              SELECT 1 FROM p2p_ads
+              WHERE p2p_ads.inventory_id = pilot_inventory.id
+                AND p2p_ads.status IN ('ACTIVO', 'PAUSADO')
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM p2p_orders
+              JOIN p2p_ads ON p2p_ads.id = p2p_orders.ad_id
+              WHERE p2p_ads.inventory_id = pilot_inventory.id
+                AND p2p_orders.status IN ('ABIERTA', 'PENDIENTE', 'OPEN')
+            )`,
         )
         .run();
     })().catch((error) => {
@@ -2346,8 +2349,7 @@ async function getOwnedShips(db: D1Database, pilotId: string): Promise<string[]>
   const { results = [] } = await db
     .prepare(
       `SELECT item_id FROM pilot_inventory
-      WHERE pilot_id = ? AND item_type = 'nave' AND quantity > 0 AND is_locked = 0
-        AND grant_source IN ('starter', 'boss', 'market')`,
+      WHERE pilot_id = ? AND item_type = 'nave' AND quantity > 0 AND is_locked = 0`,
     )
     .bind(pilotId)
     .all<{ item_id: string }>();
@@ -3666,7 +3668,10 @@ async function handleMarketRequest(
           LEFT JOIN player_profiles profile ON profile.pilot_id = pilot.pilot_id
           JOIN pilot_inventory item ON item.id = ad.inventory_id
           WHERE ad.status = 'ACTIVO'
-            AND item.grant_source IN ('starter', 'boss', 'market')
+            AND item.item_id NOT IN ('obsidian', 'falcon')
+                AND NOT (item.item_type = 'nave' AND item.item_id = (
+                  SELECT selected_ship_id FROM pilots WHERE pilot_id = ad.seller_pilot_id
+                ))
             AND NOT EXISTS (
               SELECT 1 FROM p2p_orders pending
               WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
@@ -3690,7 +3695,10 @@ async function handleMarketRequest(
           `SELECT COUNT(*) AS count FROM p2p_ads ad
           JOIN pilot_inventory item ON item.id = ad.inventory_id
           WHERE ad.status = 'ACTIVO'
-            AND item.grant_source IN ('starter', 'boss', 'market')
+            AND item.item_id NOT IN ('obsidian', 'falcon')
+                AND NOT (item.item_type = 'nave' AND item.item_id = (
+                  SELECT selected_ship_id FROM pilots WHERE pilot_id = ad.seller_pilot_id
+                ))
             AND NOT EXISTS (
               SELECT 1 FROM p2p_orders pending
               WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
@@ -4012,7 +4020,7 @@ async function handleMarketRequest(
       .prepare(
         `SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source
       FROM pilot_inventory WHERE pilot_id = ? AND is_locked = 0 AND quantity > 0
-        AND grant_source IN ('starter', 'boss', 'market')
+        AND item_id != 'obsidian' AND NOT (item_type = 'nave' AND item_id = 'falcon')
       ORDER BY created_at ASC`,
       )
       .bind(pilotId)
@@ -4047,7 +4055,8 @@ async function handleMarketRequest(
         `SELECT p2p_ads.* FROM p2p_ads
       JOIN pilot_inventory ON pilot_inventory.id = p2p_ads.inventory_id
       WHERE seller_pilot_id = ? AND status != 'CANCELADO'
-        AND pilot_inventory.grant_source IN ('starter', 'boss', 'market')
+        AND pilot_inventory.item_id != 'obsidian'
+        AND NOT (pilot_inventory.item_type = 'nave' AND pilot_inventory.item_id = 'falcon')
       ORDER BY created_at DESC`,
       )
       .bind(pilotId)
@@ -4092,7 +4101,7 @@ async function handleMarketRequest(
         .prepare(
           `SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source
         FROM pilot_inventory WHERE id = ? AND pilot_id = ?
-          AND grant_source IN ('starter', 'boss', 'market')`,
+          AND item_id != 'obsidian'`,
         )
         .bind(inventoryId, pilotId)
         .first<MarketInventoryRow>(),
@@ -4104,7 +4113,7 @@ async function handleMarketRequest(
       !item ||
       item.is_locked !== 0 ||
       item.quantity < 1 ||
-      !["starter", "boss", "market"].includes(item.grant_source)
+      item.item_id === "obsidian"
     ) {
       return pilotJson(
         request,
@@ -4126,8 +4135,7 @@ async function handleMarketRequest(
         .prepare(
           `SELECT COUNT(*) AS count FROM pilot_inventory
         WHERE pilot_id = ? AND item_type = 'nave' AND item_id != 'falcon'
-            AND is_locked = 0 AND quantity > 0
-            AND grant_source IN ('starter', 'boss', 'market')`,
+            AND is_locked = 0 AND quantity > 0`,
         )
         .bind(pilotId)
         .first<{ count: number }>();
@@ -4163,6 +4171,7 @@ async function handleMarketRequest(
           .prepare(
             `UPDATE pilot_inventory SET is_locked = 1, updated_at = ?
           WHERE id = ? AND pilot_id = ? AND is_locked = 0 AND quantity > 0
+            AND item_id != 'obsidian'
             AND (item_type != 'nave' OR (item_id != 'falcon'
               AND item_id != (SELECT selected_ship_id FROM pilots WHERE pilot_id = ?)))`,
           )

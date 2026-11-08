@@ -455,6 +455,75 @@ describe("P2P purchase flow", () => {
     expect(history.payload.orders[0]?.payment_details).toBe("checkout at pse.example");
   });
 
+  it("allows legacy-origin objects to be listed, published, bought, and transferred", async () => {
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO pilot_inventory
+      (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
+      VALUES ('inv-legacy-object', ?, 'legacy-object', 'LEGACY OBJECT', 'objeto', 2, 0, 'legacy', ?, ?)`,
+    ).run(SELLER_ID, now, now);
+
+    const state = await requestJson<{ inventory: { id: string }[] }>(
+      "/api/market/pilot-state", "GET", undefined, SELLER_TOKEN,
+    );
+    expect(state.payload.inventory.map((item) => item.id)).toContain("inv-legacy-object");
+    const published = await publishAd(validPublishInput({ inventoryId: "inv-legacy-object" }));
+    expect(published.response.status).toBe(200);
+    const catalog = await requestJson<{ listings: { listing_id: string; item_id: string }[] }>(
+      "/api/market/listings",
+    );
+    expect(catalog.payload.listings).toContainEqual(
+      expect.objectContaining({ listing_id: published.payload.adId, item_id: "legacy-object" }),
+    );
+    const bought = await requestJson<{ order_id: string }>(
+      "/api/market/buy", "POST",
+      { listing_id: published.payload.adId, payment_method: "NEQUI" },
+    );
+    expect(bought.response.status).toBe(200);
+    const confirmed = await requestJson<{ status: string }>(
+      "/api/market/confirm", "POST", { order_id: bought.payload.order_id },
+    );
+    expect(confirmed.response.status).toBe(200);
+    expect(
+      db.prepare("SELECT pilot_id, grant_source, quantity FROM pilot_inventory WHERE item_id = 'legacy-object'").get(),
+    ).toMatchObject({ pilot_id: BUYER_ID, grant_source: "market", quantity: 2 });
+  });
+
+  it("allows starter objects such as the magnet to be published", async () => {
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO pilot_inventory
+      (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
+      VALUES ('inv-starter-magnet', ?, 'iman', 'IMÁN', 'objeto', 5, 0, 'starter', ?, ?)`,
+    ).run(SELLER_ID, now, now);
+
+    const published = await publishAd(validPublishInput({ inventoryId: "inv-starter-magnet" }));
+    expect(published.response.status).toBe(200);
+    expect(
+      db.prepare("SELECT is_locked FROM pilot_inventory WHERE id = 'inv-starter-magnet'").get(),
+    ).toMatchObject({ is_locked: 1 });
+  });
+
+  it("allows legacy secondary ships but never the main ship or obsidian", async () => {
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO pilot_inventory
+      (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
+      VALUES
+      ('inv-legacy-ship', ?, 'raptor', 'RAPTOR', 'nave', 1, 0, 'legacy', ?, ?),
+      ('inv-main-ship', ?, 'falcon', 'FALCON', 'nave', 1, 0, 'starter', ?, ?),
+      ('inv-obsidian-item', ?, 'obsidian', 'OBSIDIAN', 'objeto', 10, 0, 'legacy', ?, ?)`,
+    ).run(SELLER_ID, now, now, SELLER_ID, now, now, SELLER_ID, now, now);
+    const secondaryShip = await publishAd(validPublishInput({ inventoryId: "inv-legacy-ship" }));
+    expect(secondaryShip.response.status).toBe(200);
+    const mainShip = await publishAd(validPublishInput({ inventoryId: "inv-main-ship" }));
+    expect(mainShip.response.status).toBe(400);
+    expect(mainShip.payload.error).toContain("nave básica");
+    const obsidian = await publishAd(validPublishInput({ inventoryId: "inv-obsidian-item" }));
+    expect(obsidian.response.status).toBe(400);
+    expect(obsidian.payload.error).toContain("no está disponible");
+  });
+
   it("requires a supported network for USDT payment methods", async () => {
     const missingNetwork = await publishAd(
       validPublishInput({

@@ -313,7 +313,7 @@ export class WarRoom extends DurableObject<Env> {
     if (!member) return json({ error: "No perteneces a ninguna alianza de esta guerra." }, 403);
     if (!SHIPS.some((s) => s.id === shipId)) return json({ error: "Nave no válida." }, 400);
     const item = await this.env.DB.prepare(
-      "SELECT id FROM pilot_inventory WHERE pilot_id=? AND item_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 AND grant_source IN ('starter','boss','market')",
+      "SELECT id FROM pilot_inventory WHERE pilot_id=? AND item_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 ",
     )
       .bind(actorPilotId, shipId)
       .first();
