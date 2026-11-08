@@ -520,66 +520,129 @@ async function handleSocialRequest(
     const pilotId = account.pilot_id;
 
     if (url.pathname === "/api/alliance/leaderboard" && request.method === "GET") {
-      const rows = await db.prepare(`SELECT a.alliance_id,a.name,a.tag,a.level,a.war_wins,a.war_losses,
+      const rows = await db
+        .prepare(
+          `SELECT a.alliance_id,a.name,a.tag,a.level,a.war_wins,a.war_losses,
         (SELECT COUNT(*) FROM alliance_members m WHERE m.alliance_id=a.alliance_id) AS member_count
-        FROM alliances a WHERE a.war_wins+a.war_losses>0 ORDER BY a.war_wins DESC,a.level DESC,a.name ASC LIMIT 100`).all();
+        FROM alliances a WHERE a.war_wins+a.war_losses>0 ORDER BY a.war_wins DESC,a.level DESC,a.name ASC LIMIT 100`,
+        )
+        .all();
       return json({ alliances: rows.results ?? [] });
     }
     if (url.pathname === "/api/alliance/war/opponents" && request.method === "GET") {
-      const own = await db.prepare("SELECT a.alliance_id,a.level FROM alliance_members m JOIN alliances a ON a.alliance_id=m.alliance_id WHERE m.pilot_id=?").bind(pilotId).first<{alliance_id:string;level:number}>();
-      if (!own) return json({error:"No perteneces a una alianza."},404);
-      const opponents = await db.prepare(`SELECT a.alliance_id,a.name,a.tag,a.level,
+      const own = await db
+        .prepare(
+          "SELECT a.alliance_id,a.level FROM alliance_members m JOIN alliances a ON a.alliance_id=m.alliance_id WHERE m.pilot_id=?",
+        )
+        .bind(pilotId)
+        .first<{ alliance_id: string; level: number }>();
+      if (!own) return json({ error: "No perteneces a una alianza." }, 404);
+      const opponents = await db
+        .prepare(
+          `SELECT a.alliance_id,a.name,a.tag,a.level,
         (SELECT COUNT(*) FROM alliance_members m WHERE m.alliance_id=a.alliance_id) AS member_count
         FROM alliances a WHERE a.alliance_id!=? AND a.level BETWEEN ? AND ?
         AND (SELECT COUNT(*) FROM alliance_members m WHERE m.alliance_id=a.alliance_id)>=3
         AND NOT EXISTS (SELECT 1 FROM alliance_wars w WHERE w.status IN ('DECLARED','PREPARING','ACTIVE')
           AND (w.attacker_alliance_id=a.alliance_id OR w.defender_alliance_id=a.alliance_id))
-        ORDER BY a.level,a.name LIMIT 100`).bind(own.alliance_id,own.level,own.level+1).all();
-      return json({opponents:opponents.results??[]});
+        ORDER BY a.level,a.name LIMIT 100`,
+        )
+        .bind(own.alliance_id, own.level, own.level + 1)
+        .all();
+      return json({ opponents: opponents.results ?? [] });
     }
     if (url.pathname === "/api/alliance/war/history" && request.method === "GET") {
-      const own = await db.prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id=?").bind(pilotId).first<{alliance_id:string}>();
-      if (!own) return json({wars:[]});
-      const rows = await db.prepare(`SELECT w.*,aa.name AS attacker_name,aa.tag AS attacker_tag,
+      const own = await db
+        .prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id=?")
+        .bind(pilotId)
+        .first<{ alliance_id: string }>();
+      if (!own) return json({ wars: [] });
+      const rows = await db
+        .prepare(
+          `SELECT w.*,aa.name AS attacker_name,aa.tag AS attacker_tag,
         da.name AS defender_name,da.tag AS defender_tag FROM alliance_wars w
         JOIN alliances aa ON aa.alliance_id=w.attacker_alliance_id JOIN alliances da ON da.alliance_id=w.defender_alliance_id
-        WHERE w.attacker_alliance_id=? OR w.defender_alliance_id=? ORDER BY w.created_at DESC LIMIT 50`).bind(own.alliance_id,own.alliance_id).all();
-      return json({wars:rows.results??[]});
+        WHERE w.attacker_alliance_id=? OR w.defender_alliance_id=? ORDER BY w.created_at DESC LIMIT 50`,
+        )
+        .bind(own.alliance_id, own.alliance_id)
+        .all();
+      return json({ wars: rows.results ?? [] });
     }
     if (url.pathname.startsWith("/api/alliance/war/")) {
-      if (!env.WAR_ROOM) return json({error:"El servicio de guerras no está disponible."},503);
+      if (!env.WAR_ROOM) return json({ error: "El servicio de guerras no está disponible." }, 503);
       const action = url.pathname.slice("/api/alliance/war/".length);
       if (action === "ships" && request.method === "GET") {
-        const ships = await db.prepare("SELECT item_id,item_name FROM pilot_inventory WHERE pilot_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 AND grant_source IN ('starter','boss','market') ORDER BY created_at").bind(pilotId).all();
-        return json({ships:ships.results??[]});
+        const ships = await db
+          .prepare(
+            "SELECT item_id,item_name FROM pilot_inventory WHERE pilot_id=? AND item_type='nave' AND is_locked=0 AND quantity>0 AND grant_source IN ('starter','boss','market') ORDER BY created_at",
+          )
+          .bind(pilotId)
+          .all();
+        return json({ ships: ships.results ?? [] });
       }
       if (action.startsWith("status/") && request.method === "GET") {
         const warId = action.slice("status/".length);
-        if (!/^war_[a-f0-9]{24}$/.test(warId)) return json({error:"Identificador de guerra inválido."},400);
+        if (!/^war_[a-f0-9]{24}$/.test(warId))
+          return json({ error: "Identificador de guerra inválido." }, 400);
         const room = env.WAR_ROOM.get(env.WAR_ROOM.idFromName(warId));
-        const response = await room.fetch(new Request(`https://war.internal/status?war_id=${encodeURIComponent(warId)}&pilot_id=${encodeURIComponent(pilotId)}`));
-        return json(await response.json(),response.status);
+        const response = await room.fetch(
+          new Request(
+            `https://war.internal/status?war_id=${encodeURIComponent(warId)}&pilot_id=${encodeURIComponent(pilotId)}`,
+          ),
+        );
+        return json(await response.json(), response.status);
       }
-      if (request.method !== "POST") return json({error:"Método no permitido."},405);
+      if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
       const body = await readJson(request);
-      if (!body) return json({error:"Datos de guerra inválidos."},400);
+      if (!body) return json({ error: "Datos de guerra inválidos." }, 400);
       if (action === "declare") {
         const defenderAllianceId = body["defender_alliance_id"];
-        if (typeof defenderAllianceId !== "string" || defenderAllianceId.length > 64) return json({error:"Selecciona una alianza rival."},400);
-        const own = await db.prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id=?").bind(pilotId).first<{alliance_id:string}>();
-        if (!own) return json({error:"No perteneces a una alianza."},404);
+        if (typeof defenderAllianceId !== "string" || defenderAllianceId.length > 64)
+          return json({ error: "Selecciona una alianza rival." }, 400);
+        const own = await db
+          .prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id=?")
+          .bind(pilotId)
+          .first<{ alliance_id: string }>();
+        if (!own) return json({ error: "No perteneces a una alianza." }, 404);
         const warId = `war_${randomHex(12)}`;
         const room = env.WAR_ROOM.get(env.WAR_ROOM.idFromName(warId));
-        const response = await room.fetch(new Request("https://war.internal/declare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({warId,actorPilotId:pilotId,attackerAllianceId:own.alliance_id,defenderAllianceId})}));
-        return json(await response.json(),response.status);
+        const response = await room.fetch(
+          new Request("https://war.internal/declare", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              warId,
+              actorPilotId: pilotId,
+              attackerAllianceId: own.alliance_id,
+              defenderAllianceId,
+            }),
+          }),
+        );
+        return json(await response.json(), response.status);
       }
       const warId = body["war_id"];
-      if (typeof warId !== "string" || !/^war_[a-f0-9]{24}$/.test(warId)) return json({error:"Identificador de guerra inválido."},400);
-      const internalPath = action === "respond" ? "/respond" : action === "select-ship" ? "/select-ship" : action === "start" ? "/start" : action === "action" ? "/action" : "";
-      if (!internalPath) return json({error:"Ruta de guerra no encontrada."},404);
+      if (typeof warId !== "string" || !/^war_[a-f0-9]{24}$/.test(warId))
+        return json({ error: "Identificador de guerra inválido." }, 400);
+      const internalPath =
+        action === "respond"
+          ? "/respond"
+          : action === "select-ship"
+            ? "/select-ship"
+            : action === "start"
+              ? "/start"
+              : action === "action"
+                ? "/action"
+                : "";
+      if (!internalPath) return json({ error: "Ruta de guerra no encontrada." }, 404);
       const room = env.WAR_ROOM.get(env.WAR_ROOM.idFromName(warId));
-      const response = await room.fetch(new Request(`https://war.internal${internalPath}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...body,warId,actorPilotId:pilotId})}));
-      return json(await response.json(),response.status);
+      const response = await room.fetch(
+        new Request(`https://war.internal${internalPath}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...body, warId, actorPilotId: pilotId }),
+        }),
+      );
+      return json(await response.json(), response.status);
     }
 
     if (url.pathname === "/api/alliance/mine" && request.method === "GET") {
