@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Minus, Plus, Send, ZoomIn, ZoomOut } from "lucide-react";
-import type { ChatMessage } from "@/chat/chat-room";
+import type { ChatMessage } from "@/chat/types";
 
 const MAX_MESSAGE_LENGTH = 500;
 const MIN_FONT_SIZE = 8;
