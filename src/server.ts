@@ -3516,7 +3516,7 @@ async function handleMarketRequest(
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  const isMarketPath = url.pathname.startsWith("/api/market/");
+  const isMarketPath = url.pathname.startsWith("/api/market/") || url.pathname.startsWith("/api/inventory/");
   const isAdminPath = url.pathname === "/api/admin/credit-obsidian";
   if (!isMarketPath && !isAdminPath) return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
@@ -3632,6 +3632,42 @@ async function handleMarketRequest(
     return pilotJson(request, pilotId, { error: "No se pudo inicializar el piloto." }, 503);
   }
 
+  if (url.pathname === "/api/inventory/state" && request.method === "GET") {
+    const inventory = await db
+      .prepare("SELECT id, item_id, item_name, item_type, quantity, is_locked FROM pilot_inventory WHERE pilot_id = ? AND quantity > 0 ORDER BY item_type ASC, created_at ASC")
+      .bind(pilotId)
+      .all<{ id: string; item_id: string; item_name: string; item_type: "nave" | "objeto"; quantity: number; is_locked: number }>();
+    return pilotJson(request, pilotId, { inventory: (inventory.results ?? []).map((item) => ({
+      id: item.id, itemId: item.item_id, itemName: item.item_name, itemType: item.item_type,
+      quantity: item.quantity, isLocked: item.is_locked === 1,
+    })) });
+  }
+
+  if (url.pathname === "/api/inventory/collect" && request.method === "POST") {
+    const body = await readJson(request, 1024);
+    const kind = body?.["kind"];
+    const definitions = { repair: { itemId: "repair", itemName: "REPARACIÓN" }, magnet: { itemId: "iman", itemName: "IMÁN" }, emp: { itemId: "emp", itemName: "EMP" } } as const;
+    if (typeof kind !== "string" || !Object.hasOwn(definitions, kind)) return pilotJson(request, pilotId, { error: "Objeto de combate no válido." }, 400);
+    const item = definitions[kind as keyof typeof definitions];
+    const now = Date.now();
+    const saved = await db.prepare("INSERT INTO pilot_inventory (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at) VALUES (?, ?, ?, ?, 'objeto', 1, 0, 'legacy', ?, ?) ON CONFLICT(pilot_id, item_id) DO UPDATE SET quantity = pilot_inventory.quantity + 1, updated_at = excluded.updated_at WHERE pilot_inventory.is_locked = 0")
+      .bind(`inv_${pilotId}_${item.itemId}`, pilotId, item.itemId, item.itemName, now, now).run();
+    if (saved.meta?.changes !== 1) return pilotJson(request, pilotId, { error: "Este objeto está reservado en el mercado y no se pudo guardar." }, 409);
+    const row = await db.prepare("SELECT quantity FROM pilot_inventory WHERE pilot_id = ? AND item_id = ? AND is_locked = 0").bind(pilotId, item.itemId).first<{ quantity: number }>();
+    return pilotJson(request, pilotId, { success: true, itemId: item.itemId, quantity: row?.quantity ?? 0 });
+  }
+
+  if (url.pathname === "/api/inventory/use" && request.method === "POST") {
+    const body = await readJson(request, 1024);
+    const kind = body?.["kind"];
+    const itemIds: Record<string, string> = { repair: "repair", magnet: "iman", emp: "emp" };
+    if (typeof kind !== "string" || !Object.hasOwn(itemIds, kind)) return pilotJson(request, pilotId, { error: "Objeto de combate no válido." }, 400);
+    const used = await db.prepare("UPDATE pilot_inventory SET quantity = quantity - 1, updated_at = ? WHERE pilot_id = ? AND item_id = ? AND item_type = 'objeto' AND is_locked = 0 AND quantity > 0")
+      .bind(Date.now(), pilotId, itemIds[kind]!).run();
+    if (used.meta?.changes !== 1) return pilotJson(request, pilotId, { error: "No tienes unidades disponibles de ese objeto." }, 409);
+    const row = await db.prepare("SELECT quantity FROM pilot_inventory WHERE pilot_id = ? AND item_id = ?").bind(pilotId, itemIds[kind]!).first<{ quantity: number }>();
+    return pilotJson(request, pilotId, { success: true, quantity: row?.quantity ?? 0 });
+  }
   if (url.pathname === "/api/market/listings" && request.method === "GET") {
     const rawPage = Number(url.searchParams.get("page") ?? "1");
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 100_000) : 1;
@@ -4019,8 +4055,8 @@ async function handleMarketRequest(
     const inventory = await db
       .prepare(
         `SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source
-      FROM pilot_inventory WHERE pilot_id = ? AND is_locked = 0 AND quantity > 0
-        AND item_id != 'obsidian' AND NOT (item_type = 'nave' AND item_id = 'falcon')
+      FROM pilot_inventory WHERE pilot_id = ? AND quantity > 0
+        AND item_id != 'obsidian'
       ORDER BY created_at ASC`,
       )
       .bind(pilotId)
