@@ -93,6 +93,7 @@ export interface EngineCallbacks {
   ) => void;
   onBossHelpState?: (state: BossHelpState) => void;
   onChatEvent?: (event: { type: "boss_kill"; bossName: string; shipName: string }) => void;
+  onItemCollected?: (kind: PickupKind) => void;
 }
 
 export interface BossHelpState {
@@ -117,6 +118,7 @@ export interface EngineOptions {
   durationSec: number;
   isEndless?: boolean;
   bossCooldowns?: Record<string, number>;
+  inventory?: Partial<Record<PickupKind, number>>;
   callbacks: EngineCallbacks;
 }
 
@@ -233,6 +235,7 @@ export class Engine {
     this.stage = o.stage;
     this.hangar = o.hangar;
     this.cb = o.callbacks;
+    this.inventory = { repair: o.inventory?.repair ?? 0, magnet: o.inventory?.magnet ?? 0, emp: o.inventory?.emp ?? 0 };
     this.bossCooldowns = { ...o.bossCooldowns };
     this.isEndless = Boolean(o.isEndless);
     this.duration = this.isEndless ? Infinity : o.durationSec;
@@ -1909,6 +1912,7 @@ export class Engine {
       } else {
         // Los objetos especiales pendientes se guardan en el inventario.
         this.inventory[k.kind] += 1;
+        this.cb.onItemCollected?.(k.kind);
       }
       // EMP: no queda ningún enemigo vivo que dañar en este punto.
     });
@@ -2792,13 +2796,14 @@ export class Engine {
       k.alive = false;
       Audio.SFX.pickup();
       this.inventory[k.kind] += 1;
+      this.cb.onItemCollected?.(k.kind);
     });
   }
 
   /** Activa manualmente un objeto del inventario. Devuelve false si no hay unidades. */
-  useItem(kind: PickupKind): boolean {
-    if (this.inventory[kind] <= 0 || !this.player) return false;
-    this.inventory[kind] -= 1;
+  useItem(kind: PickupKind, inventoryAlreadyConsumed = false): boolean {
+    if (!this.player || (!inventoryAlreadyConsumed && this.inventory[kind] <= 0)) return false;
+    if (!inventoryAlreadyConsumed) this.inventory[kind] -= 1;
     const p = this.player;
     Audio.SFX.power();
     if (kind === "repair") {
@@ -2811,6 +2816,7 @@ export class Engine {
       // El pulso también recupera todos los objetos especiales que siguen en el campo.
       this.pickups.forEachAlive((k) => {
         this.inventory[k.kind] += 1;
+        this.cb.onItemCollected?.(k.kind);
         k.alive = false;
       });
       this.banner("PULSO MAGNÉTICO", "Energía y objetos recuperados", "good");
