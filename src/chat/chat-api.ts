@@ -1,4 +1,4 @@
-import type { ChatMessage } from "./chat-room";
+import type { ChatMessage } from "./types";
 
 interface D1Statement {
   bind(...values: (string | number)[]): D1Statement;
