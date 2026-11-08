@@ -57,6 +57,7 @@ import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { GameChat } from "@/components/GameChat";
 import { Leaderboard } from "@/components/Leaderboard";
 import { ReferralProfile } from "@/components/ReferralProfile";
+import { AllianceProfile } from "@/components/AllianceProfile";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -1925,6 +1926,13 @@ function Index() {
                   }}
                 />
               </div>
+            ) : hangarTab === "ALLIANCE" ? (
+              <AllianceProfile
+                obsidian={marketPilot?.obsidian ?? null}
+                onObsidianChange={(obsidian) =>
+                  setMarketPilot((pilot) => (pilot ? { ...pilot, obsidian } : pilot))
+                }
+              />
             ) : (
               <div className="mt-6 space-y-8 lg:col-start-2">
                 <section className="border border-cyan-500/20 bg-[#0b0d1c]/75 p-4 sm:p-6">

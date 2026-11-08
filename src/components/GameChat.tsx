@@ -7,6 +7,13 @@ const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 18;
 const CHAT_FONT_SIZE_KEY = "space-survivors-chat-font-size";
 
+type ChatAllianceInvite = {
+  invite_id: string;
+  alliance_name: string;
+  tag: string;
+  inviter_name: string;
+};
+
 export function GameChat() {
   const [language, setLanguage] = useState<"en" | "es">("es");
   const [fontSize, setFontSize] = useState(() => {
@@ -25,10 +32,62 @@ export function GameChat() {
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<{
+    pilotId: string;
+    callsign: string;
+  } | null>(null);
+  const [myPilotId, setMyPilotId] = useState("");
+  const [canInvite, setCanInvite] = useState(false);
+  const [chatNotice, setChatNotice] = useState("");
+  const [allianceInvites, setAllianceInvites] = useState<ChatAllianceInvite[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const retryDelayRef = useRef(1000);
   const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const refreshAlliance = async () => {
+      try {
+        const response = await fetch("/api/alliance/mine", { cache: "no-store" });
+        const payload = (await response.json()) as {
+          pilot_id?: string;
+          alliance?: { role?: string } | null;
+          invites?: ChatAllianceInvite[];
+        };
+        if (!response.ok) throw new Error("No se pudo consultar la alianza para el chat.");
+        if (!active) return;
+        setMyPilotId(payload.pilot_id ?? "");
+        setCanInvite(payload.alliance?.role === "lider" || payload.alliance?.role === "teniente");
+        setAllianceInvites(payload.invites ?? []);
+      } catch (error) {
+        if (active) console.error("No se pudo consultar el permiso de invitación del chat:", error);
+      }
+    };
+    void refreshAlliance();
+    const timer = window.setInterval(() => void refreshAlliance(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const respondToInvite = async (inviteId: string, action: "accept" | "reject") => {
+    try {
+      const response = await fetch(`/api/alliance/${action}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ invite_id: inviteId }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "No se pudo responder la invitación.");
+      setAllianceInvites((current) => current.filter((invite) => invite.invite_id !== inviteId));
+      setChatNotice(action === "accept" ? "INVITACIÓN ACEPTADA" : "INVITACIÓN RECHAZADA");
+    } catch (error) {
+      setChatNotice(error instanceof Error ? error.message : "No se pudo responder la invitación.");
+    }
+  };
 
   useEffect(() => {
     try {
@@ -64,6 +123,7 @@ export function GameChat() {
           const message = JSON.parse(event.data) as ChatMessage;
           if (
             typeof message.id !== "number" ||
+            typeof message.pilotId !== "string" ||
             typeof message.callsign !== "string" ||
             typeof message.text !== "string" ||
             message.language !== language ||
@@ -201,6 +261,34 @@ export function GameChat() {
               </button>
             ))}
           </nav>
+          {allianceInvites.map((invite) => (
+            <div
+              className="shrink-0 border-b border-fuchsia-400/30 bg-fuchsia-400/[0.06] px-3 py-2"
+              key={invite.invite_id}
+            >
+              <p className="text-[10px]">
+                Invitación: <b>{invite.alliance_name}</b>{" "}
+                <span className="font-bold text-fuchsia-300">[{invite.tag}]</span> ·{" "}
+                {invite.inviter_name}
+              </p>
+              <div className="mt-1 flex gap-2">
+                <button
+                  className="px-2 py-1 text-[9px] font-bold uppercase text-emerald-300 hover:bg-slate-800"
+                  onClick={() => void respondToInvite(invite.invite_id, "accept")}
+                  type="button"
+                >
+                  Aceptar
+                </button>
+                <button
+                  className="px-2 py-1 text-[9px] font-bold uppercase text-rose-300 hover:bg-slate-800"
+                  onClick={() => void respondToInvite(invite.invite_id, "reject")}
+                  type="button"
+                >
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          ))}
           <div
             aria-live="polite"
             className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2"
@@ -209,14 +297,72 @@ export function GameChat() {
           >
             {messages.map((message) => (
               <p className="text-white" key={`${message.id}-${message.type}`}>
-                <button
-                  className="mr-1 font-semibold text-blue-400 hover:text-blue-300 hover:underline"
-                  onClick={() => addMention(message.callsign)}
-                  title={`Mencionar a ${message.callsign}`}
-                  type="button"
-                >
-                  {message.callsign}
-                </button>
+                <span className="relative mr-1 inline-block">
+                  <button
+                    className="font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                    onClick={() =>
+                      setSelectedPlayer((current) =>
+                        current?.pilotId === message.pilotId
+                          ? null
+                          : { pilotId: message.pilotId, callsign: message.callsign },
+                      )
+                    }
+                    title={`Opciones de ${message.callsign}`}
+                    type="button"
+                  >
+                    {message.callsign}
+                  </button>
+                  {message.allianceTag ? (
+                    <span className="ml-1 font-bold text-fuchsia-300">[{message.allianceTag}]</span>
+                  ) : null}
+                  {selectedPlayer?.pilotId === message.pilotId ? (
+                    <span className="absolute left-0 top-full z-20 mt-1 flex min-w-36 flex-col border border-slate-600 bg-slate-800 p-1 shadow-xl">
+                      {canInvite && message.pilotId !== myPilotId ? (
+                        <button
+                          className="px-2 py-1 text-left text-[10px] hover:bg-slate-700"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch("/api/alliance/invite", {
+                                method: "POST",
+                                credentials: "same-origin",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({ pilot_id: message.pilotId }),
+                              });
+                              const payload = (await response.json().catch(() => null)) as {
+                                error?: string;
+                              } | null;
+                              if (!response.ok) {
+                                throw new Error(
+                                  payload?.error ?? "No se pudo enviar la invitación.",
+                                );
+                              }
+                              setChatNotice(`INVITACIÓN ENVIADA A ${message.callsign}`);
+                            } catch (error) {
+                              setChatNotice(
+                                error instanceof Error ? error.message : "No se pudo invitar.",
+                              );
+                            } finally {
+                              setSelectedPlayer(null);
+                            }
+                          }}
+                          type="button"
+                        >
+                          Invitar a alianza
+                        </button>
+                      ) : null}
+                      <button
+                        className="px-2 py-1 text-left text-[10px] hover:bg-slate-700"
+                        onClick={() => {
+                          addMention(message.callsign);
+                          setSelectedPlayer(null);
+                        }}
+                        type="button"
+                      >
+                        Etiquetar (@usuario)
+                      </button>
+                    </span>
+                  ) : null}
+                </span>
                 <MessageText
                   text={
                     message.type !== "chat" && message.text.startsWith(`${message.callsign} `)
@@ -227,6 +373,14 @@ export function GameChat() {
               </p>
             ))}
           </div>
+          {chatNotice ? (
+            <p
+              role="status"
+              className="shrink-0 border-t border-slate-700 px-3 py-1 text-[9px] text-cyan-200"
+            >
+              {chatNotice}
+            </p>
+          ) : null}
           <form
             className="relative flex shrink-0 gap-2 border-t border-slate-700 p-2"
             onSubmit={(event) => {

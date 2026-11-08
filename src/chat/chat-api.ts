@@ -27,6 +27,7 @@ interface PlayerAccount {
   google_sub: string;
   pilot_id: string;
   display_name: string;
+  alliance_tag: string | null;
 }
 
 const SESSION_COOKIE = "__Host-ss_session";
@@ -67,6 +68,7 @@ export async function handleChatRequest(
     socketUrl.search = new URLSearchParams({
       pilotId: player.pilot_id,
       callsign: player.display_name,
+      allianceTag: player.alliance_tag ?? "",
       language,
     }).toString();
     return room.fetch(new Request(socketUrl, request));
@@ -117,6 +119,7 @@ export async function handleChatRequest(
           body: JSON.stringify({
             pilotId: player.pilot_id,
             callsign: player.display_name,
+            allianceTag: player.alliance_tag,
             type,
             language,
             text: `${player.display_name} ${language === "en" ? englishText : spanishText}`,
@@ -153,18 +156,26 @@ async function getChatPlayer(request: Request, db: ChatDatabase): Promise<Player
 
   const account = await db
     .prepare(
-      `SELECT a.google_sub, a.pilot_id, p.display_name
+      `SELECT a.google_sub, a.pilot_id, p.display_name, alliance.tag AS alliance_tag
        FROM player_accounts a
        LEFT JOIN player_profiles p ON p.pilot_id = a.pilot_id
+       LEFT JOIN alliance_members member ON member.pilot_id = a.pilot_id
+       LEFT JOIN alliances alliance ON alliance.alliance_id = member.alliance_id
        WHERE a.google_sub = ?`,
     )
     .bind(session.wallet_address.slice("google:".length))
-    .first<{ google_sub: string; pilot_id: string; display_name: string | null }>();
+    .first<{
+      google_sub: string;
+      pilot_id: string;
+      display_name: string | null;
+      alliance_tag: string | null;
+    }>();
   if (!account || !PILOT_ID_PATTERN.test(account.pilot_id)) return null;
   return {
     google_sub: account.google_sub,
     pilot_id: account.pilot_id,
     display_name: account.display_name?.trim() || "PILOTO",
+    alliance_tag: account.alliance_tag,
   };
 }
 

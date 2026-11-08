@@ -24,6 +24,7 @@ import {
   type BossCombatEvent,
 } from "./game/meta/boss-combat-proof";
 import { handleChatRequest, type ChatWorkerEnv } from "./chat/chat-api";
+import { hasVip } from "./game/meta/vip";
 
 type D1Result<T = Record<string, unknown>> = {
   meta?: { changes?: number };
@@ -428,11 +429,14 @@ async function ensurePilotReferralCode(db: D1Database, pilotId: string): Promise
   throw new Error("No se pudo generar un código de invitación único.");
 }
 
-async function handleReferralRequest(
+async function handleSocialRequest(
   request: Request,
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
+  if (url.pathname.startsWith("/api/alliance/") || url.pathname === "/api/admin/set-vip") {
+    return handleAllianceRequest(request, env);
+  }
   const isMine = url.pathname === "/api/referral/mine";
   const isLeaderboard = url.pathname === "/api/referral/leaderboard";
   const isMyCode = url.pathname === "/api/referral/my-code";
@@ -440,6 +444,435 @@ async function handleReferralRequest(
   if (!url.pathname.startsWith("/api/referral/")) return null;
   if (!isMine && !isLeaderboard && !isMyCode && !isRedeem) {
     return json({ error: "Ruta de invitaciones no encontrada." }, 404);
+  }
+
+  async function handleAllianceRequest(
+    request: Request,
+    env: WorkerEnv | undefined,
+  ): Promise<Response | null> {
+    const url = new URL(request.url);
+    const isAlliancePath = url.pathname.startsWith("/api/alliance/");
+    const isAdminVipPath = url.pathname === "/api/admin/set-vip";
+    if (!isAlliancePath && !isAdminVipPath) return null;
+    if (!env?.DB)
+      return json({ error: "La base de datos no está disponible en este Worker." }, 503);
+    if (request.method !== "GET" && request.method !== "POST") {
+      return json({ error: "Método no permitido." }, 405);
+    }
+    if (request.method === "POST" && !isSameOriginPost(request, url)) {
+      return json({ error: "Solicitud no autorizada." }, 403);
+    }
+    const db = env.DB;
+    try {
+      await ensureAuthSchema(db);
+    } catch (error) {
+      console.error("No se pudo preparar la autenticación para alianzas:", error);
+      return json({ error: "No se pudo preparar el sistema de alianzas." }, 503);
+    }
+    const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
+    if (isAdminVipPath) {
+      if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
+      if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+      if (account.email !== ADMIN_EMAIL) {
+        return json({ error: "Acción administrativa no autorizada." }, 403);
+      }
+      const body = await readJson(request);
+      const pilotId = body?.["pilot_id"];
+      const days = body?.["days"];
+      if (
+        !validPilotId(pilotId) ||
+        typeof days !== "number" ||
+        !Number.isSafeInteger(days) ||
+        days < 1 ||
+        days > Math.floor((Number.MAX_SAFE_INTEGER - Date.now()) / (24 * 60 * 60 * 1000))
+      ) {
+        return json({ error: "Indica un pilot_id válido y un número de días positivo." }, 400);
+      }
+      const vipUntil = Date.now() + days * 24 * 60 * 60 * 1000;
+      const updated = await db
+        .prepare("UPDATE pilots SET vip_until = ?, updated_at = ? WHERE pilot_id = ?")
+        .bind(vipUntil, Date.now(), pilotId)
+        .run();
+      if (updated.meta?.changes !== 1) return json({ error: "No se encontró el piloto." }, 404);
+      return json({ success: true, pilot_id: pilotId, vip_until: vipUntil });
+    }
+
+    if (!account) return json({ error: "Inicia sesión con Google para usar las alianzas." }, 401);
+    if (request.method === "POST" && !url.pathname.startsWith("/api/alliance/")) {
+      return json({ error: "Ruta de alianza no encontrada." }, 404);
+    }
+    const now = Date.now();
+    const pilotId = account.pilot_id;
+
+    if (url.pathname === "/api/alliance/mine" && request.method === "GET") {
+      const membership = await db
+        .prepare(
+          `SELECT alliance.alliance_id, alliance.name, alliance.tag, alliance.level,
+            alliance.leader_pilot_id, member.role
+           FROM alliance_members member
+           JOIN alliances alliance ON alliance.alliance_id = member.alliance_id
+           WHERE member.pilot_id = ?`,
+        )
+        .bind(pilotId)
+        .first<{
+          alliance_id: string;
+          name: string;
+          tag: string;
+          level: number;
+          leader_pilot_id: string;
+          role: "lider" | "teniente" | "miembro";
+        }>();
+      const invites = await db
+        .prepare(
+          `SELECT invite.invite_id, invite.alliance_id, alliance.name AS alliance_name,
+            alliance.tag, invite.invited_by,
+            COALESCE(NULLIF(profile.display_name, ''), pilot.callsign, 'PILOTO') AS inviter_name,
+            invite.created_at
+           FROM alliance_invites invite
+           JOIN alliances alliance ON alliance.alliance_id = invite.alliance_id
+           JOIN pilots pilot ON pilot.pilot_id = invite.invited_by
+           LEFT JOIN player_profiles profile ON profile.pilot_id = pilot.pilot_id
+           WHERE invite.invited_pilot_id = ? AND invite.status = 'PENDIENTE'
+           ORDER BY invite.created_at DESC`,
+        )
+        .bind(pilotId)
+        .all<{
+          invite_id: string;
+          alliance_id: string;
+          alliance_name: string;
+          tag: string;
+          invited_by: string;
+          inviter_name: string;
+          created_at: number;
+        }>();
+      const members = membership
+        ? await db
+            .prepare(
+              `SELECT member.pilot_id, member.role, member.joined_at,
+                COALESCE(NULLIF(profile.display_name, ''), pilot.callsign, 'PILOTO') AS callsign
+               FROM alliance_members member
+               JOIN pilots pilot ON pilot.pilot_id = member.pilot_id
+               LEFT JOIN player_profiles profile ON profile.pilot_id = member.pilot_id
+               WHERE member.alliance_id = ?
+               ORDER BY CASE member.role WHEN 'lider' THEN 0 WHEN 'teniente' THEN 1 ELSE 2 END,
+                 member.joined_at ASC`,
+            )
+            .bind(membership.alliance_id)
+            .all<{ pilot_id: string; role: string; joined_at: number; callsign: string }>()
+        : { results: [] };
+      const pilot = await db
+        .prepare("SELECT vip_until FROM pilots WHERE pilot_id = ?")
+        .bind(pilotId)
+        .first<{ vip_until: number | null }>();
+      return json({
+        pilot_id: pilotId,
+        alliance: membership ? { ...membership, members: members.results ?? [] } : null,
+        invites: invites.results ?? [],
+        vip: pilot ? hasVip(pilot, now) : false,
+      });
+    }
+
+    if (url.pathname === "/api/alliance/create" && request.method === "POST") {
+      const body = await readJson(request);
+      const name = typeof body?.["name"] === "string" ? body["name"].trim() : "";
+      const tag = typeof body?.["tag"] === "string" ? body["tag"].trim().toUpperCase() : "";
+      if (
+        name.length < 3 ||
+        name.length > 20 ||
+        /\p{Cc}/u.test(name) ||
+        !/^[A-Z0-9]{2,5}$/.test(tag)
+      ) {
+        return json(
+          { error: "Nombre (3-20 caracteres) o etiqueta (2-5 letras/números) no válidos." },
+          400,
+        );
+      }
+      const pilot = await db
+        .prepare("SELECT vip_until, obsidian FROM pilots WHERE pilot_id = ?")
+        .bind(pilotId)
+        .first<{ vip_until: number | null; obsidian: number }>();
+      if (!pilot) return json({ error: "No se encontró el piloto." }, 404);
+      if (!hasVip(pilot, now))
+        return json({ error: "Necesitas VIP activo para crear una alianza." }, 403);
+      if (pilot.obsidian < 20)
+        return json({ error: "Necesitas 20 OBS para crear una alianza." }, 409);
+      const existing = await db
+        .prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id = ?")
+        .bind(pilotId)
+        .first<{ alliance_id: string }>();
+      if (existing) return json({ error: "Ya perteneces a una alianza." }, 409);
+      const allianceId = `all_${randomHex(12)}`;
+      let wasCharged = false;
+      try {
+        const created = await db
+          .prepare(
+            `INSERT INTO alliances (alliance_id, name, tag, leader_pilot_id, created_at)
+             SELECT ?, ?, ?, pilot_id, ? FROM pilots
+             WHERE pilot_id = ? AND vip_until > ? AND obsidian >= 20
+               AND NOT EXISTS (SELECT 1 FROM alliance_members WHERE pilot_id = ?)
+             RETURNING alliance_id`,
+          )
+          .bind(allianceId, name, tag, now, pilotId, now, pilotId)
+          .first<{ alliance_id: string }>();
+        if (!created)
+          return json(
+            { error: "No se pudo crear la alianza; verifica VIP, OBS y membresía." },
+            409,
+          );
+        await db
+          .prepare(
+            "INSERT INTO alliance_members (alliance_id, pilot_id, role, joined_at) VALUES (?, ?, 'lider', ?)",
+          )
+          .bind(allianceId, pilotId, now)
+          .run();
+        const charged = await db
+          .prepare(
+            `UPDATE pilots SET obsidian = obsidian - 20, updated_at = ?
+             WHERE pilot_id = ? AND vip_until > ? AND obsidian >= 20
+               AND EXISTS (SELECT 1 FROM alliance_members WHERE alliance_id = ? AND pilot_id = ?)`,
+          )
+          .bind(now, pilotId, now, allianceId, pilotId)
+          .run();
+        if (charged.meta?.changes !== 1) {
+          await db.prepare("DELETE FROM alliances WHERE alliance_id = ?").bind(allianceId).run();
+          return json(
+            { error: "No se pudo cobrar el costo de creación. Inténtalo de nuevo." },
+            409,
+          );
+        }
+        wasCharged = true;
+        const balance = await db
+          .prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?")
+          .bind(pilotId)
+          .first<{ obsidian: number }>();
+        return json({
+          success: true,
+          alliance_id: allianceId,
+          name,
+          tag,
+          obsidian: balance?.obsidian ?? pilot.obsidian - 20,
+        });
+      } catch (error) {
+        await db.prepare("DELETE FROM alliances WHERE alliance_id = ?").bind(allianceId).run();
+        if (wasCharged) {
+          await db
+            .prepare(
+              "UPDATE pilots SET obsidian = obsidian + 20, updated_at = ? WHERE pilot_id = ?",
+            )
+            .bind(Date.now(), pilotId)
+            .run();
+        }
+        console.error("No se pudo crear la alianza:", error);
+        return json(
+          { error: "El nombre o la etiqueta ya están en uso, o no se pudo crear la alianza." },
+          409,
+        );
+      }
+    }
+
+    if (url.pathname === "/api/alliance/invite" && request.method === "POST") {
+      const body = await readJson(request);
+      const targetPilotId = body?.["pilot_id"];
+      if (!validPilotId(targetPilotId) || targetPilotId === pilotId) {
+        return json({ error: "El piloto a invitar no es válido." }, 400);
+      }
+      const alliance = await db
+        .prepare(
+          `SELECT alliance.alliance_id, member.role,
+            (SELECT COUNT(*) FROM alliance_members WHERE alliance_id = alliance.alliance_id) AS member_count
+           FROM alliance_members member JOIN alliances alliance
+             ON alliance.alliance_id = member.alliance_id
+           WHERE member.pilot_id = ?`,
+        )
+        .bind(pilotId)
+        .first<{ alliance_id: string; role: string; member_count: number }>();
+      if (!alliance || (alliance.role !== "lider" && alliance.role !== "teniente")) {
+        return json({ error: "Solo el líder o un teniente puede invitar." }, 403);
+      }
+      if (alliance.member_count >= 10)
+        return json({ error: "La alianza ya tiene 10 miembros." }, 409);
+      const target = await db
+        .prepare("SELECT pilot_id FROM pilots WHERE pilot_id = ?")
+        .bind(targetPilotId)
+        .first<{ pilot_id: string }>();
+      if (!target) return json({ error: "No se encontró al piloto invitado." }, 404);
+      const targetMembership = await db
+        .prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id = ?")
+        .bind(targetPilotId)
+        .first<{ alliance_id: string }>();
+      if (targetMembership) return json({ error: "El piloto ya pertenece a una alianza." }, 409);
+      try {
+        const invite = await db
+          .prepare(
+            `INSERT INTO alliance_invites
+              (invite_id, alliance_id, invited_pilot_id, invited_by, created_at)
+             SELECT ?, ?, ?, ?, ?
+             WHERE NOT EXISTS (SELECT 1 FROM alliance_members WHERE pilot_id = ?)
+               AND (SELECT COUNT(*) FROM alliance_members WHERE alliance_id = ?) < 10
+             RETURNING invite_id`,
+          )
+          .bind(
+            `inv_${randomHex(12)}`,
+            alliance.alliance_id,
+            targetPilotId,
+            pilotId,
+            now,
+            targetPilotId,
+            alliance.alliance_id,
+          )
+          .first<{ invite_id: string }>();
+        if (!invite)
+          return json(
+            { error: "No se pudo enviar la invitación: revisa la membresía y capacidad." },
+            409,
+          );
+        return json({ success: true, invite_id: invite.invite_id });
+      } catch (error) {
+        console.error("No se pudo enviar la invitación de alianza:", error);
+        return json(
+          { error: "El piloto ya tiene una invitación pendiente o no se pudo invitar." },
+          409,
+        );
+      }
+    }
+
+    if (url.pathname === "/api/alliance/accept" && request.method === "POST") {
+      const body = await readJson(request);
+      const inviteId = body?.["invite_id"];
+      if (typeof inviteId !== "string" || inviteId.length > 64) {
+        return json({ error: "La invitación indicada no es válida." }, 400);
+      }
+      try {
+        const invite = await db
+          .prepare(
+            `SELECT alliance_id FROM alliance_invites
+             WHERE invite_id = ? AND invited_pilot_id = ? AND status = 'PENDIENTE'`,
+          )
+          .bind(inviteId, pilotId)
+          .first<{ alliance_id: string }>();
+        if (!invite) return json({ error: "La invitación ya no está disponible." }, 404);
+        const joined = await db
+          .prepare(
+            `INSERT INTO alliance_members (alliance_id, pilot_id, role, joined_at)
+             SELECT ?, ?, 'miembro', ?
+             WHERE NOT EXISTS (SELECT 1 FROM alliance_members WHERE pilot_id = ?)
+               AND (SELECT COUNT(*) FROM alliance_members WHERE alliance_id = ?) < 10
+             RETURNING pilot_id`,
+          )
+          .bind(invite.alliance_id, pilotId, now, pilotId, invite.alliance_id)
+          .first<{ pilot_id: string }>();
+        if (!joined)
+          return json({ error: "Ya perteneces a otra alianza o la alianza está llena." }, 409);
+        await db
+          .prepare(
+            "UPDATE alliance_invites SET status = 'ACEPTADA', responded_at = ? WHERE invite_id = ? AND status = 'PENDIENTE'",
+          )
+          .bind(now, inviteId)
+          .run();
+        return json({ success: true });
+      } catch (error) {
+        console.error("No se pudo aceptar la invitación de alianza:", error);
+        return json({ error: "No se pudo aceptar la invitación." }, 409);
+      }
+    }
+
+    if (url.pathname === "/api/alliance/reject" && request.method === "POST") {
+      const body = await readJson(request);
+      const inviteId = body?.["invite_id"];
+      if (typeof inviteId !== "string" || inviteId.length > 64) {
+        return json({ error: "La invitación indicada no es válida." }, 400);
+      }
+      const rejected = await db
+        .prepare(
+          `UPDATE alliance_invites SET status = 'RECHAZADA', responded_at = ?
+           WHERE invite_id = ? AND invited_pilot_id = ? AND status = 'PENDIENTE'`,
+        )
+        .bind(now, inviteId, pilotId)
+        .run();
+      if (rejected.meta?.changes !== 1)
+        return json({ error: "La invitación ya no está disponible." }, 404);
+      return json({ success: true });
+    }
+
+    if (url.pathname === "/api/alliance/leave" && request.method === "POST") {
+      const membership = await db
+        .prepare("SELECT role FROM alliance_members WHERE pilot_id = ?")
+        .bind(pilotId)
+        .first<{ role: string }>();
+      if (!membership) return json({ error: "No perteneces a una alianza." }, 404);
+      if (membership.role === "lider") {
+        return json({ error: "El líder debe transferir el liderazgo o disolver la alianza." }, 409);
+      }
+      await db.prepare("DELETE FROM alliance_members WHERE pilot_id = ?").bind(pilotId).run();
+      return json({ success: true });
+    }
+
+    if (url.pathname === "/api/alliance/kick" && request.method === "POST") {
+      const body = await readJson(request);
+      const targetPilotId = body?.["pilot_id"];
+      if (!validPilotId(targetPilotId) || targetPilotId === pilotId) {
+        return json({ error: "El piloto a expulsar no es válido." }, 400);
+      }
+      const result = await db
+        .prepare(
+          `DELETE FROM alliance_members
+           WHERE pilot_id = ? AND role != 'lider'
+             AND alliance_id = (
+               SELECT alliance_id FROM alliance_members
+               WHERE pilot_id = ? AND role IN ('lider', 'teniente')
+             )
+             AND EXISTS (
+               SELECT 1 FROM alliance_members actor
+               WHERE actor.pilot_id = ? AND actor.role = 'lider'
+                 OR (actor.pilot_id = ? AND actor.role = 'teniente'
+                   AND alliance_members.role = 'miembro')
+             )`,
+        )
+        .bind(targetPilotId, pilotId, pilotId, pilotId)
+        .run();
+      if (result.meta?.changes !== 1) {
+        return json({ error: "No tienes permiso para expulsar a ese miembro." }, 403);
+      }
+      return json({ success: true });
+    }
+
+    if (url.pathname === "/api/alliance/promote" && request.method === "POST") {
+      const body = await readJson(request);
+      const targetPilotId = body?.["pilot_id"];
+      const role = body?.["role"];
+      if (
+        !validPilotId(targetPilotId) ||
+        (role !== "teniente" && role !== "miembro") ||
+        targetPilotId === pilotId
+      ) {
+        return json({ error: "Indica un miembro y un rol válido." }, 400);
+      }
+      const updated = await db
+        .prepare(
+          `UPDATE alliance_members SET role = ?
+           WHERE pilot_id = ? AND role != 'lider' AND alliance_id IN (
+             SELECT alliance_id FROM alliance_members WHERE pilot_id = ? AND role = 'lider'
+           )`,
+        )
+        .bind(role, targetPilotId, pilotId)
+        .run();
+      if (updated.meta?.changes !== 1)
+        return json({ error: "Solo el líder puede cambiar roles de su alianza." }, 403);
+      return json({ success: true });
+    }
+
+    if (url.pathname === "/api/alliance/dissolve" && request.method === "POST") {
+      const dissolved = await db
+        .prepare("DELETE FROM alliances WHERE leader_pilot_id = ?")
+        .bind(pilotId)
+        .run();
+      if (dissolved.meta?.changes !== 1)
+        return json({ error: "Solo el líder puede disolver la alianza." }, 403);
+      return json({ success: true });
+    }
+
+    return json({ error: "Ruta de alianza no encontrada." }, 404);
   }
   if ((isRedeem && request.method !== "POST") || (!isRedeem && request.method !== "GET")) {
     return json({ error: "Método de invitaciones no permitido." }, 405);
@@ -3334,8 +3767,8 @@ export default {
       if (chatResponse) return chatResponse;
       const authResponse = await handleAuthRequest(request, workerEnv);
       if (authResponse) return authResponse;
-      const referralResponse = await handleReferralRequest(request, workerEnv);
-      if (referralResponse) return referralResponse;
+      const socialResponse = await handleSocialRequest(request, workerEnv);
+      if (socialResponse) return socialResponse;
       const leaderboardResponse = await handleLeaderboardRequest(request, workerEnv);
       if (leaderboardResponse) return leaderboardResponse;
       const bossResponse = await handleBossRequest(request, workerEnv);
@@ -3352,10 +3785,12 @@ export default {
         pathname.startsWith("/api/auth/") ||
         pathname.startsWith("/api/chat/") ||
         pathname.startsWith("/api/referral/") ||
+        pathname.startsWith("/api/alliance/") ||
         pathname.startsWith("/api/leaderboard") ||
         pathname.startsWith("/api/bosses/") ||
         pathname.startsWith("/api/market/") ||
-        pathname === "/api/admin/credit-obsidian"
+        pathname === "/api/admin/credit-obsidian" ||
+        pathname === "/api/admin/set-vip"
       ) {
         const detail = error instanceof Error ? error.message : String(error);
         console.error("Fallo en endpoint de API:", detail);

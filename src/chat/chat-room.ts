@@ -8,13 +8,16 @@ export interface ChatMessage {
   id: number;
   type: MessageType;
   language: ChatLanguage;
+  pilotId: string;
   callsign: string;
+  allianceTag?: string | null;
   text: string;
   timestamp: number;
 }
 
 interface StoredMessage extends ChatMessage {
   pilot_id: string;
+  alliance_tag: string | null;
 }
 
 interface NewMessage {
@@ -22,12 +25,14 @@ interface NewMessage {
   language: ChatLanguage;
   pilotId: string;
   callsign: string;
+  allianceTag: string | null;
   text: string;
 }
 
 interface ChatAttachment {
   pilotId: string;
   callsign: string;
+  allianceTag: string | null;
   language: ChatLanguage;
 }
 
@@ -45,6 +50,7 @@ interface IncomingChat {
 interface IncomingEvent {
   pilotId: string;
   callsign: string;
+  allianceTag: string | null;
   type: "boss_kill" | "drop";
   language: ChatLanguage;
   text: string;
@@ -63,6 +69,7 @@ export class ChatRoom extends DurableObject {
         callsign TEXT NOT NULL,
         text TEXT NOT NULL,
         language TEXT NOT NULL DEFAULT 'es',
+        alliance_tag TEXT,
         timestamp INTEGER NOT NULL
       )`,
     );
@@ -76,6 +83,9 @@ export class ChatRoom extends DurableObject {
         "ALTER TABLE chat_messages ADD COLUMN language TEXT NOT NULL DEFAULT 'es'",
       );
     }
+    if (!schema?.includes("alliance_tag")) {
+      ctx.storage.sql.exec("ALTER TABLE chat_messages ADD COLUMN alliance_tag TEXT");
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -88,6 +98,7 @@ export class ChatRoom extends DurableObject {
       const pilotId = url.searchParams.get("pilotId");
       const callsign = url.searchParams.get("callsign");
       const language = url.searchParams.get("language");
+      const allianceTag = url.searchParams.get("allianceTag");
       if (!pilotId || !callsign || !isChatLanguage(language)) {
         return new Response("Missing chat identity or language.", { status: 400 });
       }
@@ -95,7 +106,12 @@ export class ChatRoom extends DurableObject {
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1] as HibernatingWebSocket;
-      server.serializeAttachment({ pilotId, callsign, language });
+      server.serializeAttachment({
+        pilotId,
+        callsign,
+        allianceTag: allianceTag || null,
+        language,
+      });
       this.ctx.acceptWebSocket(server);
       this.sendHistory(server, language);
       return new Response(null, { status: 101, webSocket: client });
@@ -119,6 +135,7 @@ export class ChatRoom extends DurableObject {
           language: payload.language,
           pilotId: payload.pilotId,
           callsign: payload.callsign,
+          allianceTag: payload.allianceTag,
           text: payload.text.trim(),
         }),
       );
@@ -156,6 +173,7 @@ export class ChatRoom extends DurableObject {
         language: attachment.language,
         pilotId: attachment.pilotId,
         callsign: attachment.callsign,
+        allianceTag: attachment.allianceTag,
         text: payload.text.trim(),
       }),
     );
@@ -178,13 +196,15 @@ export class ChatRoom extends DurableObject {
   saveMessage(input: NewMessage): ChatMessage {
     const timestamp = Date.now();
     const result = this.ctx.storage.sql.exec<{ id: number }>(
-      `INSERT INTO chat_messages (type, pilot_id, callsign, text, language, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO chat_messages
+        (type, pilot_id, callsign, text, language, alliance_tag, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       input.type,
       input.pilotId,
       input.callsign,
       input.text,
       input.language,
+      input.allianceTag,
       timestamp,
     );
     this.ctx.storage.sql.exec(
@@ -197,7 +217,9 @@ export class ChatRoom extends DurableObject {
       id,
       type: input.type,
       language: input.language,
+      pilotId: input.pilotId,
       callsign: input.callsign,
+      allianceTag: input.allianceTag,
       text: input.text,
       timestamp,
     };
@@ -206,7 +228,7 @@ export class ChatRoom extends DurableObject {
   sendHistory(socket: WebSocket, language: ChatLanguage): void {
     const messages = this.ctx.storage.sql
       .exec<StoredMessage>(
-        `SELECT id, type, pilot_id, callsign, text, language, timestamp
+        `SELECT id, type, pilot_id, callsign, text, language, alliance_tag, timestamp
          FROM chat_messages
          WHERE language = ? AND type NOT IN ('join', 'leave')
          ORDER BY id DESC LIMIT 50`,
@@ -220,7 +242,9 @@ export class ChatRoom extends DurableObject {
           id: message.id,
           type: message.type,
           language: message.language,
+          pilotId: message.pilot_id,
           callsign: message.callsign,
+          allianceTag: message.alliance_tag,
           text: message.text,
           timestamp: message.timestamp,
         }),
