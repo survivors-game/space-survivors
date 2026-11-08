@@ -9,6 +9,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
+  ArrowDown,
   AudioLines,
   Award,
   ChevronLeft,
@@ -48,6 +50,7 @@ import { STAGES, stageById } from "@/game/data/stages";
 import { WEAPONS } from "@/game/data/weapons";
 import { Engine, type BossAttempt } from "@/game/engine";
 import { createBossCombatProof } from "@/game/meta/boss-combat-proof";
+import { BOSS_REWARDS } from "@/game/data/boss-rewards";
 import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
 import { spriteUrl } from "@/game/sprites";
@@ -204,6 +207,36 @@ function Index() {
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleSessionLoading, setGoogleSessionLoading] = useState(true);
   const [bossCooldowns, setBossCooldowns] = useState<Record<string, number>>({});
+  const [allianceId, setAllianceId] = useState<string | null>(null);
+  const [bossHelpInvite, setBossHelpInvite] = useState<{
+    sessionId: string;
+    hostName: string;
+    bossName: string;
+    world: number;
+  } | null>(null);
+  const [hostHelpSessionId, setHostHelpSessionId] = useState<string | null>(null);
+  const [hostHelpActive, setHostHelpActive] = useState(false);
+  const [helperSessionId, setHelperSessionId] = useState<string | null>(null);
+  const [sharedBossState, setSharedBossState] = useState<{
+    boss: { x: number; y: number; hp: number; maxHp: number; name: string };
+    host: { x: number; y: number; hp: number; maxHp: number; shipId?: string };
+    enemyShots: { x: number; y: number }[];
+  } | null>(null);
+  const [helperHp, setHelperHp] = useState(0);
+  const [helperOffset, setHelperOffset] = useState({ x: 0, y: 0 });
+  const hostHelpSessionRef = useRef<string | null>(null);
+  const helperSessionRef = useRef<string | null>(null);
+  const bossHelpSocketRef = useRef<WebSocket | null>(null);
+  const helpTimeoutRef = useRef<number | null>(null);
+  const bossHelpInviteRef = useRef<{
+    sessionId: string;
+    hostName: string;
+    bossName: string;
+    world: number;
+  } | null>(null);
+  const helperOffsetRef = useRef({ x: 0, y: 0 });
+  const helperHpRef = useRef(0);
+  const helperLastHitRef = useRef(0);
   const [startingMission, setStartingMission] = useState(false);
   const [turnstileOpen, setTurnstileOpen] = useState(false);
   const [turnstileVerifying, setTurnstileVerifying] = useState(false);
@@ -229,6 +262,25 @@ function Index() {
     setAudioEnabled(!Settings.get().muted);
     return unsubscribe;
   }, [googleSessionLoading]);
+
+  useEffect(() => {
+    if (googleSessionLoading || !googlePlayer) {
+      setAllianceId(null);
+      return;
+    }
+    let active = true;
+    void marketRequest<{ alliance: { alliance_id: string } | null }>("/api/alliance/mine")
+      .then((result) => {
+        if (active) setAllianceId(result.alliance?.alliance_id ?? null);
+      })
+      .catch((error: unknown) => {
+        console.error("No se pudo consultar la alianza para la ayuda de boss:", error);
+        if (active) setAllianceId(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [googleSessionLoading, googlePlayer]);
 
   useEffect(() => {
     if (googleSessionLoading) return;
@@ -686,6 +738,164 @@ function Index() {
       !progress.claimed.includes(mission.id) && missionValue(progress, mission.id) >= mission.goal,
   ).length;
 
+  useEffect(() => {
+    if (!allianceId || !googlePlayer) return;
+    const connect = (sessionId?: string) => {
+      const url = new URL("/api/boss/help/ws", window.location.href);
+      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+      url.searchParams.set("alliance_id", allianceId);
+      if (sessionId) url.searchParams.set("session_id", sessionId);
+      const socket = new WebSocket(url);
+      if (sessionId) bossHelpSocketRef.current = socket;
+      socket.addEventListener("message", (event) => {
+        let message: Record<string, unknown>;
+        try {
+          message = JSON.parse(String(event.data)) as Record<string, unknown>;
+        } catch {
+          return;
+        }
+        if (message["type"] === "invite" && typeof message["sessionId"] === "string") {
+          const invite = {
+            sessionId: message["sessionId"],
+            hostName: typeof message["hostName"] === "string" ? message["hostName"] : "PILOTO",
+            bossName: typeof message["bossName"] === "string" ? message["bossName"] : "BOSS",
+            world: typeof message["world"] === "number" ? message["world"] : 1,
+          };
+          bossHelpInviteRef.current = invite;
+          setBossHelpInvite(invite);
+        } else if (
+          message["type"] === "joined" &&
+          message["hostPilotId"] === googlePlayer.playerId
+        ) {
+          if (helpTimeoutRef.current !== null) {
+            window.clearTimeout(helpTimeoutRef.current);
+            helpTimeoutRef.current = null;
+          }
+          setHostHelpSessionId(
+            typeof message["sessionId"] === "string" ? message["sessionId"] : null,
+          );
+          setHostHelpActive(true);
+          engineRef.current?.resume();
+        } else if (
+          message["type"] === "joined" &&
+          typeof message["sessionId"] === "string" &&
+          bossHelpInviteRef.current?.sessionId === message["sessionId"]
+        ) {
+          bossHelpInviteRef.current = null;
+          setBossHelpInvite(null);
+          setNotice("Ya alguien se unió al combate de boss.");
+        } else if (message["type"] === "helper-fire") {
+          engineRef.current?.applyHelperShot(
+            typeof message["damage"] === "number" ? message["damage"] : 35,
+          );
+        } else if (message["type"] === "helper-position") {
+          const helper = message["helper"];
+          if (helper && typeof helper === "object") {
+            const data = helper as { x?: number; y?: number; shipId?: string };
+            if (typeof data.x === "number" && typeof data.y === "number") {
+              engineRef.current?.setHelperPosition(data.x, data.y, data.shipId);
+            }
+          }
+        } else if (message["type"] === "state") {
+          const boss = message["boss"];
+          const host = message["host"];
+          if (boss && typeof boss === "object" && host && typeof host === "object") {
+            setSharedBossState({
+              boss: boss as { x: number; y: number; hp: number; maxHp: number; name: string },
+              host: host as {
+                x: number;
+                y: number;
+                hp: number;
+                maxHp: number;
+                shipId?: string;
+              },
+              enemyShots: Array.isArray(message["enemyShots"])
+                ? (message["enemyShots"] as { x: number; y: number }[])
+                : [],
+            });
+            if (
+              message["sessionId"] === helperSessionId &&
+              Array.isArray(message["enemyShots"]) &&
+              helperHpRef.current > 0
+            ) {
+              const hostState = host as { x: number; y: number };
+              const helperX = hostState.x + helperOffsetRef.current.x;
+              const helperY = hostState.y + helperOffsetRef.current.y;
+              const collided = (message["enemyShots"] as { x: number; y: number }[]).some(
+                (shot) =>
+                  Number.isFinite(shot.x) &&
+                  Number.isFinite(shot.y) &&
+                  Math.hypot(shot.x - helperX, shot.y - helperY) < 35,
+              );
+              if (collided && Date.now() - helperLastHitRef.current > 700) {
+                helperLastHitRef.current = Date.now();
+                helperHpRef.current = Math.max(0, helperHpRef.current - 20);
+                setHelperHp(helperHpRef.current);
+                if (helperHpRef.current === 0) {
+                  helperHpRef.current = -1;
+                  setNotice("NAVE AYUDANTE DESTRUIDA. SALISTE DEL COMBATE.");
+                  void leaveBossHelp();
+                }
+              }
+            }
+          }
+        } else if (
+          ["expired", "left", "completed"].includes(String(message["type"])) &&
+          (message["sessionId"] === hostHelpSessionRef.current ||
+            message["sessionId"] === helperSessionId)
+        ) {
+          const expiredHostSession = message["sessionId"] === hostHelpSessionRef.current;
+          if (expiredHostSession) {
+            if (helpTimeoutRef.current !== null) {
+              window.clearTimeout(helpTimeoutRef.current);
+              helpTimeoutRef.current = null;
+            }
+            const endedSessionId = hostHelpSessionRef.current;
+            hostHelpSessionRef.current = null;
+            setHostHelpSessionId(null);
+            setHostHelpActive(false);
+            engineRef.current?.resume();
+            if (message["type"] === "expired" && endedSessionId) {
+              void marketRequest("/api/boss/help-leave", {
+                method: "POST",
+                body: JSON.stringify({ session_id: endedSessionId }),
+              }).catch((error: unknown) =>
+                console.error("No se pudo cerrar la solicitud de ayuda expirada:", error),
+              );
+            }
+          }
+          if (message["sessionId"] === helperSessionId) {
+            if (message["type"] === "completed") {
+              void marketRequest<{ progress: unknown }>("/api/auth/progress")
+                .then(({ progress: savedProgress }) => {
+                  const next = sanitize(savedProgress);
+                  ProgressStore.set(next);
+                  setProgress(next);
+                  setMarketRefresh((version) => version + 1);
+                })
+                .catch((error: unknown) =>
+                  console.error("No se pudo actualizar la recompensa del ayudante:", error),
+                );
+            }
+            helperSessionRef.current = null;
+            setHelperSessionId(null);
+            setSharedBossState(null);
+          }
+        }
+      });
+      return socket;
+    };
+
+    const notificationSocket = connect();
+    const participantSession = screen === "PLAYING" ? (hostHelpSessionId ?? helperSessionId) : null;
+    const participantSocket = participantSession ? connect(participantSession) : null;
+    return () => {
+      notificationSocket.close();
+      participantSocket?.close();
+      if (bossHelpSocketRef.current === participantSocket) bossHelpSocketRef.current = null;
+    };
+  }, [allianceId, googlePlayer, screen, hostHelpSessionId, helperSessionId]);
+
   const scrollShipCarousel = (direction: -1 | 1) => {
     shipCarouselRef.current?.scrollBy({ left: direction * 280, behavior: "smooth" });
   };
@@ -738,7 +948,16 @@ function Index() {
               rewards: { itemType: "nave" | "objeto"; itemName: string }[];
             }>("/api/boss/claim", {
               method: "POST",
-              body: JSON.stringify({ boss_id: bossId, token, result: outcome, ...evidence, proof }),
+              body: JSON.stringify({
+                boss_id: bossId,
+                token,
+                result: outcome,
+                ...evidence,
+                proof,
+                ...(hostHelpSessionRef.current
+                  ? { help_session_id: hostHelpSessionRef.current }
+                  : {}),
+              }),
             });
             setMarketRefresh((version) => version + 1);
             const drops = result.rewards.map((reward) => reward.itemName);
@@ -782,7 +1001,36 @@ function Index() {
     });
     engineRef.current = engine;
     engine.start();
-    const hudTimer = window.setInterval(() => setHud(engine.getHud()), 100);
+    if (helperSessionRef.current) engine.pause();
+    const hudTimer = window.setInterval(() => {
+      setHud(engine.getHud());
+      const sessionId = hostHelpSessionRef.current;
+      const state = engine.getBossHelpState();
+      const socket = bossHelpSocketRef.current;
+      if (sessionId && state && socket?.readyState === WebSocket.OPEN) {
+        socket.send(
+          JSON.stringify({
+            type: "state",
+            sessionId,
+            boss: {
+              x: state.bossX,
+              y: state.bossY,
+              hp: state.bossHp,
+              maxHp: state.bossMaxHp,
+              name: state.bossName,
+            },
+            host: {
+              x: state.hostX,
+              y: state.hostY,
+              hp: state.hostHp,
+              maxHp: state.hostMaxHp,
+              shipId: selectedShip.id,
+            },
+            enemyShots: state.enemyShots,
+          }),
+        );
+      }
+    }, 100);
 
     return () => {
       window.clearInterval(hudTimer);
@@ -892,6 +1140,22 @@ function Index() {
   };
 
   const returnToMenu = () => {
+    const helpSessionId = hostHelpSessionRef.current;
+    if (helpSessionId) {
+      if (helpTimeoutRef.current !== null) {
+        window.clearTimeout(helpTimeoutRef.current);
+        helpTimeoutRef.current = null;
+      }
+      void marketRequest("/api/boss/help-leave", {
+        method: "POST",
+        body: JSON.stringify({ session_id: helpSessionId }),
+      }).catch((error: unknown) =>
+        console.error("No se pudo cerrar la ayuda al terminar la misión:", error),
+      );
+      hostHelpSessionRef.current = null;
+      setHostHelpSessionId(null);
+      setHostHelpActive(false);
+    }
     engineRef.current?.stop();
     setPaused(false);
     setChoices([]);
@@ -904,6 +1168,130 @@ function Index() {
   };
 
   const rerollChoices = () => engineRef.current?.reroll();
+
+  const requestBossHelp = async () => {
+    const state = engineRef.current?.getBossHelpState();
+    const reward = state && BOSS_REWARDS.find((entry) => entry.bossId === state.bossId);
+    if (!state || !reward || hostHelpSessionRef.current) return;
+    engineRef.current?.pause();
+    try {
+      const result = await marketRequest<{ session_id: string }>("/api/boss/help-request", {
+        method: "POST",
+        body: JSON.stringify({ boss_id: state.bossId, world: reward.world }),
+      });
+      hostHelpSessionRef.current = result.session_id;
+      setHostHelpSessionId(result.session_id);
+      setHostHelpActive(false);
+      helpTimeoutRef.current = window.setTimeout(() => {
+        void marketRequest("/api/boss/help-leave", {
+          method: "POST",
+          body: JSON.stringify({ session_id: result.session_id }),
+        })
+          .catch((error: unknown) =>
+            console.error("No se pudo expirar la solicitud de ayuda:", error),
+          )
+          .finally(() => {
+            hostHelpSessionRef.current = null;
+            setHostHelpSessionId(null);
+            setHostHelpActive(false);
+            engineRef.current?.resume();
+          });
+      }, 60_000);
+      setNotice("SOLICITUD ENVIADA. EL COMBATE SE REANUDARÁ AL UNIRSE UN ALIADO O EXPIRAR.");
+    } catch (error) {
+      engineRef.current?.resume();
+      setNotice(error instanceof Error ? error.message : "No se pudo pedir ayuda.");
+    }
+  };
+
+  const joinBossHelp = async () => {
+    if (!bossHelpInvite) return;
+    try {
+      const result = await marketRequest<{ session_id: string }>("/api/boss/help-join", {
+        method: "POST",
+        body: JSON.stringify({ session_id: bossHelpInvite.sessionId }),
+      });
+      engineRef.current?.pause();
+      setHelperOffset({ x: 60, y: 0 });
+      helperOffsetRef.current = { x: 60, y: 0 };
+      helperHpRef.current = selectedShip.hp;
+      helperLastHitRef.current = 0;
+      setHelperHp(selectedShip.hp);
+      helperSessionRef.current = result.session_id;
+      setHelperSessionId(result.session_id);
+      bossHelpInviteRef.current = null;
+      setBossHelpInvite(null);
+      setScreen("PLAYING");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo unir al combate.");
+      bossHelpInviteRef.current = null;
+      setBossHelpInvite(null);
+    }
+  };
+
+  const dismissBossHelpInvite = () => {
+    bossHelpInviteRef.current = null;
+    setBossHelpInvite(null);
+  };
+
+  const moveHelper = (dx: number, dy: number) => {
+    const next = {
+      x: Math.max(-100, Math.min(100, helperOffset.x + dx)),
+      y: Math.max(-100, Math.min(100, helperOffset.y + dy)),
+    };
+    helperOffsetRef.current = next;
+    setHelperOffset(next);
+    const socket = bossHelpSocketRef.current;
+    if (socket?.readyState === WebSocket.OPEN && helperSessionId) {
+      socket.send(JSON.stringify({ type: "move", sessionId: helperSessionId, ...next }));
+    }
+  };
+
+  const fireHelperShot = () => {
+    if (bossHelpSocketRef.current?.readyState === WebSocket.OPEN && helperSessionId) {
+      bossHelpSocketRef.current.send(JSON.stringify({ type: "fire", sessionId: helperSessionId }));
+    }
+  };
+
+  const leaveBossHelp = async () => {
+    if (!helperSessionId) return;
+    try {
+      await marketRequest("/api/boss/help-leave", {
+        method: "POST",
+        body: JSON.stringify({ session_id: helperSessionId }),
+      });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo salir del combate.");
+    } finally {
+      helperSessionRef.current = null;
+      setHelperSessionId(null);
+      helperHpRef.current = 0;
+      setHelperHp(0);
+      setSharedBossState(null);
+      engineRef.current?.resume();
+    }
+  };
+
+  const cancelBossHelpRequest = async () => {
+    const sessionId = hostHelpSessionRef.current;
+    if (!sessionId) return;
+    try {
+      await marketRequest("/api/boss/help-leave", {
+        method: "POST",
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "No se pudo cancelar la solicitud.");
+      return;
+    }
+    if (helpTimeoutRef.current !== null) {
+      window.clearTimeout(helpTimeoutRef.current);
+      helpTimeoutRef.current = null;
+    }
+    hostHelpSessionRef.current = null;
+    setHostHelpSessionId(null);
+    engineRef.current?.resume();
+  };
 
   if (screen === "PLAYING") {
     const healthPercent = hud ? Math.max(0, (hud.hp / Math.max(1, hud.maxHp)) * 100) : 100;
@@ -994,9 +1382,183 @@ function Index() {
                 <span className="font-arcade text-[8px]">{Math.ceil(hud.boss.hp)} PS</span>
               </div>
               <Meter value={(hud.boss.hp / hud.boss.maxHp) * 100} color="bg-[#ff0055]" />
+              {allianceId && !helperSessionId ? (
+                <div className="mt-3 flex justify-center">
+                  {hostHelpSessionId ? (
+                    hostHelpActive ? (
+                      <span className="pointer-events-auto border border-cyan-300/50 bg-cyan-950/70 px-3 py-2 text-[9px] uppercase tracking-widest text-cyan-100">
+                        ALIADO EN COMBATE
+                      </span>
+                    ) : (
+                      <Button
+                        className="pointer-events-auto border border-amber-300/60 bg-amber-950/80 text-amber-100"
+                        onClick={() => void cancelBossHelpRequest()}
+                      >
+                        ESPERANDO ALIADO · CANCELAR
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      className="pointer-events-auto border border-fuchsia-300/70 bg-fuchsia-950/85 font-arcade text-xs text-fuchsia-100 shadow-[0_0_18px_#ff4df055]"
+                      onClick={() => void requestBossHelp()}
+                    >
+                      AYUDA!
+                    </Button>
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
+
+        {bossHelpInvite ? (
+          <div className="absolute bottom-24 left-1/2 z-40 w-[min(92%,420px)] -translate-x-1/2 border border-fuchsia-300/60 bg-[#100b20]/95 p-4 shadow-[0_0_30px_#ff4df044]">
+            <p className="font-arcade text-[10px] text-fuchsia-100">
+              {bossHelpInvite.hostName} PIDE AYUDA
+            </p>
+            <p className="mt-2 text-xs text-white/75">
+              {bossHelpInvite.bossName} · MUNDO {bossHelpInvite.world}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <Button
+                className="flex-1 bg-fuchsia-700 text-white"
+                onClick={() => void joinBossHelp()}
+              >
+                UNIRSE
+              </Button>
+              <Button
+                variant="outline"
+                className="border-white/20 text-white/70"
+                onClick={dismissBossHelpInvite}
+              >
+                CERRAR
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {helperSessionId ? (
+          <div className="absolute inset-0 z-30 grid place-items-center bg-[#070814]/95 p-4">
+            <section className="w-full max-w-xl border border-fuchsia-300/50 bg-[#100b20]/95 p-5 shadow-[0_0_35px_#ff4df033]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-arcade text-xs text-fuchsia-100">COMBATE DE ALIANZA</p>
+                  <p className="mt-2 text-xs uppercase tracking-widest text-white/65">
+                    Tú: ayudante · {Math.ceil(helperHp)} PS · Host:{" "}
+                    {sharedBossState ? `${Math.ceil(sharedBossState.host.hp)} PS` : "conectando"}
+                  </p>
+                  <div className="mt-2 max-w-48">
+                    <Meter
+                      value={(helperHp / Math.max(1, selectedShip.hp)) * 100}
+                      color="bg-fuchsia-500"
+                    />
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="border-white/25 text-white"
+                  onClick={() => void leaveBossHelp()}
+                >
+                  SALIR
+                </Button>
+              </div>
+              <div className="mt-6 border border-fuchsia-400/20 bg-black/40 p-4">
+                <div className="mb-2 flex justify-between text-[10px] uppercase text-fuchsia-100">
+                  <span>{sharedBossState?.boss.name ?? bossHelpInvite?.bossName ?? "BOSS"}</span>
+                  <span>
+                    {sharedBossState
+                      ? `${Math.ceil(sharedBossState.boss.hp)} / ${Math.ceil(sharedBossState.boss.maxHp)} PS`
+                      : "SINCRONIZANDO"}
+                  </span>
+                </div>
+                <Meter
+                  value={
+                    sharedBossState
+                      ? (sharedBossState.boss.hp / Math.max(1, sharedBossState.boss.maxHp)) * 100
+                      : 100
+                  }
+                  color="bg-[#ff0055]"
+                />
+                <div className="relative mt-5 h-40 overflow-hidden border border-white/10 bg-[radial-gradient(ellipse_at_center,_#34123a_0%,_#080812_70%)]">
+                  <span
+                    className="absolute -translate-x-1/2 -translate-y-1/2 text-3xl text-[#ff0055] drop-shadow-[0_0_14px_#ff0055]"
+                    style={{
+                      left: `${sharedBossState ? Math.max(15, Math.min(85, 30 + (sharedBossState.boss.x - sharedBossState.host.x) / 20)) : 50}%`,
+                      top: `${sharedBossState ? Math.max(20, Math.min(75, 35 + (sharedBossState.boss.y - sharedBossState.host.y) / 20)) : 35}%`,
+                    }}
+                  >
+                    ✦
+                  </span>
+                  {sharedBossState?.enemyShots.map((shot, index) => (
+                    <span
+                      key={index}
+                      className="absolute size-1.5 rounded-full bg-[#ffb84d] shadow-[0_0_8px_#ffb84d]"
+                      style={{
+                        left: `${Math.max(8, Math.min(92, 30 + (shot.x - sharedBossState.host.x) / 20))}%`,
+                        top: `${Math.max(10, Math.min(90, 35 + (shot.y - sharedBossState.host.y) / 20))}%`,
+                      }}
+                    />
+                  ))}
+                  <img
+                    src={spriteUrl(
+                      SHIPS.find((ship) => ship.id === sharedBossState?.host.shipId)?.sprite ??
+                        SHIPS[0]!.sprite,
+                    )}
+                    alt="Nave host"
+                    className="absolute left-[30%] top-[70%] h-10 w-10 -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_0_10px_#00f0ff]"
+                  />
+                  <img
+                    src={spriteUrl(selectedShip.sprite)}
+                    alt="Nave ayudante"
+                    className="absolute h-10 w-10 object-contain drop-shadow-[0_0_10px_#ff4df0]"
+                    style={{
+                      left: `${50 + helperOffset.x / 4}%`,
+                      top: `${70 + helperOffset.y / 4}%`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-widest text-cyan-100">
+                    Nave del host ·{" "}
+                    {sharedBossState ? `${Math.ceil(sharedBossState.host.hp)} PS` : "—"}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  aria-label="Mover arriba"
+                  onClick={() => moveHelper(0, -20)}
+                >
+                  <ArrowUp />
+                </Button>
+                <Button
+                  variant="outline"
+                  aria-label="Mover izquierda"
+                  onClick={() => moveHelper(-20, 0)}
+                >
+                  <ArrowLeft />
+                </Button>
+                <Button
+                  variant="outline"
+                  aria-label="Mover abajo"
+                  onClick={() => moveHelper(0, 20)}
+                >
+                  <ArrowDown />
+                </Button>
+                <Button
+                  variant="outline"
+                  aria-label="Mover derecha"
+                  onClick={() => moveHelper(20, 0)}
+                >
+                  <ArrowRight />
+                </Button>
+                <Button className="ml-2 bg-fuchsia-700 text-white" onClick={fireHelperShot}>
+                  DISPARAR
+                </Button>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {hud?.banner ? (
           <div className="pointer-events-none absolute left-1/2 top-1/3 z-10 -translate-x-1/2 text-center">
@@ -1090,22 +1652,38 @@ function Index() {
             eyebrow="CONTROL DE VUELO"
             icon={<CirclePause className="size-5" />}
           >
-            <p className="mb-7 text-center text-xs uppercase tracking-[0.16em] text-white/55">
-              La flota enemiga espera tu siguiente movimiento.
-            </p>
-            <Button
-              className="font-arcade h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] hover:bg-cyan-200"
-              onClick={() => engineRef.current?.resume()}
-            >
-              <Play /> Continuar
-            </Button>
-            <Button
-              variant="outline"
-              className="font-arcade mt-3 h-12 w-full rounded-none border-white/20 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white hover:bg-white/10"
-              onClick={returnToMenu}
-            >
-              <ArrowLeft /> Volver al menú
-            </Button>
+            {hostHelpSessionId && !hostHelpActive ? (
+              <>
+                <p className="mb-7 text-center text-xs uppercase tracking-[0.16em] text-white/55">
+                  Esperando a un aliado. La pausa se cancelará automáticamente en 60 segundos.
+                </p>
+                <Button
+                  className="font-arcade h-12 w-full rounded-none bg-amber-700 text-[9px] uppercase tracking-[0.08em] text-white hover:bg-amber-600"
+                  onClick={() => void cancelBossHelpRequest()}
+                >
+                  Cancelar solicitud y continuar
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="mb-7 text-center text-xs uppercase tracking-[0.16em] text-white/55">
+                  La flota enemiga espera tu siguiente movimiento.
+                </p>
+                <Button
+                  className="font-arcade h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] hover:bg-cyan-200"
+                  onClick={() => engineRef.current?.resume()}
+                >
+                  <Play /> Continuar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="font-arcade mt-3 h-12 w-full rounded-none border-white/20 bg-transparent text-[8px] uppercase tracking-[0.08em] text-white hover:bg-white/10"
+                  onClick={returnToMenu}
+                >
+                  <ArrowLeft /> Volver al menú
+                </Button>
+              </>
+            )}
           </Overlay>
         ) : null}
       </main>
@@ -2304,6 +2882,31 @@ function Index() {
           ) : null}
         </footer>
       </div>
+      {bossHelpInvite ? (
+        <div className="fixed bottom-5 right-5 z-50 w-[min(92vw,380px)] border border-fuchsia-300/60 bg-[#100b20]/95 p-4 shadow-[0_0_30px_#ff4df044]">
+          <p className="font-arcade text-[10px] text-fuchsia-100">
+            {bossHelpInvite.hostName} PIDE AYUDA
+          </p>
+          <p className="mt-2 text-xs text-white/75">
+            {bossHelpInvite.bossName} · MUNDO {bossHelpInvite.world}
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Button
+              className="flex-1 bg-fuchsia-700 text-white"
+              onClick={() => void joinBossHelp()}
+            >
+              UNIRSE
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/20 text-white/70"
+              onClick={dismissBossHelpInvite}
+            >
+              CERRAR
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

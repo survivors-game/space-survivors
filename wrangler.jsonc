@@ -20,9 +20,15 @@
     "TURNSTILE_SITE_KEY": "0x4AAAAAAF3_cGCrnDqEPxfr",
   },
   "durable_objects": {
-    "bindings": [{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }],
+    "bindings": [
+      { "name": "CHAT_ROOM", "class_name": "ChatRoom" },
+      { "name": "BOSS_HELP", "class_name": "BossHelpRoom" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChatRoom"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ChatRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["BossHelpRoom"] },
+  ],
   "assets": {
     "binding": "ASSETS",
     "directory": ".output/public",

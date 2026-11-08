@@ -25,6 +25,8 @@ import {
 } from "./game/meta/boss-combat-proof";
 import { handleChatRequest, type ChatWorkerEnv } from "./chat/chat-api";
 import { hasVip } from "./game/meta/vip";
+import { BossHelpRoom } from "./game/boss-help-room";
+import { bossById } from "./game/data/bosses";
 
 type D1Result<T = Record<string, unknown>> = {
   meta?: { changes?: number };
@@ -47,6 +49,10 @@ type KVNamespace = {
 type WorkerEnv = ChatWorkerEnv & {
   DB?: D1Database;
   LEADERBOARD?: KVNamespace;
+  BOSS_HELP?: {
+    idFromName(name: string): unknown;
+    get(id: unknown): { fetch(request: Request): Promise<Response> };
+  };
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
@@ -196,6 +202,7 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   if (!database && candidates.length === 0) return undefined;
 
   const chatRoom = candidates.find((candidate) => candidate.CHAT_ROOM)?.CHAT_ROOM;
+  const bossHelp = candidates.find((candidate) => candidate.BOSS_HELP)?.BOSS_HELP;
   const googleClientId = candidates.find(
     (candidate) => candidate.GOOGLE_CLIENT_ID,
   )?.GOOGLE_CLIENT_ID;
@@ -215,6 +222,7 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   return {
     ...(database ? { DB: database } : {}),
     ...(chatRoom ? { CHAT_ROOM: chatRoom } : {}),
+    ...(bossHelp ? { BOSS_HELP: bossHelp } : {}),
     ...(leaderboard ? { LEADERBOARD: leaderboard } : {}),
     ...(googleClientId ? { GOOGLE_CLIENT_ID: googleClientId } : {}),
     ...(googleClientSecret ? { GOOGLE_CLIENT_SECRET: googleClientSecret } : {}),
@@ -2460,14 +2468,35 @@ async function handleBossRequest(
     url.pathname === "/api/bosses/start" ||
     url.pathname === "/api/bosses/attempt";
   const isClaim = url.pathname === "/api/boss/claim" || url.pathname === "/api/bosses/claim";
-  if (!isStatus && !isStart && !isClaim) {
+  const isHelpRequest = url.pathname === "/api/boss/help-request";
+  const isHelpJoin = url.pathname === "/api/boss/help-join";
+  const isHelpLeave = url.pathname === "/api/boss/help-leave";
+  const isHelpSocket = url.pathname === "/api/boss/help/ws";
+  if (
+    !isStatus &&
+    !isStart &&
+    !isClaim &&
+    !isHelpRequest &&
+    !isHelpJoin &&
+    !isHelpLeave &&
+    !isHelpSocket
+  ) {
     return null;
   }
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
-  if ((isStatus && request.method !== "GET") || (!isStatus && request.method !== "POST")) {
+  if (
+    (isStatus && request.method !== "GET") ||
+    (isHelpSocket && request.method !== "GET") ||
+    (!isStatus && !isHelpSocket && request.method !== "POST")
+  ) {
     return json({ error: "Método no permitido." }, 405);
   }
-  if (!isStatus && !isSameOriginPost(request, url)) {
+  if (
+    (!isStatus && !isHelpSocket && !isSameOriginPost(request, url)) ||
+    (isHelpSocket &&
+      (request.headers.get("Upgrade")?.toLowerCase() !== "websocket" ||
+        request.headers.get("origin") !== url.origin))
+  ) {
     return json({ error: "Solicitud no autorizada." }, 403);
   }
 
@@ -2481,6 +2510,7 @@ async function handleBossRequest(
   }
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión con Google para luchar contra bosses." }, 401);
+  const now = Date.now();
 
   if (isStatus) {
     try {
@@ -2498,13 +2528,331 @@ async function handleBossRequest(
     }
   }
 
+  if (isHelpSocket) {
+    if (!env.BOSS_HELP)
+      return json({ error: "La sala de ayuda del boss no está disponible." }, 503);
+    const allianceId = url.searchParams.get("alliance_id");
+    const membership = await db
+      .prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id = ?")
+      .bind(account.pilot_id)
+      .first<{ alliance_id: string }>();
+    if (!membership || membership.alliance_id !== allianceId) {
+      return json({ error: "Debes pertenecer a la alianza para recibir ayuda de boss." }, 403);
+    }
+    const sessionId = url.searchParams.get("session_id");
+    let role: "member" | "host" | "helper" = "member";
+    if (sessionId) {
+      const session = await db
+        .prepare(
+          `SELECT host_pilot_id, helper_pilot_id, status FROM boss_help_sessions
+           WHERE session_id = ? AND status IN ('WAITING', 'ACTIVE')`,
+        )
+        .bind(sessionId)
+        .first<{
+          host_pilot_id: string;
+          helper_pilot_id: string | null;
+          status: string;
+        }>();
+      if (!session) return json({ error: "La sesión de ayuda ya no está disponible." }, 404);
+      if (session.host_pilot_id === account.pilot_id) role = "host";
+      else if (session.helper_pilot_id === account.pilot_id && session.status === "ACTIVE") {
+        role = "helper";
+      } else {
+        return json({ error: "No participas en esta sesión de ayuda." }, 403);
+      }
+    }
+    const profile = await db
+      .prepare("SELECT display_name FROM player_profiles WHERE pilot_id = ?")
+      .bind(account.pilot_id)
+      .first<{ display_name: string }>();
+    const savedProgress = await db
+      .prepare("SELECT progress_json FROM player_progress WHERE pilot_id = ?")
+      .bind(account.pilot_id)
+      .first<{ progress_json: string }>();
+    let shipId = "falcon";
+    if (savedProgress?.progress_json) {
+      try {
+        const progress: unknown = JSON.parse(savedProgress.progress_json);
+        if (
+          isRecord(progress) &&
+          typeof progress["selectedShip"] === "string" &&
+          (await getOwnedShips(db, account.pilot_id)).includes(progress["selectedShip"])
+        ) {
+          shipId = progress["selectedShip"];
+        }
+      } catch (error) {
+        console.error("No se pudo recuperar la nave elegida para ayudar al boss:", error);
+      }
+    }
+    const room = env.BOSS_HELP.get(env.BOSS_HELP.idFromName(membership.alliance_id));
+    const socketUrl = new URL(request.url);
+    socketUrl.pathname = "/websocket";
+    socketUrl.search = new URLSearchParams({
+      pilotId: account.pilot_id,
+      allianceId: membership.alliance_id,
+      callsign: profile?.display_name || "PILOTO",
+      role,
+      shipId,
+      ...(sessionId ? { sessionId } : {}),
+    }).toString();
+    return room.fetch(new Request(socketUrl, request));
+  }
+
+  if (isHelpRequest || isHelpJoin || isHelpLeave) {
+    if (!env.BOSS_HELP) {
+      return json({ error: "La sala de ayuda del boss no está disponible en este Worker." }, 503);
+    }
+    const body = await readJson(request, 2048);
+    if (!body) return json({ error: "El cuerpo de la solicitud no es válido." }, 400);
+    const membership = await db
+      .prepare(
+        `SELECT alliance.alliance_id, alliance.name
+         FROM alliance_members member
+         JOIN alliances alliance ON alliance.alliance_id = member.alliance_id
+         WHERE member.pilot_id = ?`,
+      )
+      .bind(account.pilot_id)
+      .first<{ alliance_id: string; name: string }>();
+    if (!membership)
+      return json({ error: "Debes pertenecer a una alianza para pedir ayuda." }, 403);
+    const room = env.BOSS_HELP.get(env.BOSS_HELP.idFromName(membership.alliance_id));
+
+    if (isHelpRequest) {
+      const bossId = body["boss_id"];
+      const world = body["world"];
+      const reward = BOSS_REWARDS.find((candidate) => candidate.bossId === bossId);
+      if (
+        typeof bossId !== "string" ||
+        !reward ||
+        typeof world !== "number" ||
+        !Number.isSafeInteger(world) ||
+        world !== reward.world
+      ) {
+        return json({ error: "Boss o mundo no válidos." }, 400);
+      }
+      const cooldown = await db
+        .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
+        .bind(account.pilot_id, bossId)
+        .first<{ last_defeated_at: number }>();
+      if (cooldown && cooldown.last_defeated_at + BOSS_COOLDOWN_MS > now) {
+        return json({ error: "No puedes pedir ayuda mientras el boss esté en cooldown." }, 409);
+      }
+      const attempt = await db
+        .prepare(
+          `SELECT token_hash FROM boss_attempts
+           WHERE pilot_id = ? AND boss_id = ? AND claimed_at IS NULL AND expires_at > ?`,
+        )
+        .bind(account.pilot_id, bossId, now)
+        .first<{ token_hash: string }>();
+      if (!attempt)
+        return json({ error: "Debes iniciar el combate autorizado antes de pedir ayuda." }, 409);
+      const sessionId = `help_${randomHex(12)}`;
+      const created = await db
+        .prepare(
+          `INSERT INTO boss_help_sessions (session_id, host_pilot_id, boss_id, created_at)
+           SELECT ?, ?, ?, ?
+           WHERE EXISTS (SELECT 1 FROM alliance_members WHERE pilot_id = ? AND alliance_id = ?)
+             AND EXISTS (
+               SELECT 1 FROM boss_attempts
+               WHERE token_hash = ? AND pilot_id = ? AND claimed_at IS NULL AND expires_at > ?
+             )
+           ON CONFLICT DO NOTHING
+           RETURNING session_id`,
+        )
+        .bind(
+          sessionId,
+          account.pilot_id,
+          bossId,
+          now,
+          account.pilot_id,
+          membership.alliance_id,
+          attempt.token_hash,
+          account.pilot_id,
+          now,
+        )
+        .first<{ session_id: string }>();
+      if (!created) return json({ error: "Ya tienes una solicitud de ayuda activa." }, 409);
+      const profile = await db
+        .prepare("SELECT display_name FROM player_profiles WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ display_name: string }>();
+      const notification = await room.fetch(
+        new Request("https://boss-help/notify", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            bossId,
+            bossName: bossById(bossId)?.name ?? bossId,
+            world,
+            hostPilotId: account.pilot_id,
+            hostName: profile?.display_name || "PILOTO",
+            expiresAt: now + 60_000,
+          }),
+        }),
+      );
+      if (!notification.ok) {
+        await db
+          .prepare(
+            "UPDATE boss_help_sessions SET status = 'EXPIRED', ended_at = ? WHERE session_id = ?",
+          )
+          .bind(now, sessionId)
+          .run();
+        console.error("El Durable Object rechazó la solicitud de ayuda:", notification.status);
+        return json({ error: "No se pudo notificar a los miembros de la alianza." }, 502);
+      }
+      return json({ success: true, session_id: sessionId, expires_at: now + 60_000 });
+    }
+
+    const sessionId = body["session_id"];
+    if (typeof sessionId !== "string" || !/^help_[0-9a-f]{24}$/.test(sessionId)) {
+      return json({ error: "La sesión de ayuda no es válida." }, 400);
+    }
+    const session = await db
+      .prepare(
+        `SELECT session_id, host_pilot_id, helper_pilot_id, boss_id, status, created_at
+         FROM boss_help_sessions WHERE session_id = ?`,
+      )
+      .bind(sessionId)
+      .first<{
+        session_id: string;
+        host_pilot_id: string;
+        helper_pilot_id: string | null;
+        boss_id: string;
+        status: "WAITING" | "ACTIVE" | "COMPLETED" | "EXPIRED" | "LEFT";
+        created_at: number;
+      }>();
+    if (!session) return json({ error: "No se encontró la solicitud de ayuda." }, 404);
+
+    if (isHelpJoin) {
+      if (session.host_pilot_id === account.pilot_id) {
+        return json({ error: "No puedes unirte a tu propio combate." }, 409);
+      }
+      if (session.status !== "WAITING" || session.created_at + 60_000 <= now) {
+        if (session.status === "WAITING") {
+          await db
+            .prepare(
+              "UPDATE boss_help_sessions SET status = 'EXPIRED', ended_at = ? WHERE session_id = ? AND status = 'WAITING'",
+            )
+            .bind(now, sessionId)
+            .run();
+          await room.fetch(
+            new Request("https://boss-help/ended", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ sessionId, status: "expired" }),
+            }),
+          );
+        }
+        return json({ error: "La solicitud expiró o ya tiene un ayudante." }, 409);
+      }
+      const helperProfile = await db
+        .prepare("SELECT display_name FROM player_profiles WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ display_name: string }>();
+      const savedProgress = await db
+        .prepare("SELECT progress_json FROM player_progress WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .first<{ progress_json: string }>();
+      let shipId = "falcon";
+      try {
+        const progress: unknown = savedProgress?.progress_json
+          ? JSON.parse(savedProgress.progress_json)
+          : null;
+        if (
+          isRecord(progress) &&
+          typeof progress["selectedShip"] === "string" &&
+          (await getOwnedShips(db, account.pilot_id)).includes(progress["selectedShip"])
+        ) {
+          shipId = progress["selectedShip"];
+        }
+      } catch (error) {
+        console.error("No se pudo recuperar la nave del ayudante:", error);
+      }
+      const joined = await db
+        .prepare(
+          `UPDATE boss_help_sessions SET helper_pilot_id = ?, status = 'ACTIVE', started_at = ?
+           WHERE session_id = ? AND status = 'WAITING' AND created_at + 60000 > ?
+             AND EXISTS (SELECT 1 FROM alliance_members host
+               WHERE host.pilot_id = boss_help_sessions.host_pilot_id
+                 AND host.alliance_id = ?)
+             AND EXISTS (SELECT 1 FROM alliance_members helper
+               WHERE helper.pilot_id = ? AND helper.alliance_id = ?)
+           RETURNING session_id`,
+        )
+        .bind(
+          account.pilot_id,
+          now,
+          sessionId,
+          now,
+          membership.alliance_id,
+          account.pilot_id,
+          membership.alliance_id,
+        )
+        .first<{ session_id: string }>();
+      if (!joined) return json({ error: "Otro miembro ya se unió o la solicitud expiró." }, 409);
+      const notification = await room.fetch(
+        new Request("https://boss-help/joined", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            hostPilotId: session.host_pilot_id,
+            helperPilotId: account.pilot_id,
+            helperName: helperProfile?.display_name || "PILOTO",
+            shipId,
+          }),
+        }),
+      );
+      if (!notification.ok) {
+        console.error("El Durable Object rechazó la unión al combate:", notification.status);
+        return json({ error: "No se pudo notificar la incorporación al combate." }, 502);
+      }
+      return json({
+        success: true,
+        session_id: sessionId,
+        boss_id: session.boss_id,
+        ship_id: shipId,
+      });
+    }
+
+    const actorIsHost = session.host_pilot_id === account.pilot_id;
+    const actorIsHelper = session.helper_pilot_id === account.pilot_id;
+    if (!actorIsHost && !actorIsHelper)
+      return json({ error: "No participas en esta sesión." }, 403);
+    if (!["WAITING", "ACTIVE"].includes(session.status)) {
+      return json({ success: true, status: session.status });
+    }
+    const status = actorIsHost && session.status === "WAITING" ? "EXPIRED" : "LEFT";
+    const ended = await db
+      .prepare(
+        `UPDATE boss_help_sessions SET status = ?, ended_at = ?
+         WHERE session_id = ? AND status IN ('WAITING', 'ACTIVE')`,
+      )
+      .bind(status, now, sessionId)
+      .run();
+    if (ended.meta?.changes) {
+      await room.fetch(
+        new Request("https://boss-help/ended", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            status: status === "EXPIRED" ? "expired" : "left",
+            pilotId: account.pilot_id,
+          }),
+        }),
+      );
+    }
+    return json({ success: true, status });
+  }
+
   const body = await readJson(request, isStart ? 1024 : 262_144);
   if (!body) return json({ error: "El cuerpo de la solicitud no es válido." }, 400);
   const bossId = body["boss_id"] ?? body["bossId"];
   const reward = BOSS_REWARDS.find((candidate) => candidate.bossId === bossId);
   const params = reward ? BOSS_COMBAT_PARAMS[reward.bossId] : undefined;
 
-  const now = Date.now();
   try {
     await ensurePilot(db, account.pilot_id);
     if (isStart) {
@@ -2596,6 +2944,32 @@ async function handleBossRequest(
     if (attempt.claimed_at !== null) {
       return json({ error: "Este token de combate ya fue utilizado." }, 409);
     }
+    const helpSessionId = body["help_session_id"];
+    let helpSession: { session_id: string; helper_pilot_id: string } | null = null;
+    if (helpSessionId !== undefined) {
+      if (typeof helpSessionId !== "string") {
+        return json({ error: "La sesión de ayuda indicada no es válida." }, 400);
+      }
+      helpSession = await db
+        .prepare(
+          `SELECT session_id, helper_pilot_id FROM boss_help_sessions
+           WHERE session_id = ? AND host_pilot_id = ? AND boss_id = ? AND status = 'ACTIVE'`,
+        )
+        .bind(helpSessionId, account.pilot_id, attempt.boss_id)
+        .first<{ session_id: string; helper_pilot_id: string }>();
+      if (!helpSession?.helper_pilot_id) {
+        return json({ error: "La sesión de ayuda activa no pertenece a este combate." }, 409);
+      }
+    } else {
+      const activeHelp = await db
+        .prepare(
+          `SELECT session_id FROM boss_help_sessions
+           WHERE host_pilot_id = ? AND boss_id = ? AND status = 'ACTIVE'`,
+        )
+        .bind(account.pilot_id, attempt.boss_id)
+        .first<{ session_id: string }>();
+      if (activeHelp) return json({ error: "Falta validar la recompensa de tu ayudante." }, 409);
+    }
     const claimId = randomHex(32);
     const consumed = await db
       .prepare(
@@ -2652,6 +3026,16 @@ async function handleBossRequest(
       return json({ error: "Una derrota del jugador no puede declararse como victoria." }, 400);
     }
     if (result === "defeat") {
+      if (helpSession) {
+        await db
+          .prepare(
+            `UPDATE boss_help_sessions SET status = 'COMPLETED', ended_at = ?
+             WHERE session_id = ? AND status = 'ACTIVE'`,
+          )
+          .bind(now, helpSession.session_id)
+          .run();
+        await notifyBossHelpEnded(env, db, helpSession.session_id, account.pilot_id, "completed");
+      }
       return json({ success: true, result, bossId: reward.bossId, rewards: [] });
     }
 
@@ -2751,6 +3135,65 @@ async function handleBossRequest(
           ),
       ),
     ];
+    if (helpSession) {
+      statements.push(
+        db
+          .prepare(
+            `UPDATE pilots SET obsidian = obsidian + 1, updated_at = ?
+             WHERE pilot_id = ? AND EXISTS (
+               SELECT 1 FROM boss_help_sessions
+               WHERE session_id = ? AND host_pilot_id = ? AND helper_pilot_id = ?
+                 AND status = 'ACTIVE'
+             )`,
+          )
+          .bind(
+            now,
+            helpSession.helper_pilot_id,
+            helpSession.session_id,
+            account.pilot_id,
+            helpSession.helper_pilot_id,
+          ),
+        db
+          .prepare(
+            `INSERT INTO player_progress (pilot_id, progress_json, updated_at)
+             SELECT ?, json_set(?, '$.credits', ?), ?
+             WHERE EXISTS (
+               SELECT 1 FROM boss_help_sessions
+               WHERE session_id = ? AND host_pilot_id = ? AND helper_pilot_id = ?
+                 AND status = 'ACTIVE'
+             )
+             ON CONFLICT(pilot_id) DO UPDATE SET
+               progress_json = json_set(
+                 CASE WHEN json_valid(player_progress.progress_json)
+                   THEN player_progress.progress_json ELSE ? END,
+                 '$.credits',
+                 COALESCE(CAST(json_extract(
+                   CASE WHEN json_valid(player_progress.progress_json)
+                     THEN player_progress.progress_json ELSE ? END,
+                   '$.credits'
+                 ) AS INTEGER), 0) + 50
+               ),
+               updated_at = excluded.updated_at`,
+          )
+          .bind(
+            helpSession.helper_pilot_id,
+            DEFAULT_REFERRAL_PROGRESS,
+            50,
+            now,
+            helpSession.session_id,
+            account.pilot_id,
+            helpSession.helper_pilot_id,
+            DEFAULT_REFERRAL_PROGRESS,
+            DEFAULT_REFERRAL_PROGRESS,
+          ),
+        db
+          .prepare(
+            `UPDATE boss_help_sessions SET status = 'COMPLETED', ended_at = ?
+             WHERE session_id = ? AND host_pilot_id = ? AND helper_pilot_id = ? AND status = 'ACTIVE'`,
+          )
+          .bind(now, helpSession.session_id, account.pilot_id, helpSession.helper_pilot_id),
+      );
+    }
     const results = await db.batch(statements);
     if (results[0]?.meta?.changes !== 1) {
       const previous = await db
@@ -2767,16 +3210,46 @@ async function handleBossRequest(
     ) {
       throw new Error("La recompensa del boss no se pudo aplicar completamente.");
     }
+    if (helpSession) {
+      await notifyBossHelpEnded(env, db, helpSession.session_id, account.pilot_id, "completed");
+    }
     return json({
       success: true,
       bossId: reward.bossId,
       obsidian: reward.obsidian,
       cooldownUntil: now + BOSS_COOLDOWN_MS,
+      helperReward: helpSession ? { credits: 50, obsidian: 1 } : null,
       rewards: drops.map(({ itemName, itemType }) => ({ itemName, itemType })),
     });
   } catch (error) {
     console.error("No se pudo aplicar la recompensa del boss:", error);
     return json({ error: "No se pudo guardar la recompensa del boss." }, 503);
+  }
+}
+
+async function notifyBossHelpEnded(
+  env: WorkerEnv | undefined,
+  db: D1Database,
+  sessionId: string,
+  hostPilotId: string,
+  status: "completed" | "left" | "expired",
+): Promise<void> {
+  if (!env?.BOSS_HELP) return;
+  const membership = await db
+    .prepare("SELECT alliance_id FROM alliance_members WHERE pilot_id = ?")
+    .bind(hostPilotId)
+    .first<{ alliance_id: string }>();
+  if (!membership) return;
+  const room = env.BOSS_HELP.get(env.BOSS_HELP.idFromName(membership.alliance_id));
+  const response = await room.fetch(
+    new Request("https://boss-help/ended", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, status }),
+    }),
+  );
+  if (!response.ok) {
+    console.error("El Durable Object rechazó el fin del combate:", response.status);
   }
 }
 
@@ -3808,3 +4281,4 @@ export default {
 };
 
 export { ChatRoom } from "./chat/chat-room";
+export { BossHelpRoom } from "./game/boss-help-room";

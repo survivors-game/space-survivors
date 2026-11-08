@@ -31,6 +31,11 @@ function createDatabase() {
     string,
     { itemId: string; itemName: string; itemType: string; quantity: number; grantSource: string }
   >();
+  const helpSessions = new Map<
+    string,
+    { hostPilotId: string; helperPilotId: string; status: "ACTIVE" | "COMPLETED" }
+  >();
+  const helperBalances = new Map<string, { credits: number; obsidian: number }>();
   let bossObsidian = 0;
 
   const db = {
@@ -79,6 +84,9 @@ function createDatabase() {
             }
             attempt.claimedAt = Number(values[0]);
             attempt.claimId = String(values[1]);
+          } else if (query.includes("UPDATE boss_help_sessions SET status = 'COMPLETED'")) {
+            const session = helpSessions.get(String(values[1]));
+            if (session?.status === "ACTIVE") session.status = "COMPLETED";
           } else if (query.includes("INSERT OR IGNORE INTO pilot_inventory")) {
             inventory.set("falcon", {
               itemId: "falcon",
@@ -115,6 +123,15 @@ function createDatabase() {
           if (query.includes("FROM boss_cooldowns")) {
             const cooldown = cooldowns.get(String(values[1]));
             return cooldown ? ({ last_defeated_at: cooldown.lastDefeatedAt } as T) : null;
+          }
+          if (query.includes("FROM boss_help_sessions")) {
+            const session = helpSessions.get(String(values[0]));
+            return session?.status === "ACTIVE"
+              ? ({
+                  session_id: values[0],
+                  helper_pilot_id: session.helperPilotId,
+                } as T)
+              : null;
           }
           if (query.includes("FROM boss_attempts")) {
             const attempt = attempts.get(String(values[0]));
@@ -195,6 +212,51 @@ function createDatabase() {
           bossObsidian += Number(values[0]);
           return { meta: { changes: 1 } };
         }
+        if (query.includes("UPDATE pilots SET obsidian = obsidian + 1")) {
+          const session = helpSessions.get(String(values[2]));
+          if (
+            !session ||
+            session.status !== "ACTIVE" ||
+            session.hostPilotId !== values[3] ||
+            session.helperPilotId !== values[4] ||
+            session.helperPilotId !== values[1]
+          ) {
+            return { meta: { changes: 0 } };
+          }
+          const balance = helperBalances.get(session.helperPilotId) ?? { credits: 0, obsidian: 0 };
+          balance.obsidian += 1;
+          helperBalances.set(session.helperPilotId, balance);
+          return { meta: { changes: 1 } };
+        }
+        if (query.includes("INSERT INTO player_progress")) {
+          const session = helpSessions.get(String(values[4]));
+          if (
+            !session ||
+            session.status !== "ACTIVE" ||
+            session.hostPilotId !== values[5] ||
+            session.helperPilotId !== values[6] ||
+            session.helperPilotId !== values[0]
+          ) {
+            return { meta: { changes: 0 } };
+          }
+          const balance = helperBalances.get(session.helperPilotId) ?? { credits: 0, obsidian: 0 };
+          balance.credits += 50;
+          helperBalances.set(session.helperPilotId, balance);
+          return { meta: { changes: 1 } };
+        }
+        if (query.includes("UPDATE boss_help_sessions SET status = 'COMPLETED'")) {
+          const session = helpSessions.get(String(values[1]));
+          if (
+            !session ||
+            session.status !== "ACTIVE" ||
+            session.hostPilotId !== values[2] ||
+            session.helperPilotId !== values[3]
+          ) {
+            return { meta: { changes: 0 } };
+          }
+          session.status = "COMPLETED";
+          return { meta: { changes: 1 } };
+        }
         if (query.includes("INSERT INTO pilot_inventory")) {
           const cooldown = cooldowns.get(String(values[9]));
           if (!cooldown || cooldown.rewardId !== values[10]) return { meta: { changes: 0 } };
@@ -219,6 +281,8 @@ function createDatabase() {
     db,
     cooldowns,
     attempts,
+    helpSessions,
+    helperBalances,
     inventory,
     getBossObsidian: () => bossObsidian,
   };
@@ -286,6 +350,7 @@ async function claimBoss(
   seed: string,
   result: "victory" | "defeat",
   evidence: BossCombatEvidence,
+  helpSessionId?: string,
 ) {
   const proof = await createBossCombatProof(seed, evidence);
   return server.fetch(
@@ -295,6 +360,7 @@ async function claimBoss(
       result,
       ...evidence,
       proof,
+      ...(helpSessionId ? { help_session_id: helpSessionId } : {}),
     }),
     { DB: db },
   );
@@ -310,6 +376,63 @@ afterEach(() => {
 });
 
 describe("server-validated boss combat", () => {
+  it("pays the helper only after a validated victory", async () => {
+    const victoryState = createDatabase();
+    const victorySession = "help_victory";
+    victoryState.helpSessions.set(victorySession, {
+      hostPilotId: PILOT_ID,
+      helperPilotId: "plt_helper",
+      status: "ACTIVE",
+    });
+    const { response: victoryStart, body: victoryAttempt } = await startBoss(
+      victoryState.db,
+      "leviathan",
+    );
+    expect(victoryStart.status).toBe(200);
+    const durationMs = victoryAttempt.boss!.min_combat_ms + 1_000;
+    vi.advanceTimersByTime(durationMs);
+    const victory = await claimBoss(
+      victoryState.db,
+      "leviathan",
+      victoryAttempt.token!,
+      victoryAttempt.seed!,
+      "victory",
+      createEvidence(victoryAttempt.issued_at!, durationMs, victoryAttempt.boss!.hp),
+      victorySession,
+    );
+    expect(victory.status).toBe(200);
+    expect(victoryState.getBossObsidian()).toBe(3);
+    expect(victoryState.helperBalances.get("plt_helper")).toEqual({ credits: 50, obsidian: 1 });
+    expect(victoryState.helpSessions.get(victorySession)?.status).toBe("COMPLETED");
+
+    const defeatState = createDatabase();
+    const defeatSession = "help_defeat";
+    defeatState.helpSessions.set(defeatSession, {
+      hostPilotId: PILOT_ID,
+      helperPilotId: "plt_helper",
+      status: "ACTIVE",
+    });
+    const { response: defeatStart, body: defeatAttempt } = await startBoss(
+      defeatState.db,
+      "leviathan",
+    );
+    expect(defeatStart.status).toBe(200);
+    const defeatDuration = defeatAttempt.boss!.min_combat_ms + 1_000;
+    vi.advanceTimersByTime(defeatDuration);
+    const defeat = await claimBoss(
+      defeatState.db,
+      "leviathan",
+      defeatAttempt.token!,
+      defeatAttempt.seed!,
+      "defeat",
+      createEvidence(defeatAttempt.issued_at!, defeatDuration, defeatAttempt.boss!.hp),
+      defeatSession,
+    );
+    expect(defeat.status).toBe(200);
+    expect(defeatState.getBossObsidian()).toBe(0);
+    expect(defeatState.helperBalances.size).toBe(0);
+  });
+
   it("uses server parameters and awards progressive rewards for valid victories", async () => {
     const { db, cooldowns, inventory, getBossObsidian } = createDatabase();
     expect(BOSS_REWARDS.map(({ bossId }) => bossId)).toEqual(["leviathan", "nemesis", "colossus"]);

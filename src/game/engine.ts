@@ -32,7 +32,7 @@ import type {
   UpgradeChoice,
   WeaponState,
 } from "./types";
-import type { ShipDef } from "./data/ships";
+import { shipById, type ShipDef } from "./data/ships";
 import type { StageDef } from "./data/stages";
 import { ENEMIES, enemyById } from "./data/enemies";
 import { bossById } from "./data/bosses";
@@ -91,11 +91,26 @@ export interface EngineCallbacks {
     result: "victory" | "defeat",
     evidence: BossCombatEvidence,
   ) => void;
+  onBossHelpState?: (state: BossHelpState) => void;
   onChatEvent?: (
     event:
       | { type: "boss_kill"; bossName: string; shipName: string }
       | { type: "drop"; itemName: string },
   ) => void;
+}
+
+export interface BossHelpState {
+  bossId: string;
+  bossName: string;
+  bossX: number;
+  bossY: number;
+  bossHp: number;
+  bossMaxHp: number;
+  hostX: number;
+  hostY: number;
+  hostHp: number;
+  hostMaxHp: number;
+  enemyShots: { x: number; y: number }[];
 }
 
 export interface EngineOptions {
@@ -182,6 +197,8 @@ export class Engine {
   private bossDamageReceived = 0;
   private bossHitCount = 0;
   private bossCombatEvents: BossCombatEvent[] = [];
+  private helperPosition: { x: number; y: number; ship: ShipDef } | null = null;
+  private lastHelperShotAt = 0;
   pendingLevelUps = 0;
   choices: UpgradeChoice[] = [];
   bannerState: HudState["banner"] = null;
@@ -434,6 +451,47 @@ export class Engine {
     this.state = "PLAYING";
     this.last = performance.now();
     this.cb.onPauseChange(false);
+  }
+
+  getBossHelpState(): BossHelpState | null {
+    const boss = this.boss;
+    if (!boss?.boss) return null;
+    const enemyShots: { x: number; y: number }[] = [];
+    this.eProj.forEachAlive((shot) => {
+      if (enemyShots.length < 40) enemyShots.push({ x: shot.x, y: shot.y });
+    });
+    return {
+      bossId: boss.boss.id,
+      bossName: boss.boss.name,
+      bossX: boss.x,
+      bossY: boss.y,
+      bossHp: Math.max(0, boss.hp),
+      bossMaxHp: boss.maxHp,
+      hostX: this.player.x,
+      hostY: this.player.y,
+      hostHp: this.player.hp,
+      hostMaxHp: this.player.maxHp,
+      enemyShots,
+    };
+  }
+
+  applyHelperShot(damage: number): void {
+    const boss = this.boss;
+    const now = Date.now();
+    if (!boss?.alive || !boss.boss || now - this.lastHelperShotAt < 400) return;
+    this.lastHelperShotAt = now;
+    this.damageEnemy(boss, Math.min(35, Math.max(1, damage)));
+  }
+
+  setHelperPosition(x: number, y: number, shipId = "falcon"): void {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const ship = shipById(shipId);
+    if (!ship) return;
+    this.helperPosition = {
+      x: Math.max(this.player.x - 500, Math.min(this.player.x + 500, this.player.x + x)),
+      y: Math.max(this.player.y - 500, Math.min(this.player.y + 500, this.player.y + y)),
+      ship,
+    };
   }
 
   private frame(dt: number) {
@@ -2866,7 +2924,6 @@ export class Engine {
       Math.abs(x - this.cam.x) < vw / 2 + r && Math.abs(y - this.cam.y) < vh / 2 + r;
 
     this.backdrop.drawFloor(ctx, this.cam.x, this.cam.y, vw, vh, t);
-
     // arena boundary
     const R = CONFIG.world.arenaRadius;
     if (Math.hypot(this.cam.x, this.cam.y) + Math.hypot(vw, vh) / 2 > R) {
@@ -3071,6 +3128,33 @@ export class Engine {
     });
 
     this.drawPlayer(ctx, t, fancy);
+    if (this.helperPosition && inView(this.helperPosition.x, this.helperPosition.y, 40)) {
+      ctx.save();
+      this.drawFlames(
+        ctx,
+        this.helperPosition.x,
+        this.helperPosition.y,
+        0,
+        PLAYER_SCALE,
+        this.helperPosition.ship.engines,
+        this.helperPosition.ship.trail,
+        0.8,
+        fancy,
+      );
+      drawSprite(
+        ctx,
+        getSprite(this.helperPosition.ship.sprite),
+        this.helperPosition.x,
+        this.helperPosition.y,
+        0,
+        PLAYER_SCALE,
+      );
+      ctx.fillStyle = "#ff4df0";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("AYUDANTE", this.helperPosition.x, this.helperPosition.y - 24);
+      ctx.restore();
+    }
 
     // player projectiles
     ctx.globalCompositeOperation = "lighter";
