@@ -4282,3 +4282,4 @@ export default {
 
 export { ChatRoom } from "./chat/chat-room";
 export { BossHelpRoom } from "./game/boss-help-room";
+export { BossHelpRoom } from "./game/boss-help-room";
