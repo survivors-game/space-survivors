@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
