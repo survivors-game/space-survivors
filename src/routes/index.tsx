@@ -171,10 +171,13 @@ function Index() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleSessionLoading, setGoogleSessionLoading] = useState(true);
+  const [bossCooldowns, setBossCooldowns] = useState<Record<string, number>>({});
+  const [startingMission, setStartingMission] = useState(false);
   const [turnstileOpen, setTurnstileOpen] = useState(false);
   const [turnstileVerifying, setTurnstileVerifying] = useState(false);
   const [turnstileWidgetVersion, setTurnstileWidgetVersion] = useState(0);
   const googleConnectionLockRef = useRef(false);
+  const startingMissionRef = useRef(false);
   const progressSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -585,6 +588,7 @@ function Index() {
       hangar: calcHangarBonuses(progress.upgrades),
       durationSec: 1200,
       isEndless: gameMode === "ENDLESS",
+      bossCooldowns,
       callbacks: {
         onLevelUp: (nextChoices, nextRerolls) => {
           setChoices(nextChoices);
@@ -605,6 +609,28 @@ function Index() {
           setScreen("GAMEOVER");
         },
         onPauseChange: setPaused,
+        onBossDefeated: (bossId) => {
+          void marketRequest<{
+            obsidian: number;
+            rewards: { itemType: "nave" | "objeto"; itemName: string }[];
+          }>("/api/bosses/defeat", {
+            method: "POST",
+            body: JSON.stringify({ bossId }),
+          })
+            .then((result) => {
+              setMarketRefresh((version) => version + 1);
+              const drops = result.rewards.map((reward) => reward.itemName);
+              setNotice(
+                `RECOMPENSA DE BOSS: +${result.obsidian} OBS${drops.length ? ` · ${drops.join(" · ")}` : ""}`,
+              );
+            })
+            .catch((error: unknown) => {
+              console.error("No se pudo reclamar la recompensa del boss:", error);
+              setNotice(
+                error instanceof Error ? error.message : "No se pudo reclamar la recompensa del boss.",
+              );
+            });
+        },
         onChatEvent: (chatEvent) => {
           void fetch("/api/chat/event", {
             method: "POST",
@@ -636,7 +662,15 @@ function Index() {
       engine.stop();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode, saveProgress]);
+  }, [
+    screen,
+    selectedShip,
+    selectedStage,
+    progress.upgrades,
+    gameMode,
+    bossCooldowns,
+    saveProgress,
+  ]);
 
   useEffect(() => {
     if (googleSessionLoading || googlePlayer) return;
@@ -675,14 +709,30 @@ function Index() {
     saveProgress({ ...progress, selectedStage: id });
   };
 
-  const startMission = () => {
+  const startMission = async () => {
     if (!requireGoogleSession()) return;
-    Audio.init();
-    setHud(null);
-    setChoices([]);
-    setPaused(false);
-    setRunResult(null);
-    setScreen("PLAYING");
+    if (startingMissionRef.current) return;
+    startingMissionRef.current = true;
+    setStartingMission(true);
+    try {
+      const { cooldowns } = await marketRequest<{ cooldowns: Record<string, number> }>(
+        "/api/bosses/status",
+      );
+      setBossCooldowns(cooldowns);
+      Audio.init();
+      setHud(null);
+      setChoices([]);
+      setPaused(false);
+      setRunResult(null);
+      setScreen("PLAYING");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "No se pudo consultar el cooldown de bosses.",
+      );
+    } finally {
+      startingMissionRef.current = false;
+      setStartingMission(false);
+    }
   };
 
   const toggleAudio = () => {
@@ -1387,9 +1437,10 @@ function Index() {
                 </div>
                 <Button
                   onClick={startMission}
-                  className="font-arcade mt-6 h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] shadow-[0_0_25px_#00f0ff25] hover:bg-cyan-200"
+                  disabled={startingMission}
+                  className="font-arcade mt-6 h-12 w-full rounded-none bg-[#00f0ff] text-[9px] uppercase tracking-[0.08em] text-[#070814] shadow-[0_0_25px_#00f0ff25] hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60"
                 >
-                  <Play /> Iniciar misión
+                  <Play /> {startingMission ? "Consultando bosses..." : "Iniciar misión"}
                 </Button>
                 <p className="mt-3 text-center text-[9px] uppercase tracking-[0.18em] text-white/35">
                   {gameMode === "ENDLESS"

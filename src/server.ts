@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { SHIPS } from "./game/data/ships";
+import { BOSS_COOLDOWN_MS, BOSS_REWARDS } from "./game/data/boss-rewards";
 import { handleChatRequest, type ChatWorkerEnv } from "./chat/chat-api";
 
 type D1Result<T = Record<string, unknown>> = {
@@ -1014,6 +1015,13 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           reason TEXT NOT NULL,
           created_at INTEGER NOT NULL
         )`,
+        `CREATE TABLE IF NOT EXISTS boss_cooldowns (
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          boss_id TEXT NOT NULL,
+          last_defeated_at INTEGER NOT NULL,
+          last_reward_id TEXT NOT NULL,
+          PRIMARY KEY (pilot_id, boss_id)
+        )`,
         `CREATE TABLE IF NOT EXISTS p2p_orders (
           id TEXT PRIMARY KEY,
           ad_id TEXT NOT NULL REFERENCES p2p_ads(id),
@@ -1166,6 +1174,159 @@ async function hasOpenOrder(db: D1Database, adId: string): Promise<boolean> {
     .bind(adId)
     .first<{ id: string }>();
   return order !== null;
+}
+
+async function handleBossRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/bosses/status" && url.pathname !== "/api/bosses/defeat") {
+    return null;
+  }
+  if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
+  if (
+    (url.pathname === "/api/bosses/status" && request.method !== "GET") ||
+    (url.pathname === "/api/bosses/defeat" && request.method !== "POST")
+  ) {
+    return json({ error: "Método no permitido." }, 405);
+  }
+  if (request.method === "POST" && !isSameOriginPost(request, url)) {
+    return json({ error: "Solicitud no autorizada." }, 403);
+  }
+
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await ensureMarketSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar el sistema de recompensas de bosses:", error);
+    return json({ error: "No se pudo preparar el sistema de bosses." }, 503);
+  }
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con Google para luchar contra bosses." }, 401);
+
+  if (url.pathname === "/api/bosses/status") {
+    try {
+      const { results = [] } = await db
+        .prepare("SELECT boss_id, last_defeated_at FROM boss_cooldowns WHERE pilot_id = ?")
+        .bind(account.pilot_id)
+        .all<{ boss_id: string; last_defeated_at: number }>();
+      const cooldowns = Object.fromEntries(
+        results.map((row) => [row.boss_id, row.last_defeated_at + BOSS_COOLDOWN_MS]),
+      );
+      return json({ cooldowns });
+    } catch (error) {
+      console.error("No se pudo consultar el cooldown de bosses:", error);
+      return json({ error: "No se pudo consultar el cooldown de bosses." }, 503);
+    }
+  }
+
+  const body = await readJson(request, 1024);
+  const bossId = body?.["bossId"];
+  const reward = BOSS_REWARDS.find((candidate) => candidate.bossId === bossId);
+  if (!reward) return json({ error: "El boss indicado no es válido." }, 400);
+
+  const now = Date.now();
+  const rewardId = `boss_${randomHex(12)}`;
+  const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
+  if (rollChance(reward.shipChance)) {
+    drops.push({
+      itemId: `boss_ship_${reward.bossId}_${reward.rank.toLowerCase()}`,
+      itemName: `Nave de combate · Rango ${reward.rank}`,
+      itemType: "nave",
+    });
+  }
+  if (rollChance(reward.itemChance)) {
+    drops.push({
+      itemId: `boss_item_${reward.bossId}_${reward.rank.toLowerCase()}`,
+      itemName: `Objeto especial · Rango ${reward.rank}`,
+      itemType: "objeto",
+    });
+  }
+
+  try {
+    await ensurePilot(db, account.pilot_id);
+    const statements = [
+      db
+        .prepare(
+          `INSERT INTO boss_cooldowns (pilot_id, boss_id, last_defeated_at, last_reward_id)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(pilot_id, boss_id) DO UPDATE SET
+            last_defeated_at = excluded.last_defeated_at,
+            last_reward_id = excluded.last_reward_id
+          WHERE boss_cooldowns.last_defeated_at <= ?`,
+        )
+        .bind(account.pilot_id, reward.bossId, now, rewardId, now - BOSS_COOLDOWN_MS),
+      db
+        .prepare(
+          `UPDATE pilots SET boss_obsidian = boss_obsidian + ?, updated_at = ?
+          WHERE pilot_id = ? AND EXISTS (
+            SELECT 1 FROM boss_cooldowns
+            WHERE pilot_id = ? AND boss_id = ? AND last_reward_id = ?
+          )`,
+        )
+        .bind(reward.obsidian, now, account.pilot_id, account.pilot_id, reward.bossId, rewardId),
+      ...drops.map((drop) =>
+        db
+          .prepare(
+            `INSERT INTO pilot_inventory
+              (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, created_at, updated_at)
+            SELECT ?, ?, ?, ?, ?, 1, 0, ?, ?
+            WHERE EXISTS (
+              SELECT 1 FROM boss_cooldowns
+              WHERE pilot_id = ? AND boss_id = ? AND last_reward_id = ?
+            )
+            ON CONFLICT(pilot_id, item_id) DO UPDATE SET
+              quantity = pilot_inventory.quantity + excluded.quantity,
+              updated_at = excluded.updated_at`,
+          )
+          .bind(
+            `inv_${randomHex(8)}`,
+            account.pilot_id,
+            drop.itemId,
+            drop.itemName,
+            drop.itemType,
+            now,
+            now,
+            account.pilot_id,
+            reward.bossId,
+            rewardId,
+          ),
+      ),
+    ];
+    const results = await db.batch(statements);
+    if (results[0]?.meta?.changes !== 1) {
+      const previous = await db
+        .prepare("SELECT last_defeated_at FROM boss_cooldowns WHERE pilot_id = ? AND boss_id = ?")
+        .bind(account.pilot_id, reward.bossId)
+        .first<{ last_defeated_at: number }>();
+      const retryAt = (previous?.last_defeated_at ?? now) + BOSS_COOLDOWN_MS;
+      const minutes = Math.max(1, Math.ceil((retryAt - now) / 60_000));
+      return json({ error: `Boss en cooldown. Disponible en ${minutes} min.`, retryAt }, 409);
+    }
+    if (
+      results[1]?.meta?.changes !== 1 ||
+      results.slice(2).some((result) => result.meta?.changes !== 1)
+    ) {
+      throw new Error("La recompensa del boss no se pudo aplicar completamente.");
+    }
+    return json({
+      success: true,
+      bossId: reward.bossId,
+      obsidian: reward.obsidian,
+      cooldownUntil: now + BOSS_COOLDOWN_MS,
+      rewards: drops.map(({ itemName, itemType }) => ({ itemName, itemType })),
+    });
+  } catch (error) {
+    console.error("No se pudo aplicar la recompensa del boss:", error);
+    return json({ error: "No se pudo guardar la recompensa del boss." }, 503);
+  }
+}
+
+function rollChance(probability: number): boolean {
+  const value = crypto.getRandomValues(new Uint32Array(1))[0]!;
+  return value / 0x1_0000_0000 < probability;
 }
 
 async function handleMarketRequest(
@@ -1692,6 +1853,8 @@ export default {
       if (authResponse) return authResponse;
       const leaderboardResponse = await handleLeaderboardRequest(request, workerEnv);
       if (leaderboardResponse) return leaderboardResponse;
+      const bossResponse = await handleBossRequest(request, workerEnv);
+      if (bossResponse) return bossResponse;
       const marketResponse = await handleMarketRequest(request, workerEnv);
       if (marketResponse) return marketResponse;
       const handler = await getServerEntry();
@@ -1704,6 +1867,7 @@ export default {
         pathname.startsWith("/api/auth/") ||
         pathname.startsWith("/api/chat/") ||
         pathname.startsWith("/api/leaderboard") ||
+        pathname.startsWith("/api/bosses/") ||
         pathname.startsWith("/api/market/") ||
         pathname === "/api/admin/credit-obsidian"
       ) {

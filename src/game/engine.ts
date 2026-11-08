@@ -36,6 +36,7 @@ import type { ShipDef } from "./data/ships";
 import type { StageDef } from "./data/stages";
 import { ENEMIES, enemyById } from "./data/enemies";
 import { bossById } from "./data/bosses";
+import { BOSS_COOLDOWN_MS } from "./data/boss-rewards";
 import { WEAPONS, dronePos, droneCount, fieldRadius, weaponById } from "./data/weapons";
 import { PASSIVES, passiveById } from "./data/passives";
 import type { HangarBonuses } from "./meta/upgrades";
@@ -64,6 +65,7 @@ export interface EngineCallbacks {
   onLevelUp: (choices: UpgradeChoice[], rerolls: number) => void;
   onEnd: (r: RunResult) => void;
   onPauseChange: (paused: boolean) => void;
+  onBossDefeated?: (bossId: string) => void;
   onChatEvent?: (
     event:
       | { type: "boss_kill"; bossName: string; shipName: string }
@@ -78,6 +80,7 @@ export interface EngineOptions {
   hangar: HangarBonuses;
   durationSec: number;
   isEndless?: boolean;
+  bossCooldowns?: Record<string, number>;
   callbacks: EngineCallbacks;
 }
 
@@ -156,6 +159,7 @@ export class Engine {
   kills = 0;
   killsByType: Record<string, number> = {};
   bossesDefeated: string[] = [];
+  private bossCooldowns: Record<string, number>;
   damageDealt = 0;
   damageTaken = 0;
   energy = 0;
@@ -182,6 +186,7 @@ export class Engine {
     this.stage = o.stage;
     this.hangar = o.hangar;
     this.cb = o.callbacks;
+    this.bossCooldowns = { ...o.bossCooldowns };
     this.isEndless = Boolean(o.isEndless);
     this.duration = this.isEndless ? Infinity : o.durationSec;
     this.xpScale = this.isEndless ? 1 : Math.sqrt(900 / this.duration);
@@ -1389,6 +1394,8 @@ export class Engine {
     this.kills++;
     this.killsByType[def.id] = (this.killsByType[def.id] ?? 0) + 1;
     this.bossesDefeated.push(def.id);
+    this.bossCooldowns[def.id] = Date.now() + BOSS_COOLDOWN_MS;
+    this.cb.onBossDefeated?.(def.id);
     this.creditsRaw += def.credits;
     this.explosion(e.x, e.y, 90, def.color);
     this.emit(e.x, e.y, 60, {
@@ -1821,6 +1828,22 @@ export class Engine {
     const next = plan[this.nextBoss];
     if (next && this.minute >= next.minute && !this.boss) {
       if (this.bossWarnAt < 0) {
+        const cooldownUntil = this.bossCooldowns[next.boss] ?? 0;
+        if (cooldownUntil > Date.now()) {
+          const def = bossById(next.boss);
+          const minutes = Math.ceil((cooldownUntil - Date.now()) / 60_000);
+          this.banner(
+            `${def.name} BLOQUEADO`,
+            `Enfriamiento activo · Disponible en ${minutes} min`,
+            "warn",
+          );
+          this.nextBoss++;
+          if (!this.isEndless && next.final) {
+            this.state = "DYING";
+            this.endTimer = 2;
+          }
+          return;
+        }
         this.bossWarnAt = this.elapsed + 3;
         const def = bossById(next.boss);
         this.banner(
