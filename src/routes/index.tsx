@@ -60,7 +60,15 @@ import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { MISSIONS } from "@/game/meta/missions";
-import type { P2PMyAd, P2PPilotState, P2PPublishInput } from "@/game/data/market";
+import type {
+  P2PHistoryOrder,
+  P2PItemType,
+  P2PMyAd,
+  P2PPurchaseOrder,
+  P2PPublicListing,
+  P2PPilotState,
+  P2PPublishInput,
+} from "@/game/data/market";
 import {
   ProgressStore,
   applyRun as recordRun,
@@ -163,6 +171,10 @@ function Index() {
   const [notice, setNotice] = useState("");
   const [marketPilot, setMarketPilot] = useState<P2PPilotState | null>(null);
   const [marketAds, setMarketAds] = useState<P2PMyAd[]>([]);
+  const [marketListings, setMarketListings] = useState<P2PPublicListing[]>([]);
+  const [marketListingPage, setMarketListingPage] = useState(1);
+  const [marketListingPages, setMarketListingPages] = useState(1);
+  const [marketHistory, setMarketHistory] = useState<P2PHistoryOrder[]>([]);
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketError, setMarketError] = useState("");
   const [marketRefresh, setMarketRefresh] = useState(0);
@@ -204,6 +216,8 @@ function Index() {
     if (!googlePlayer) {
       setMarketPilot(null);
       setMarketAds([]);
+      setMarketListings([]);
+      setMarketHistory([]);
       setMarketLoading(false);
       setMarketError("");
       return;
@@ -213,13 +227,15 @@ function Index() {
     setMarketError("");
     void (async () => {
       try {
-        const [pilot, myAds] = await Promise.all([
+        const [pilot, myAds, history] = await Promise.all([
           marketRequest<P2PPilotState>("/api/market/pilot-state"),
           marketRequest<{ ads: P2PMyAd[] }>("/api/market/my-ads"),
+          marketRequest<{ orders: P2PHistoryOrder[] }>("/api/market/history"),
         ]);
         if (active) {
           setMarketPilot(pilot);
           setMarketAds(myAds.ads);
+          setMarketHistory(history.orders);
           await progressSaveQueueRef.current.catch(() => undefined);
           if (!active) return;
           void submitLeaderboardUpdate({
@@ -251,6 +267,34 @@ function Index() {
       active = false;
     };
   }, [googleSessionLoading, googlePlayer, marketRefresh, profileName]);
+
+  const loadMarketListings = useCallback(
+    async (
+      page: number,
+      itemType: P2PItemType | "",
+      sort: "newest" | "price_asc" | "price_desc",
+    ) => {
+      setMarketError("");
+      try {
+        const params = new URLSearchParams({ page: String(page), sort });
+        if (itemType) params.set("item_type", itemType);
+        const result = await marketRequest<{
+          listings: P2PPublicListing[];
+          page: number;
+          pages: number;
+        }>(`/api/market/listings?${params.toString()}`);
+        setMarketListings(result.listings);
+        setMarketListingPage(result.page);
+        setMarketListingPages(result.pages);
+      } catch (error) {
+        setMarketError(
+          error instanceof Error ? error.message : "No se pudieron cargar los anuncios.",
+        );
+        throw error;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -468,6 +512,49 @@ function Index() {
     }
   };
 
+  const buyMarketListing = async (listingId: string): Promise<P2PPurchaseOrder> => {
+    setMarketError("");
+    try {
+      const order = await marketRequest<P2PPurchaseOrder>("/api/market/buy", {
+        method: "POST",
+        body: JSON.stringify({ listing_id: listingId }),
+      });
+      setMarketRefresh((version) => version + 1);
+      return order;
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo iniciar la compra.");
+      throw error;
+    }
+  };
+
+  const confirmMarketOrder = async (orderId: string) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/confirm", {
+        method: "POST",
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo confirmar la compra.");
+      throw error;
+    }
+  };
+
+  const cancelMarketOrder = async (orderId: string) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/cancel", {
+        method: "POST",
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo cancelar la orden.");
+      throw error;
+    }
+  };
+
   const handleGoogleSignOut = async () => {
     if (googleConnectionLockRef.current) return;
     googleConnectionLockRef.current = true;
@@ -659,7 +746,11 @@ function Index() {
             })
             .catch((error: unknown) => {
               console.error("No se pudo publicar un evento del juego en el chat:", error);
-              setNotice(error instanceof Error ? error.message : "No se pudo publicar el evento en el chat.");
+              setNotice(
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo publicar el evento en el chat.",
+              );
             });
         },
       },
@@ -1110,9 +1201,7 @@ function Index() {
               </p>
               <div className="mt-5">
                 {turnstileVerifying ? (
-                  <p className="py-5 text-center text-xs text-cyan-200">
-                    Verificando…
-                  </p>
+                  <p className="py-5 text-center text-xs text-cyan-200">Verificando…</p>
                 ) : (
                   <TurnstileWidget
                     key={turnstileWidgetVersion}
@@ -1172,7 +1261,9 @@ function Index() {
                     if (requireGoogleSession()) setScreen("HANGAR");
                   }}
                   disabled={!googlePlayer || googleSessionLoading}
-                  title={!googlePlayer ? "Inicia sesión con Google para entrar al hangar" : "Hangar"}
+                  title={
+                    !googlePlayer ? "Inicia sesión con Google para entrar al hangar" : "Hangar"
+                  }
                   variant="outline"
                   className="h-12 flex-1 rounded-none border-[#8a2be2]/60 bg-[#8a2be2]/10 text-sm font-bold uppercase tracking-[0.18em] text-white hover:bg-[#8a2be2]/25 disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -1210,7 +1301,9 @@ function Index() {
                   <div className="absolute bottom-4 left-4 text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
                     {googlePlayer ? "NAVE ACTIVA" : "NAVE DE EXHIBICIÓN"}
                     <br />
-                    <span className="text-white">{googlePlayer ? selectedShip.name : "HALCÓN NOVA"}</span>
+                    <span className="text-white">
+                      {googlePlayer ? selectedShip.name : "HALCÓN NOVA"}
+                    </span>
                   </div>
                   <div className="absolute bottom-4 right-4 text-right text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
                     SECTOR
@@ -1223,7 +1316,10 @@ function Index() {
                     label="Misiones"
                     value={googlePlayer ? progress.stats.runs.toString().padStart(2, "0") : "00"}
                   />
-                  <MenuStat label="Bajas" value={googlePlayer ? progress.stats.kills.toLocaleString() : "0"} />
+                  <MenuStat
+                    label="Bajas"
+                    value={googlePlayer ? progress.stats.kills.toLocaleString() : "0"}
+                  />
                   <MenuStat
                     label="Naves"
                     value={googlePlayer ? progress.ships.length.toString().padStart(2, "0") : "00"}
@@ -1788,12 +1884,20 @@ function Index() {
                   actions={{
                     pilotState: marketPilot,
                     ads: marketAds,
+                    publicListings: marketListings,
+                    listingPage: marketListingPage,
+                    listingPages: marketListingPages,
+                    history: marketHistory,
                     selectedShipId: progress.selectedShip,
                     isLoading: marketLoading,
                     error: marketError,
                     onPublish: publishMarketAd,
                     onToggleAd: toggleMarketAd,
                     onCancelAd: cancelMarketAd,
+                    onLoadListings: loadMarketListings,
+                    onBuy: buyMarketListing,
+                    onConfirmOrder: confirmMarketOrder,
+                    onCancelOrder: cancelMarketOrder,
                   }}
                 />
               </div>
@@ -1806,11 +1910,17 @@ function Index() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <p className="text-[8px] uppercase tracking-widest text-white/40">PILOT ID</p>
-                      <p className="mt-2 break-all text-[10px] text-cyan-100">{googlePlayer?.playerId}</p>
+                      <p className="mt-2 break-all text-[10px] text-cyan-100">
+                        {googlePlayer?.playerId}
+                      </p>
                     </div>
                     <div>
-                      <p className="text-[8px] uppercase tracking-widest text-white/40">CORREO PRIVADO DE ACCESO</p>
-                      <p className="mt-2 break-all text-[10px] text-white/60">{googlePlayer?.email}</p>
+                      <p className="text-[8px] uppercase tracking-widest text-white/40">
+                        CORREO PRIVADO DE ACCESO
+                      </p>
+                      <p className="mt-2 break-all text-[10px] text-white/60">
+                        {googlePlayer?.email}
+                      </p>
                     </div>
                   </div>
                   <form
@@ -1826,24 +1936,31 @@ function Index() {
                           headers: { "content-type": "application/json" },
                           body: JSON.stringify({ displayName: profileNameDraft }),
                         });
-                        const payload = (await response.json().catch(() => null)) as
-                          | { displayName?: string; error?: string }
-                          | null;
+                        const payload = (await response.json().catch(() => null)) as {
+                          displayName?: string;
+                          error?: string;
+                        } | null;
                         if (!response.ok || !payload?.displayName) {
-                          throw new Error(payload?.error ?? "No se pudo guardar el nombre de usuario.");
+                          throw new Error(
+                            payload?.error ?? "No se pudo guardar el nombre de usuario.",
+                          );
                         }
                         setProfileName(payload.displayName);
                         setProfileNameDraft(payload.displayName);
                         setNotice("NOMBRE DE USUARIO GUARDADO");
                       } catch (error) {
-                        setNotice(error instanceof Error ? error.message : "No se pudo guardar el perfil.");
+                        setNotice(
+                          error instanceof Error ? error.message : "No se pudo guardar el perfil.",
+                        );
                       } finally {
                         setProfileSaving(false);
                       }
                     }}
                   >
                     <label className="min-w-0 flex-1">
-                      <span className="mb-2 block text-[8px] uppercase tracking-widest text-white/45">NOMBRE DE USUARIO (3–20 CARACTERES)</span>
+                      <span className="mb-2 block text-[8px] uppercase tracking-widest text-white/45">
+                        NOMBRE DE USUARIO (3–20 CARACTERES)
+                      </span>
                       <input
                         value={profileNameDraft}
                         onChange={(event) => setProfileNameDraft(event.target.value)}
@@ -1856,11 +1973,18 @@ function Index() {
                         placeholder="ELIGE TU NOMBRE"
                       />
                     </label>
-                    <Button type="submit" disabled={profileSaving} className="mt-auto h-11 rounded-none bg-[#00f0ff] px-5 text-[9px] font-bold uppercase text-[#070814] hover:bg-cyan-200">
+                    <Button
+                      type="submit"
+                      disabled={profileSaving}
+                      className="mt-auto h-11 rounded-none bg-[#00f0ff] px-5 text-[9px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
+                    >
                       {profileSaving ? "GUARDANDO..." : "GUARDAR NOMBRE"}
                     </Button>
                   </form>
-                  <p className="mt-2 text-[8px] text-white/35">El nombre será visible en el juego. Tu correo se conserva únicamente para iniciar sesión.</p>
+                  <p className="mt-2 text-[8px] text-white/35">
+                    El nombre será visible en el juego. Tu correo se conserva únicamente para
+                    iniciar sesión.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"

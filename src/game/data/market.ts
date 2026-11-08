@@ -39,7 +39,7 @@ export interface P2PPublishInput {
   paymentDetails: string;
 }
 
-export const P2P_FEE_OBSIDIAN = { publish: 1 } as const;
+export const P2P_FEE_OBSIDIAN = { publish: 1, purchase: 1 } as const;
 
 export const P2P_PAY_METHODS: readonly P2PPayMethod[] = [
   "NEQUI",
@@ -53,4 +53,40 @@ export interface P2PPilotState {
   callsign: string;
   obsidian: number;
   inventory: P2PInventoryItem[];
+}
+
+export interface P2PPublicListing {
+  listing_id: string;
+  item_id: string;
+  item_name: string;
+  item_type: P2PItemType;
+  price: number;
+  price_currency: P2PCurrency;
+  seller_callsign: string;
+  created_at: number;
+}
+
+export interface P2PPurchaseOrder {
+  order_id: string;
+  payment_methods: P2PPayMethod[];
+  payment_details: string;
+  price: number;
+  price_currency: P2PCurrency;
+  commission_obsidian: number;
+}
+
+export interface P2PHistoryOrder {
+  order_id: string;
+  item_id: string;
+  item_name: string;
+  item_type: P2PItemType;
+  price: number;
+  price_currency: P2PCurrency;
+  status: "PENDIENTE" | "COMPLETADA" | "CANCELADA";
+  created_at: number;
+  updated_at: number;
+  role: "COMPRADOR" | "VENDEDOR";
+  counterpart: string;
+  payment_methods: P2PPayMethod[] | null;
+  payment_details: string | null;
 }

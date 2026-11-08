@@ -418,10 +418,7 @@ async function handleLeaderboardRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) {
-    return json(
-      { error: "Inicia sesión con Google para actualizar la clasificación." },
-      401,
-    );
+    return json({ error: "Inicia sesión con Google para actualizar la clasificación." }, 401);
   }
 
   const body = await readJson(request, 4096);
@@ -564,9 +561,7 @@ async function verifyTurnstileToken(
     action?: string;
   };
   return (
-    result.success === true &&
-    result.hostname === expectedHostname &&
-    result.action === "login"
+    result.success === true && result.hostname === expectedHostname && result.action === "login"
   );
 }
 
@@ -861,18 +856,28 @@ async function handleAuthRequest(
     const body = await readJson(request, 2048);
     const displayName = typeof body?.["displayName"] === "string" ? body["displayName"].trim() : "";
     if (!/^[\p{L}\p{N}_-]{3,20}$/u.test(displayName)) {
-      return json({ error: "El nombre debe tener entre 3 y 20 caracteres: letras, números, guion o guion bajo." }, 400);
+      return json(
+        {
+          error:
+            "El nombre debe tener entre 3 y 20 caracteres: letras, números, guion o guion bajo.",
+        },
+        400,
+      );
     }
     const duplicate = await db
-      .prepare(`SELECT pilot_id FROM player_profiles WHERE lower(display_name) = lower(?) AND pilot_id <> ?`)
+      .prepare(
+        `SELECT pilot_id FROM player_profiles WHERE lower(display_name) = lower(?) AND pilot_id <> ?`,
+      )
       .bind(displayName, account.pilot_id)
       .first<{ pilot_id: string }>();
     if (duplicate) return json({ error: "Ese nombre de usuario ya está en uso." }, 409);
     await db
-      .prepare(`INSERT INTO player_profiles (pilot_id, display_name, updated_at)
+      .prepare(
+        `INSERT INTO player_profiles (pilot_id, display_name, updated_at)
         VALUES (?, ?, ?)
         ON CONFLICT(pilot_id) DO UPDATE SET
-          display_name = excluded.display_name, updated_at = excluded.updated_at`)
+          display_name = excluded.display_name, updated_at = excluded.updated_at`,
+      )
       .bind(account.pilot_id, displayName, Date.now())
       .run();
     return json({ success: true, displayName });
@@ -1113,6 +1118,8 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           ON p2p_ads(inventory_id) WHERE status IN ('ACTIVO', 'PAUSADO')`,
         `CREATE INDEX IF NOT EXISTS idx_p2p_orders_ad_status
           ON p2p_orders(ad_id, status)`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_pending_per_ad
+          ON p2p_orders(ad_id) WHERE status = 'PENDIENTE'`,
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_boss_attempts_active
           ON boss_attempts(pilot_id, boss_id) WHERE claimed_at IS NULL`,
         `CREATE TRIGGER IF NOT EXISTS market_publish_pilot_guard
@@ -1156,6 +1163,112 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
                 WHERE ad_id = OLD.id AND status IN ('ABIERTA', 'PENDIENTE', 'OPEN')
               )
               THEN RAISE(ABORT, 'market ad cannot be cancelled') END;
+          END`,
+        `CREATE TRIGGER IF NOT EXISTS market_buy_order_guard
+          BEFORE INSERT ON p2p_orders
+          WHEN NEW.status = 'PENDIENTE'
+          BEGIN
+            SELECT CASE WHEN NOT EXISTS (
+              SELECT 1
+              FROM p2p_ads ad
+              JOIN pilot_inventory item ON item.id = ad.inventory_id
+              JOIN pilots buyer ON buyer.pilot_id = NEW.buyer_pilot_id
+              WHERE ad.id = NEW.ad_id AND ad.status = 'ACTIVO'
+                AND ad.seller_pilot_id != NEW.buyer_pilot_id
+                AND item.pilot_id = ad.seller_pilot_id
+                AND item.quantity > 0
+                AND item.grant_source IN ('starter', 'boss', 'market')
+                AND buyer.obsidian >= 1
+            ) THEN RAISE(ABORT, 'market purchase is not eligible') END;
+          END`,
+        `CREATE TRIGGER IF NOT EXISTS market_buy_order_apply
+          AFTER INSERT ON p2p_orders
+          WHEN NEW.status = 'PENDIENTE'
+          BEGIN
+            UPDATE pilots SET obsidian = obsidian - 1, updated_at = NEW.created_at
+            WHERE pilot_id = NEW.buyer_pilot_id AND obsidian >= 1;
+            UPDATE pilot_inventory SET is_locked = 1, updated_at = NEW.created_at
+            WHERE id = (SELECT inventory_id FROM p2p_ads WHERE id = NEW.ad_id)
+              AND pilot_id = (
+                SELECT seller_pilot_id FROM p2p_ads WHERE id = NEW.ad_id
+              )
+              AND quantity > 0;
+          END`,
+        `CREATE TRIGGER IF NOT EXISTS market_order_confirm_guard
+          BEFORE UPDATE OF status ON p2p_orders
+          WHEN NEW.status = 'COMPLETADA' AND OLD.status != 'COMPLETADA'
+          BEGIN
+            SELECT CASE WHEN OLD.status != 'PENDIENTE'
+              OR NOT EXISTS (
+                SELECT 1 FROM p2p_ads ad
+                JOIN pilot_inventory item ON item.id = ad.inventory_id
+                WHERE ad.id = OLD.ad_id AND ad.status = 'ACTIVO'
+                  AND item.pilot_id = ad.seller_pilot_id
+                  AND item.is_locked = 1 AND item.quantity > 0
+              )
+              THEN RAISE(ABORT, 'market order cannot be completed') END;
+          END`,
+        `CREATE TRIGGER IF NOT EXISTS market_order_confirm_apply
+          AFTER UPDATE OF status ON p2p_orders
+          WHEN NEW.status = 'COMPLETADA' AND OLD.status = 'PENDIENTE'
+          BEGIN
+            UPDATE pilot_inventory
+            SET quantity = quantity + (
+              SELECT seller_item.quantity FROM p2p_ads ad
+              JOIN pilot_inventory seller_item ON seller_item.id = ad.inventory_id
+              WHERE ad.id = NEW.ad_id
+            ), grant_source = 'market', updated_at = NEW.updated_at
+            WHERE pilot_id = NEW.buyer_pilot_id
+              AND item_id = (SELECT item_id FROM p2p_ads WHERE id = NEW.ad_id)
+              AND id != (SELECT inventory_id FROM p2p_ads WHERE id = NEW.ad_id);
+            UPDATE pilot_inventory
+            SET pilot_id = NEW.buyer_pilot_id, grant_source = 'market',
+              is_locked = 0, updated_at = NEW.updated_at
+            WHERE id = (SELECT inventory_id FROM p2p_ads WHERE id = NEW.ad_id)
+              AND NOT EXISTS (
+                SELECT 1 FROM pilot_inventory buyer_item
+                JOIN p2p_ads ad ON ad.id = NEW.ad_id
+                WHERE buyer_item.pilot_id = NEW.buyer_pilot_id
+                  AND buyer_item.item_id = ad.item_id
+                  AND buyer_item.id != ad.inventory_id
+              );
+            UPDATE pilot_inventory
+            SET quantity = 0, is_locked = 0, updated_at = NEW.updated_at
+            WHERE id = (SELECT inventory_id FROM p2p_ads WHERE id = NEW.ad_id)
+              AND EXISTS (
+                SELECT 1 FROM pilot_inventory buyer_item
+                JOIN p2p_ads ad ON ad.id = NEW.ad_id
+                WHERE buyer_item.pilot_id = NEW.buyer_pilot_id
+                  AND buyer_item.item_id = ad.item_id
+                  AND buyer_item.id != ad.inventory_id
+              );
+            UPDATE p2p_ads SET status = 'VENDIDO', updated_at = NEW.updated_at
+            WHERE id = NEW.ad_id AND status = 'ACTIVO';
+          END`,
+        `CREATE TRIGGER IF NOT EXISTS market_order_cancel_guard
+          BEFORE UPDATE OF status ON p2p_orders
+          WHEN NEW.status = 'CANCELADA' AND OLD.status != 'CANCELADA'
+          BEGIN
+            SELECT CASE WHEN OLD.status != 'PENDIENTE'
+              OR NOT EXISTS (
+                SELECT 1 FROM p2p_ads ad
+                JOIN pilot_inventory item ON item.id = ad.inventory_id
+                WHERE ad.id = OLD.ad_id AND ad.status = 'ACTIVO'
+                  AND item.pilot_id = ad.seller_pilot_id AND item.is_locked = 1
+              )
+              THEN RAISE(ABORT, 'market order cannot be cancelled') END;
+          END`,
+        `CREATE TRIGGER IF NOT EXISTS market_order_cancel_apply
+          AFTER UPDATE OF status ON p2p_orders
+          WHEN NEW.status = 'CANCELADA' AND OLD.status = 'PENDIENTE'
+          BEGIN
+            UPDATE pilot_inventory SET is_locked = 0, updated_at = NEW.updated_at
+            WHERE id = (SELECT inventory_id FROM p2p_ads WHERE id = NEW.ad_id)
+              AND pilot_id = (
+                SELECT seller_pilot_id FROM p2p_ads WHERE id = NEW.ad_id
+              );
+            UPDATE p2p_ads SET status = 'ACTIVO', updated_at = NEW.updated_at
+            WHERE id = NEW.ad_id AND status = 'ACTIVO';
           END`,
       ];
       for (const statement of schema) await db.prepare(statement).run();
@@ -1921,6 +2034,299 @@ async function handleMarketRequest(
   } catch (error) {
     console.error("No se pudo inicializar el piloto del mercado:", error);
     return pilotJson(request, pilotId, { error: "No se pudo inicializar el piloto." }, 503);
+  }
+
+  if (url.pathname === "/api/market/listings" && request.method === "GET") {
+    const rawPage = Number(url.searchParams.get("page") ?? "1");
+    const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 100_000) : 1;
+    const typeParam = url.searchParams.get("item_type");
+    if (typeParam && typeParam !== "nave" && typeParam !== "objeto") {
+      return pilotJson(request, pilotId, { error: "El filtro de artículo no es válido." }, 400);
+    }
+    const sort = url.searchParams.get("sort") ?? "newest";
+    if (sort !== "newest" && sort !== "price_asc" && sort !== "price_desc") {
+      return pilotJson(request, pilotId, { error: "El orden solicitado no es válido." }, 400);
+    }
+    const whereType = typeParam ? "AND ad.item_type = ?" : "";
+    const bindings = typeParam ? [typeParam] : [];
+    const orderBy =
+      sort === "price_asc"
+        ? "ad.price ASC, ad.created_at DESC"
+        : sort === "price_desc"
+          ? "ad.price DESC, ad.created_at DESC"
+          : "ad.created_at DESC";
+    const [listings, total] = await Promise.all([
+      db
+        .prepare(
+          `SELECT ad.id AS listing_id, ad.item_id, ad.item_name, ad.item_type,
+            ad.price, ad.currency AS price_currency,
+            COALESCE(NULLIF(profile.display_name, ''), pilot.callsign, 'PILOTO') AS seller_callsign,
+            ad.created_at
+          FROM p2p_ads ad
+          JOIN pilots pilot ON pilot.pilot_id = ad.seller_pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id = pilot.pilot_id
+          JOIN pilot_inventory item ON item.id = ad.inventory_id
+          WHERE ad.status = 'ACTIVO'
+            AND item.grant_source IN ('starter', 'boss', 'market')
+            AND NOT EXISTS (
+              SELECT 1 FROM p2p_orders pending
+              WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
+            )
+            ${whereType}
+          ORDER BY ${orderBy}
+          LIMIT 20 OFFSET ?`,
+        )
+        .bind(...bindings, (page - 1) * 20)
+        .all<{
+          listing_id: string;
+          item_id: string;
+          item_name: string;
+          item_type: "nave" | "objeto";
+          price: number;
+          price_currency: "COP" | "USD";
+          seller_callsign: string;
+          created_at: number;
+        }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM p2p_ads ad
+          JOIN pilot_inventory item ON item.id = ad.inventory_id
+          WHERE ad.status = 'ACTIVO'
+            AND item.grant_source IN ('starter', 'boss', 'market')
+            AND NOT EXISTS (
+              SELECT 1 FROM p2p_orders pending
+              WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
+            )
+            ${whereType}`,
+        )
+        .bind(...bindings)
+        .first<{ count: number }>(),
+    ]);
+    return pilotJson(request, pilotId, {
+      listings: listings.results ?? [],
+      page,
+      pageSize: 20,
+      total: total?.count ?? 0,
+      pages: Math.ceil((total?.count ?? 0) / 20),
+    });
+  }
+
+  if (url.pathname === "/api/market/buy" && request.method === "POST") {
+    const body = await readJson(request, 2048);
+    const listingId = body?.["listing_id"];
+    if (typeof listingId !== "string" || listingId.length < 1 || listingId.length > 64) {
+      return pilotJson(request, pilotId, { error: "El anuncio indicado no es válido." }, 400);
+    }
+    const ad = await db
+      .prepare(
+        `SELECT ad.id, ad.seller_pilot_id, ad.inventory_id
+        FROM p2p_ads ad WHERE ad.id = ? AND ad.status = 'ACTIVO'`,
+      )
+      .bind(listingId)
+      .first<{ id: string; seller_pilot_id: string; inventory_id: string }>();
+    if (!ad) {
+      return pilotJson(request, pilotId, { error: "El anuncio ya no está disponible." }, 409);
+    }
+    if (ad.seller_pilot_id === pilotId) {
+      return pilotJson(request, pilotId, { error: "No puedes comprar tu propio anuncio." }, 400);
+    }
+    const buyer = await db
+      .prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?")
+      .bind(pilotId)
+      .first<{ obsidian: number }>();
+    if (!buyer || buyer.obsidian < 1) {
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "Saldo insuficiente: se requiere 1 OBS de comisión de compra." },
+        400,
+      );
+    }
+
+    const now = Date.now();
+    const orderId = `ord_${randomHex(12)}`;
+    try {
+      const order = await db
+        .prepare(
+          `INSERT INTO p2p_orders (id, ad_id, buyer_pilot_id, status, created_at, updated_at)
+          VALUES (?, ?, ?, 'PENDIENTE', ?, ?)
+          RETURNING id`,
+        )
+        .bind(orderId, listingId, pilotId, now, now)
+        .first<{ id: string }>();
+      if (!order) {
+        return pilotJson(
+          request,
+          pilotId,
+          { error: "El anuncio dejó de estar disponible o ya tiene una compra pendiente." },
+          409,
+        );
+      }
+    } catch (error) {
+      console.error("No se pudo crear la orden de compra:", error);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "El anuncio dejó de estar disponible o ya tiene una compra pendiente." },
+        409,
+      );
+    }
+
+    const orderDetails = await db
+      .prepare(
+        `SELECT ad.price, ad.currency, ad.payment_methods, ad.payment_details
+        FROM p2p_orders order_row
+        JOIN p2p_ads ad ON ad.id = order_row.ad_id
+        WHERE order_row.id = ? AND order_row.buyer_pilot_id = ?
+          AND order_row.status = 'PENDIENTE'`,
+      )
+      .bind(orderId, pilotId)
+      .first<{
+        price: number;
+        currency: "COP" | "USD";
+        payment_methods: string;
+        payment_details: string;
+      }>();
+    if (!orderDetails) {
+      throw new Error("La orden recién creada no contiene los datos de pago.");
+    }
+    return pilotJson(request, pilotId, {
+      order_id: orderId,
+      payment_methods: decodeMethods(orderDetails.payment_methods),
+      payment_details: orderDetails.payment_details,
+      price: orderDetails.price,
+      price_currency: orderDetails.currency,
+      commission_obsidian: 1,
+    });
+  }
+
+  if (url.pathname === "/api/market/confirm" && request.method === "POST") {
+    const body = await readJson(request, 2048);
+    const orderId = body?.["order_id"];
+    if (typeof orderId !== "string" || orderId.length > 64) {
+      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
+    }
+    try {
+      const result = await db
+        .prepare(
+          `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
+          WHERE id = ? AND buyer_pilot_id = ? AND status = 'PENDIENTE'
+          RETURNING id`,
+        )
+        .bind(Date.now(), orderId, pilotId)
+        .first<{ id: string }>();
+      if (!result) {
+        return pilotJson(
+          request,
+          pilotId,
+          { error: "La orden no existe, no te pertenece o ya fue procesada." },
+          409,
+        );
+      }
+      return pilotJson(request, pilotId, {
+        success: true,
+        order_id: result.id,
+        status: "COMPLETADA",
+      });
+    } catch (error) {
+      console.error("No se pudo completar la compra del mercado:", error);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "No se pudo completar la compra; la operación fue revertida." },
+        409,
+      );
+    }
+  }
+
+  if (url.pathname === "/api/market/cancel" && request.method === "POST") {
+    const body = await readJson(request, 2048);
+    const orderId = body?.["order_id"];
+    if (typeof orderId !== "string" || orderId.length > 64) {
+      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
+    }
+    try {
+      const result = await db
+        .prepare(
+          `UPDATE p2p_orders SET status = 'CANCELADA', updated_at = ?
+          WHERE id = ? AND status = 'PENDIENTE'
+            AND (
+              buyer_pilot_id = ?
+              OR EXISTS (
+                SELECT 1 FROM p2p_ads ad
+                WHERE ad.id = p2p_orders.ad_id AND ad.seller_pilot_id = ?
+              )
+            )
+          RETURNING id`,
+        )
+        .bind(Date.now(), orderId, pilotId, pilotId)
+        .first<{ id: string }>();
+      if (!result) {
+        return pilotJson(
+          request,
+          pilotId,
+          { error: "La orden no existe, no puedes cancelarla o ya fue procesada." },
+          409,
+        );
+      }
+      return pilotJson(request, pilotId, {
+        success: true,
+        order_id: result.id,
+        status: "CANCELADA",
+      });
+    } catch (error) {
+      console.error("No se pudo cancelar la orden del mercado:", error);
+      return pilotJson(request, pilotId, { error: "No se pudo cancelar la orden." }, 409);
+    }
+  }
+
+  if (url.pathname === "/api/market/history" && request.method === "GET") {
+    const orders = await db
+      .prepare(
+        `SELECT order_row.id AS order_id, ad.item_id, ad.item_name, ad.item_type,
+          ad.price, ad.currency AS price_currency, order_row.status,
+          order_row.created_at, order_row.updated_at,
+          CASE WHEN order_row.buyer_pilot_id = ? AND order_row.status = 'PENDIENTE'
+            THEN ad.payment_methods ELSE NULL END AS payment_methods,
+          CASE WHEN order_row.buyer_pilot_id = ? AND order_row.status = 'PENDIENTE'
+            THEN ad.payment_details ELSE NULL END AS payment_details,
+          CASE WHEN order_row.buyer_pilot_id = ? THEN 'COMPRADOR' ELSE 'VENDEDOR' END AS role,
+          CASE WHEN order_row.buyer_pilot_id = ?
+            THEN COALESCE(NULLIF(seller_profile.display_name, ''), seller.callsign, 'PILOTO')
+            ELSE COALESCE(NULLIF(buyer_profile.display_name, ''), buyer.callsign, 'PILOTO')
+          END AS counterpart
+        FROM p2p_orders order_row
+        JOIN p2p_ads ad ON ad.id = order_row.ad_id
+        JOIN pilots seller ON seller.pilot_id = ad.seller_pilot_id
+        JOIN pilots buyer ON buyer.pilot_id = order_row.buyer_pilot_id
+        LEFT JOIN player_profiles seller_profile ON seller_profile.pilot_id = seller.pilot_id
+        LEFT JOIN player_profiles buyer_profile ON buyer_profile.pilot_id = buyer.pilot_id
+        WHERE order_row.buyer_pilot_id = ? OR ad.seller_pilot_id = ?
+        ORDER BY order_row.created_at DESC
+        LIMIT 100`,
+      )
+      .bind(pilotId, pilotId, pilotId, pilotId, pilotId, pilotId)
+      .all<{
+        order_id: string;
+        item_id: string;
+        item_name: string;
+        item_type: "nave" | "objeto";
+        price: number;
+        price_currency: "COP" | "USD";
+        status: string;
+        created_at: number;
+        updated_at: number;
+        role: "COMPRADOR" | "VENDEDOR";
+        counterpart: string;
+        payment_methods: string | null;
+        payment_details: string | null;
+      }>();
+    return pilotJson(request, pilotId, {
+      orders: (orders.results ?? []).map((order) => ({
+        ...order,
+        payment_methods: order.payment_methods ? decodeMethods(order.payment_methods) : null,
+      })),
+    });
   }
 
   if (url.pathname === "/api/market/pilot-state" && request.method === "GET") {

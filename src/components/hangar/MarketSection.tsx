@@ -5,19 +5,22 @@ import { MarketListings } from "@/components/hangar/MarketListings";
 import { MarketSell } from "@/components/hangar/MarketSell";
 import type {
   P2PAd,
+  P2PHistoryOrder,
   P2PInventoryItem,
   P2PMyAd,
+  P2PPurchaseOrder,
+  P2PPublicListing,
   P2PPilotState,
   P2PPublishInput,
+  P2PItemType,
 } from "@/game/data/market";
 
 type MarketTab = "COMPRAR" | "VENDER" | "MIS LISTADOS" | "HISTORIAL";
-type NavigationTab = { label: MarketTab; disabled: false } | { label: "OFERTAS"; disabled: true };
+type NavigationTab = { label: MarketTab; disabled: false };
 
 const TABS: NavigationTab[] = [
   { label: "COMPRAR", disabled: false },
   { label: "VENDER", disabled: false },
-  { label: "OFERTAS", disabled: true },
   { label: "MIS LISTADOS", disabled: false },
   { label: "HISTORIAL", disabled: false },
 ];
@@ -25,12 +28,24 @@ const TABS: NavigationTab[] = [
 export interface MarketActions {
   pilotState: P2PPilotState | null;
   ads: P2PMyAd[];
+  publicListings: P2PPublicListing[];
+  listingPage: number;
+  listingPages: number;
+  history: P2PHistoryOrder[];
   selectedShipId: string;
   isLoading: boolean;
   error: string;
   onPublish: (input: P2PPublishInput) => Promise<void>;
   onToggleAd: (adId: string) => Promise<void>;
   onCancelAd: (adId: string) => Promise<void>;
+  onLoadListings: (
+    page: number,
+    itemType: P2PItemType | "",
+    sort: "newest" | "price_asc" | "price_desc",
+  ) => Promise<void>;
+  onBuy: (listingId: string) => Promise<P2PPurchaseOrder>;
+  onConfirmOrder: (orderId: string) => Promise<void>;
+  onCancelOrder: (orderId: string) => Promise<void>;
 }
 
 export function MarketSection({ actions }: { actions: MarketActions }) {
@@ -77,7 +92,18 @@ export function MarketSection({ actions }: { actions: MarketActions }) {
           </p>
         ) : null}
       </div>
-      {activeTab === "COMPRAR" ? <MarketBuy /> : null}
+      {activeTab === "COMPRAR" ? (
+        <MarketBuy
+          listings={actions.publicListings}
+          page={actions.listingPage}
+          pages={actions.listingPages}
+          isLoading={actions.isLoading}
+          onLoadListings={actions.onLoadListings}
+          onBuy={actions.onBuy}
+          onConfirm={actions.onConfirmOrder}
+          onCancel={actions.onCancelOrder}
+        />
+      ) : null}
       {activeTab === "VENDER" ? (
         <MarketSell
           inventory={inventory}
@@ -95,7 +121,14 @@ export function MarketSection({ actions }: { actions: MarketActions }) {
           onCancelAd={actions.onCancelAd}
         />
       ) : null}
-      {activeTab === "HISTORIAL" ? <MarketHistory /> : null}
+      {activeTab === "HISTORIAL" ? (
+        <MarketHistory
+          orders={actions.history}
+          isLoading={actions.isLoading}
+          onConfirm={actions.onConfirmOrder}
+          onCancel={actions.onCancelOrder}
+        />
+      ) : null}
     </div>
   );
 }
