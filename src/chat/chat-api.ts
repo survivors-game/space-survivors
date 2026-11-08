@@ -88,7 +88,7 @@ export async function handleChatRequest(
       return json({ error: "El evento de chat no es válido." }, 400);
     }
 
-    let type: "boss_kill" | "drop";
+    let type: "boss_kill";
     let englishText: string;
     let spanishText: string;
     if (
@@ -99,10 +99,6 @@ export async function handleChatRequest(
       type = "boss_kill";
       englishText = `defeated boss ${body["bossName"].trim()} with ship ${body["shipName"].trim()}.`;
       spanishText = `mató al boss ${body["bossName"].trim()} con la nave ${body["shipName"].trim()}.`;
-    } else if (body["type"] === "drop" && isShortText(body["itemName"], 50)) {
-      type = "drop";
-      englishText = `picked up ${body["itemName"].trim()}.`;
-      spanishText = `obtuvo ${body["itemName"].trim()}.`;
     } else {
       return json({ error: "El evento de chat no es válido." }, 400);
     }
