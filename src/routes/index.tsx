@@ -1115,7 +1115,7 @@ function Index() {
     saveProgress({ ...progress, selectedStage: id });
   };
 
-  const usePersistentItem = async (kind: PickupKind) => {
+  const activateInventoryItem = async (kind: PickupKind) => {
     const engine = engineRef.current;
     if (!engine || engine.inventory[kind] <= 0) return;
     try {
@@ -1354,7 +1354,7 @@ function Index() {
       <main className="fixed inset-0 overflow-hidden bg-[#070814] font-pixel text-white">
         <canvas ref={canvasRef} className="w-full h-full block" />
         <TouchControls />
-        <Hotbar inventory={hud?.inventory} onUse={(kind) => void usePersistentItem(kind)} />
+        <Hotbar inventory={hud?.inventory} onUse={(kind) => void activateInventoryItem(kind)} />
         <CombatStatsOverlay stats={hud?.playerStats} />
         <WeaponHotbar weapons={hud?.weapons} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
