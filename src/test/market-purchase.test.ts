@@ -464,7 +464,10 @@ describe("P2P purchase flow", () => {
     ).run(SELLER_ID, now, now);
 
     const state = await requestJson<{ inventory: { id: string }[] }>(
-      "/api/market/pilot-state", "GET", undefined, SELLER_TOKEN,
+      "/api/market/pilot-state",
+      "GET",
+      undefined,
+      SELLER_TOKEN,
     );
     expect(state.payload.inventory.map((item) => item.id)).toContain("inv-legacy-object");
     const published = await publishAd(validPublishInput({ inventoryId: "inv-legacy-object" }));
@@ -475,17 +478,21 @@ describe("P2P purchase flow", () => {
     expect(catalog.payload.listings).toContainEqual(
       expect.objectContaining({ listing_id: published.payload.adId, item_id: "legacy-object" }),
     );
-    const bought = await requestJson<{ order_id: string }>(
-      "/api/market/buy", "POST",
-      { listing_id: published.payload.adId, payment_method: "NEQUI" },
-    );
+    const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
+      listing_id: published.payload.adId,
+      payment_method: "NEQUI",
+    });
     expect(bought.response.status).toBe(200);
-    const confirmed = await requestJson<{ status: string }>(
-      "/api/market/confirm", "POST", { order_id: bought.payload.order_id },
-    );
+    const confirmed = await requestJson<{ status: string }>("/api/market/confirm", "POST", {
+      order_id: bought.payload.order_id,
+    });
     expect(confirmed.response.status).toBe(200);
     expect(
-      db.prepare("SELECT pilot_id, grant_source, quantity FROM pilot_inventory WHERE item_id = 'legacy-object'").get(),
+      db
+        .prepare(
+          "SELECT pilot_id, grant_source, quantity FROM pilot_inventory WHERE item_id = 'legacy-object'",
+        )
+        .get(),
     ).toMatchObject({ pilot_id: BUYER_ID, grant_source: "market", quantity: 2 });
   });
 

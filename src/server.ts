@@ -4109,12 +4109,7 @@ async function handleMarketRequest(
     if (!pilot || pilot.obsidian < 1) {
       return pilotJson(request, pilotId, { error: "Saldo insuficiente: se requiere 1 OBS." }, 400);
     }
-    if (
-      !item ||
-      item.is_locked !== 0 ||
-      item.quantity < 1 ||
-      item.item_id === "obsidian"
-    ) {
+    if (!item || item.is_locked !== 0 || item.quantity < 1 || item.item_id === "obsidian") {
       return pilotJson(
         request,
         pilotId,
