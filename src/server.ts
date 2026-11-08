@@ -2736,6 +2736,7 @@ async function handleBossRequest(
             )
             .bind(now, sessionId)
             .run();
+          await room.fetch(
             new Request("https://boss-help/ended", {
               method: "POST",
               headers: { "content-type": "application/json" },
