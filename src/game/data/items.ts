@@ -12,9 +12,30 @@ export interface ItemDef {
 }
 
 export const ITEMS: ItemDef[] = [
-  { kind: "repair", inventoryId: "repair", label: "REPARACIÓN", sprite: "pk_repair", color: "#7dff4f", description: "Recupera integridad durante el combate." },
-  { kind: "magnet", inventoryId: "iman", label: "IMÁN", sprite: "pk_magnet", color: "#ff3df2", description: "Atrae energía y recupera objetos especiales." },
-  { kind: "emp", inventoryId: "emp", label: "EMP", sprite: "pk_emp", color: "#3d7bff", description: "Descarga electromagnética contra enemigos." },
+  {
+    kind: "repair",
+    inventoryId: "repair",
+    label: "REPARACIÓN",
+    sprite: "pk_repair",
+    color: "#7dff4f",
+    description: "Recupera integridad durante el combate.",
+  },
+  {
+    kind: "magnet",
+    inventoryId: "iman",
+    label: "IMÁN",
+    sprite: "pk_magnet",
+    color: "#ff3df2",
+    description: "Atrae energía y recupera objetos especiales.",
+  },
+  {
+    kind: "emp",
+    inventoryId: "emp",
+    label: "EMP",
+    sprite: "pk_emp",
+    color: "#3d7bff",
+    description: "Descarga electromagnética contra enemigos.",
+  },
 ];
 
 export const PICKUP_INVENTORY_IDS = Object.fromEntries(
@@ -38,7 +59,13 @@ export const INVENTORY_CATALOG: InventoryCatalogEntry[] = [
     usable: true,
   })),
   // Alias retained for older inventory rows created before the canonical "iman" ID.
-  { itemId: "magnet", label: "IMÁN", sprite: "pk_magnet", description: "Atrae energía y recupera objetos especiales.", usable: true },
+  {
+    itemId: "magnet",
+    label: "IMÁN",
+    sprite: "pk_magnet",
+    description: "Atrae energía y recupera objetos especiales.",
+    usable: true,
+  },
 ];
 
 export const INVENTORY_CATALOG_BY_ID = Object.fromEntries(

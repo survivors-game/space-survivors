@@ -1,7 +1,23 @@
-import { Crosshair, Package, ScrollText, ShoppingBag, Shield, Skull, Target, Wrench } from "lucide-react";
+import {
+  Crosshair,
+  Package,
+  ScrollText,
+  ShoppingBag,
+  Shield,
+  Skull,
+  Target,
+  Wrench,
+} from "lucide-react";
 
 export type HangarTab =
-  "UPGRADES" | "MISSIONS" | "BESTIARY" | "ARSENAL" | "PROFILE" | "INVENTORY" | "MARKET" | "ALLIANCE";
+  | "UPGRADES"
+  | "MISSIONS"
+  | "BESTIARY"
+  | "ARSENAL"
+  | "PROFILE"
+  | "INVENTORY"
+  | "MARKET"
+  | "ALLIANCE";
 
 interface HangarSidebarProps {
   activeTab: HangarTab;

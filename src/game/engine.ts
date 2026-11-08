@@ -235,7 +235,11 @@ export class Engine {
     this.stage = o.stage;
     this.hangar = o.hangar;
     this.cb = o.callbacks;
-    this.inventory = { repair: o.inventory?.repair ?? 0, magnet: o.inventory?.magnet ?? 0, emp: o.inventory?.emp ?? 0 };
+    this.inventory = {
+      repair: o.inventory?.repair ?? 0,
+      magnet: o.inventory?.magnet ?? 0,
+      emp: o.inventory?.emp ?? 0,
+    };
     this.bossCooldowns = { ...o.bossCooldowns };
     this.isEndless = Boolean(o.isEndless);
     this.duration = this.isEndless ? Infinity : o.durationSec;

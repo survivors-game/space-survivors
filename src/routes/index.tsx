@@ -142,7 +142,9 @@ async function marketRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-function hotbarInventoryFromPilot(inventory: P2PInventoryItem[] | undefined): Record<PickupKind, number> {
+function hotbarInventoryFromPilot(
+  inventory: P2PInventoryItem[] | undefined,
+): Record<PickupKind, number> {
   const counts: Record<PickupKind, number> = { repair: 0, magnet: 0, emp: 0 };
   for (const item of inventory ?? []) {
     if (item.isLocked || item.itemType !== "objeto") continue;
@@ -205,7 +207,11 @@ function Index() {
   const [unlockedSectors, setUnlockedSectors] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [marketPilot, setMarketPilot] = useState<P2PPilotState | null>(null);
-  const persistentInventoryRef = useRef<Record<PickupKind, number>>({ repair: 0, magnet: 0, emp: 0 });
+  const persistentInventoryRef = useRef<Record<PickupKind, number>>({
+    repair: 0,
+    magnet: 0,
+    emp: 0,
+  });
   const [marketAds, setMarketAds] = useState<P2PMyAd[]>([]);
   const [marketListings, setMarketListings] = useState<P2PPublicListing[]>([]);
   const [marketListingPage, setMarketListingPage] = useState(1);
@@ -994,15 +1000,20 @@ function Index() {
         },
         onItemCollected: (kind) => {
           void marketRequest<{ success: boolean }>("/api/inventory/collect", {
-            method: "POST", body: JSON.stringify({ kind }),
-          }).then(() => setMarketRefresh((version) => version + 1)).catch((error: unknown) => {
-            const current = engineRef.current;
-            if (current) {
-              current.inventory[kind] = Math.max(0, current.inventory[kind] - 1);
-              setHud(current.getHud());
-            }
-            setNotice(error instanceof Error ? error.message : "No se pudo guardar el objeto recogido.");
-          });
+            method: "POST",
+            body: JSON.stringify({ kind }),
+          })
+            .then(() => setMarketRefresh((version) => version + 1))
+            .catch((error: unknown) => {
+              const current = engineRef.current;
+              if (current) {
+                current.inventory[kind] = Math.max(0, current.inventory[kind] - 1);
+                setHud(current.getHud());
+              }
+              setNotice(
+                error instanceof Error ? error.message : "No se pudo guardar el objeto recogido.",
+              );
+            });
         },
         onChatEvent: (chatEvent) => {
           void fetch("/api/chat/event", {
@@ -1120,7 +1131,8 @@ function Index() {
     if (!engine || engine.inventory[kind] <= 0) return;
     try {
       await marketRequest<{ success: boolean }>("/api/inventory/use", {
-        method: "POST", body: JSON.stringify({ kind }),
+        method: "POST",
+        body: JSON.stringify({ kind }),
       });
       engine.inventory[kind] = Math.max(0, engine.inventory[kind] - 1);
       if (engine.useItem(kind, true)) setHud(engine.getHud());
@@ -2529,7 +2541,10 @@ function Index() {
               </div>
             ) : hangarTab === "INVENTORY" ? (
               <div className="mt-6 lg:col-start-2">
-                <InventorySection inventory={marketPilot?.inventory ?? []} selectedShipId={progress.selectedShip} />
+                <InventorySection
+                  inventory={marketPilot?.inventory ?? []}
+                  selectedShipId={progress.selectedShip}
+                />
               </div>
             ) : hangarTab === "MARKET" ? (
               <div className="lg:col-start-2">
