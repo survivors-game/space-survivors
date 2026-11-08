@@ -1,19 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "cloudflare:workers";
-
-export type ChatLanguage = "en" | "es";
-type MessageType = "chat" | "boss_kill" | "drop";
-
-export interface ChatMessage {
-  id: number;
-  type: MessageType;
-  language: ChatLanguage;
-  pilotId: string;
-  callsign: string;
-  allianceTag?: string | null;
-  text: string;
-  timestamp: number;
-}
+import type { ChatLanguage, ChatMessage, ChatMessageType as MessageType } from "./types";
 
 interface StoredMessage extends ChatMessage {
   pilot_id: string;
