@@ -33,6 +33,7 @@ export function GameChat() {
   const [connected, setConnected] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<{
+    messageId: number;
     pilotId: string;
     callsign: string;
   } | null>(null);
@@ -295,16 +296,20 @@ export function GameChat() {
             ref={listRef}
             style={{ fontSize: `${fontSize}px`, lineHeight: `${Math.ceil(fontSize * 1.45)}px` }}
           >
-            {messages.map((message, messageIndex) => (
+            {messages.map((message) => (
               <p className="text-white" key={`${message.id}-${message.type}`}>
                 <span className="relative mr-1 inline-block">
                   <button
                     className="font-semibold text-blue-400 hover:text-blue-300 hover:underline"
                     onClick={() =>
                       setSelectedPlayer((current) =>
-                        current?.pilotId === message.pilotId
+                        current?.messageId === message.id
                           ? null
-                          : { pilotId: message.pilotId, callsign: message.callsign },
+                          : {
+                              messageId: message.id,
+                              pilotId: message.pilotId,
+                              callsign: message.callsign,
+                            },
                       )
                     }
                     title={`Opciones de ${message.callsign}`}
@@ -315,8 +320,7 @@ export function GameChat() {
                   {message.allianceTag ? (
                     <span className="ml-1 font-bold text-fuchsia-300">[{message.allianceTag}]</span>
                   ) : null}
-                  {selectedPlayer?.pilotId === message.pilotId &&
-                  messages.findIndex((item) => item.pilotId === message.pilotId) === messageIndex ? (
+                  {selectedPlayer?.messageId === message.id ? (
                     <span className="absolute left-0 top-full z-20 mt-1 flex min-w-36 flex-col border border-slate-600 bg-slate-800 p-1 shadow-xl">
                       {canInvite && message.pilotId !== myPilotId ? (
                         <button
