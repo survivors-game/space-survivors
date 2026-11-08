@@ -47,6 +47,17 @@ jobs:
       - name: Ejecutar pruebas
         run: npm test
 
+      - name: Aplicar formato automático
+        run: |
+          npm run lint -- --fix
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -u
+            git commit -m "style: aplicar formato Prettier"
+            git push origin HEAD:main
+          fi
+
       - name: Revisar código
         run: npm run lint
 
