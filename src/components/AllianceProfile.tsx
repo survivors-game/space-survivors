@@ -255,7 +255,9 @@ export function AllianceProfile({
                     <p className="mt-1 text-[9px] uppercase tracking-widest text-white/45">
                       LÍDER: <span className="text-amber-200">{leader?.callsign ?? "—"}</span> · TU
                       ROL:{" "}
-                      <span className="text-fuchsia-200">{roleLabel[alliance.role] ?? alliance.role}</span>
+                      <span className="text-fuchsia-200">
+                        {roleLabel[alliance.role] ?? alliance.role}
+                      </span>
                     </p>
                   </div>
                   {alliance.role !== "lider" ? (
@@ -274,13 +276,21 @@ export function AllianceProfile({
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <MpStat label="Nivel" value={alliance.level} />
-                  <MpStat label="Tripulación" value={`${alliance.members.length}/10`} tone="fuchsia" />
+                  <MpStat
+                    label="Tripulación"
+                    value={`${alliance.members.length}/10`}
+                    tone="fuchsia"
+                  />
                   <MpStat
                     label="Guerras V/D"
                     value={ownRank ? `${ownRank.war_wins}/${ownRank.war_losses}` : "—"}
                     tone="emerald"
                   />
-                  <MpStat label="Ranking" value={ownRankPos ? `#${ownRankPos}` : "—"} tone="amber" />
+                  <MpStat
+                    label="Ranking"
+                    value={ownRankPos ? `#${ownRankPos}` : "—"}
+                    tone="amber"
+                  />
                 </div>
               </MpPanel>
 
@@ -327,7 +337,9 @@ export function AllianceProfile({
                                   pilot_id: member.pilot_id,
                                   role: member.role === "teniente" ? "miembro" : "teniente",
                                 },
-                                member.role === "teniente" ? "ROL ACTUALIZADO" : "TENIENTE DESIGNADO",
+                                member.role === "teniente"
+                                  ? "ROL ACTUALIZADO"
+                                  : "TENIENTE DESIGNADO",
                               )
                             }
                             className="h-8 rounded-none border-cyan-400/30 bg-transparent text-[8px] uppercase text-cyan-100 hover:bg-cyan-400/10"
@@ -352,7 +364,11 @@ export function AllianceProfile({
                       variant="outline"
                       disabled={busy}
                       onClick={() => {
-                        if (window.confirm("¿Disolver esta alianza y eliminar todas sus invitaciones?")) {
+                        if (
+                          window.confirm(
+                            "¿Disolver esta alianza y eliminar todas sus invitaciones?",
+                          )
+                        ) {
                           void runAction("/api/alliance/dissolve", {}, "ALIANZA DISUELTA");
                         }
                       }}
@@ -578,7 +594,8 @@ export function AllianceProfile({
               <div className="mt-4 overflow-hidden border border-fuchsia-300/50 bg-[radial-gradient(ellipse_at_top_right,_#3a0f3f_0%,_#0b0d1c_70%)] p-4 shadow-[0_0_30px_#ff4df022]">
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full border-2 border-[#ff0055]/70 bg-[#ff0055]/10 text-2xl text-[#ff4d88] shadow-[0_0_24px_#ff005555]">
-                    <span className="absolute inset-0 animate-ping rounded-full border border-[#ff0055]/40" />☠
+                    <span className="absolute inset-0 animate-ping rounded-full border border-[#ff0055]/40" />
+                    ☠
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-[9px] uppercase tracking-[0.25em] text-rose-200">
@@ -632,9 +649,21 @@ export function AllianceProfile({
             <MpHeader kicker="PROTOCOLO" title="Cómo funciona la ayuda cooperativa" />
             <ol className="mt-4 grid gap-2 sm:grid-cols-3">
               {[
-                ["01", "Pide ayuda", "Durante un combate contra un jefe pulsa AYUDA! para alertar a tu alianza."],
-                ["02", "Un aliado se une", "El primer miembro que acepte entra como nave escolta en tu combate."],
-                ["03", "Derrótenlo juntos", "Ambas naves atacan al mismo jefe y comparten su barra de vida."],
+                [
+                  "01",
+                  "Pide ayuda",
+                  "Durante un combate contra un jefe pulsa AYUDA! para alertar a tu alianza.",
+                ],
+                [
+                  "02",
+                  "Un aliado se une",
+                  "El primer miembro que acepte entra como nave escolta en tu combate.",
+                ],
+                [
+                  "03",
+                  "Derrótenlo juntos",
+                  "Ambas naves atacan al mismo jefe y comparten su barra de vida.",
+                ],
               ].map(([step, title, text]) => (
                 <li key={step} className="border border-white/10 bg-white/[0.02] p-3">
                   <p className="text-lg font-black text-cyan-300/80">{step}</p>

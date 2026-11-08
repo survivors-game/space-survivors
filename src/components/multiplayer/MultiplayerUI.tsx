@@ -59,8 +59,14 @@ export function MpPanel({
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent"
       />
-      <span aria-hidden className="pointer-events-none absolute left-0 top-0 h-3 w-3 border-l-2 border-t-2 border-cyan-300/70" />
-      <span aria-hidden className="pointer-events-none absolute bottom-0 right-0 h-3 w-3 border-b-2 border-r-2 border-fuchsia-300/70" />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 h-3 w-3 border-l-2 border-t-2 border-cyan-300/70"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 right-0 h-3 w-3 border-b-2 border-r-2 border-fuchsia-300/70"
+      />
       {children}
     </section>
   );
@@ -158,7 +164,12 @@ export function MpEmpty({
         <span className="absolute inset-0 animate-ping rounded-full border border-current opacity-20" />
         {icon}
       </div>
-      <p className={cn("relative mt-3 text-[10px] font-black uppercase tracking-[0.2em]", toneText[tone])}>
+      <p
+        className={cn(
+          "relative mt-3 text-[10px] font-black uppercase tracking-[0.2em]",
+          toneText[tone],
+        )}
+      >
         {title}
       </p>
       <p className="relative mt-1.5 max-w-sm text-[10px] leading-5 text-white/45">{text}</p>
@@ -178,7 +189,10 @@ export function MpMeter({ value, tone = "cyan" }: { value: number; tone?: Tone }
   const pct = Math.max(0, Math.min(100, value));
   return (
     <div className="h-1.5 w-full overflow-hidden bg-white/10">
-      <div className={cn("h-full bg-gradient-to-r transition-all", bar[tone])} style={{ width: `${pct}%` }} />
+      <div
+        className={cn("h-full bg-gradient-to-r transition-all", bar[tone])}
+        style={{ width: `${pct}%` }}
+      />
     </div>
   );
 }
@@ -209,7 +223,10 @@ export function MpTabs<T extends string>({
   onChange: (id: T) => void;
 }) {
   return (
-    <div role="tablist" className="grid grid-cols-3 gap-1 border border-cyan-400/20 bg-[#070814]/80 p-1">
+    <div
+      role="tablist"
+      className="grid grid-cols-3 gap-1 border border-cyan-400/20 bg-[#070814]/80 p-1"
+    >
       {tabs.map((tab) => {
         const selected = tab.id === value;
         return (
