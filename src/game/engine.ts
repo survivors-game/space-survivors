@@ -2846,10 +2846,16 @@ export class Engine {
       this.enemies.forEachAlive((e) => {
         if (Math.abs(e.x - p.x) > this.W / this.zoom || Math.abs(e.y - p.y) > this.H / this.zoom)
           return;
-        this.damageEnemy(
-          e,
-          e.boss || e.def.behavior === "generator" ? e.maxHp * 0.05 : 150 * p.dmgMult,
-        );
+        // El EMP debe seguir siendo relevante cuando aumenta la vida de los enemigos.
+        // El daño escala con la resistencia del objetivo y conserva un mínimo ligado a la nave.
+        const empDamage = e.boss
+          ? Math.max(300 * p.dmgMult, e.maxHp * 0.12)
+          : e.def.behavior === "generator"
+            ? Math.max(250 * p.dmgMult, e.maxHp * 0.2)
+            : e.elite
+              ? Math.max(300 * p.dmgMult, e.maxHp * 0.3)
+              : Math.max(250 * p.dmgMult, e.maxHp * 0.4);
+        this.damageEnemy(e, empDamage);
       });
       Audio.SFX.bigExplode();
       this.banner("DESCARGA EMP", "Enemigos en pantalla neutralizados", "good");
