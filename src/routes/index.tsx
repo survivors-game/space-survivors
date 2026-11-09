@@ -1123,8 +1123,6 @@ function Index() {
     }
   }, [googleSessionLoading, googlePlayer, screen]);
 
-
-
   const requireGoogleSession = () => {
     if (googleSessionLoading) {
       setNotice("VERIFICANDO SESIÓN. ESPERA UN MOMENTO.");

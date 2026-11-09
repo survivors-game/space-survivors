@@ -1,10 +1,6 @@
 import { useEffect } from "react";
 import { Coins, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
-import {
-  VIP_DURATION_DAYS,
-  formatVipTimeRemaining,
-  hasVip,
-} from "@/game/meta/vip";
+import { VIP_DURATION_DAYS, formatVipTimeRemaining, hasVip } from "@/game/meta/vip";
 
 export interface VipModalProps {
   open: boolean;
@@ -62,7 +58,6 @@ const BENEFITS: Benefit[] = [
 ];
 
 export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
-
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -78,7 +73,6 @@ export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
   const active = hasVip({ vip_until: vipUntil }, now);
   const remainingMs = active && vipUntil !== null ? vipUntil - now : 0;
   const progress = Math.min(100, (remainingMs / (VIP_DURATION_DAYS * DAY_MS)) * 100);
-
 
   return (
     <div
@@ -141,7 +135,8 @@ export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
               <p className="mt-1 font-arcade text-[10px] text-[#ff4d9d]">{obsidian ?? "--"} OBS</p>
             </div>
             <p className="border border-amber-400/40 bg-amber-400/10 px-3 py-3 text-[11px] leading-relaxed text-amber-200">
-              La compra de VIP con OBS está temporalmente deshabilitada. La administración podrá asignar VIP mientras se define cómo adquirir OBS.
+              La compra de VIP con OBS está temporalmente deshabilitada. La administración podrá
+              asignar VIP mientras se define cómo adquirir OBS.
             </p>
           </section>
 
