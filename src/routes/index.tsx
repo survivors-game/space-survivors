@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -66,6 +66,7 @@ import { ReferralProfile } from "@/components/ReferralProfile";
 import { AllianceProfile } from "@/components/AllianceProfile";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
+import { PilotHub } from "@/components/hub/PilotHub";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import type {
   P2PHistoryOrder,
@@ -767,7 +768,7 @@ function Index() {
   const claimableCount = getSeasonClaimableCount(progress, hasVip);
 
   useEffect(() => {
-    if (screen !== "HANGAR" || !googlePlayer) {
+    if (!googlePlayer) {
       setHasVip(false);
       return;
     }
@@ -782,7 +783,7 @@ function Index() {
     return () => {
       active = false;
     };
-  }, [screen, googlePlayer]);
+  }, [googlePlayer]);
 
   useEffect(() => {
     if (!allianceId || !googlePlayer) return;
@@ -1938,7 +1939,50 @@ function Index() {
           </div>
         ) : null}
 
-        {screen === "MENU" ? (
+        {screen === "MENU" && googlePlayer ? (
+          <section className="min-w-0 flex-1 py-8 sm:py-12">
+            <PilotHub
+              pilotName={
+                profileName || marketPilot?.callsign || googlePlayer.email.split("@")[0] || "PILOTO"
+              }
+              pilotId={googlePlayer.playerId}
+              vipActive={hasVip}
+              credits={progress.credits}
+              obsidian={marketPilot?.obsidian ?? 0}
+              runs={progress.stats.runs}
+              kills={progress.stats.kills}
+              shipsCount={progress.ships.length}
+              selectedShip={selectedShip}
+              selectedStage={selectedStage}
+              allianceTag={null}
+              onDeploy={() => {
+                if (requireGoogleSession()) setScreen("SELECT");
+              }}
+              onOpenHangar={() => {
+                setHangarTab("UPGRADES");
+                setScreen("HANGAR");
+              }}
+              onOpenMissions={() => {
+                setHangarTab("MISSIONS");
+                setScreen("HANGAR");
+              }}
+              onOpenAlliance={() => {
+                setHangarTab("ALLIANCE");
+                setScreen("HANGAR");
+              }}
+              onOpenMarket={() => {
+                setHangarTab("MARKET");
+                setScreen("HANGAR");
+              }}
+              onOpenProfile={() => {
+                setHangarTab("PROFILE");
+                setScreen("HANGAR");
+              }}
+            />
+          </section>
+        ) : null}
+
+        {screen === "MENU" && !googlePlayer ? (
           <section className="grid min-w-0 flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
             <div className="relative">
               <div className="mb-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] text-cyan-300">
@@ -1957,34 +2001,14 @@ function Index() {
                 hordas enemigas, recolecta recursos, mejora tu arsenal y sobrevive hasta derrotar al
                 jefe del sector.
               </p>
-              {!googlePlayer ? (
-                <p className="mt-7 max-w-lg border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-[10px] uppercase leading-5 tracking-[0.12em] text-amber-200/80">
-                  INICIA SESIÓN Y DESPLIEGA TU NAVE
-                </p>
-              ) : null}
-              <div className="mt-9 flex max-w-md flex-col gap-3 sm:flex-row">
+              <div className="mt-9 flex max-w-md flex-col gap-3">
                 <Button
-                  onClick={() => {
-                    if (requireGoogleSession()) setScreen("SELECT");
-                  }}
-                  disabled={!googlePlayer || googleSessionLoading}
-                  title={!googlePlayer ? "Inicia sesión con Google para desplegar" : "Desplegar"}
-                  className="font-arcade h-12 flex-1 rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[8px] uppercase tracking-[0.04em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => void handleGoogleSignIn()}
+                  disabled={googleSessionLoading || googleConnecting}
+                  title="Iniciar sesión con Google"
+                  className="font-arcade h-14 w-full rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[9px] uppercase tracking-[0.04em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <Rocket /> Desplegar
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (requireGoogleSession()) setScreen("HANGAR");
-                  }}
-                  disabled={!googlePlayer || googleSessionLoading}
-                  title={
-                    !googlePlayer ? "Inicia sesión con Google para entrar al hangar" : "Hangar"
-                  }
-                  variant="outline"
-                  className="h-12 flex-1 rounded-none border-[#8a2be2]/60 bg-[#8a2be2]/10 text-sm font-bold uppercase tracking-[0.18em] text-white hover:bg-[#8a2be2]/25 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Wrench /> Hangar
+                  <Rocket /> [ INICIAR SESIÓN CON GOOGLE / JUGAR ]
                 </Button>
               </div>
               <button
@@ -2013,42 +2037,15 @@ function Index() {
                   <div className="absolute bottom-[18%] left-[34%] size-1 rounded-full bg-white shadow-[0_0_10px_3px_#8a2be2]" />
                   <div className="absolute inset-x-0 bottom-8 h-48 bg-[radial-gradient(ellipse_at_center,#8a2be21f,transparent_70%)]" />
                   <div className="relative z-10 w-full">
-                    <MenuHeroShip ship={selectedShip} />
+                    <MenuHeroShip ship={SHIPS[0]!} />
                   </div>
                   <div className="absolute bottom-4 left-4 text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
-                    {googlePlayer ? "NAVE ACTIVA" : "NAVE DE EXHIBICIÓN"}
+                    NAVE DE EXHIBICIÓN
                     <br />
-                    <span className="text-white">
-                      {googlePlayer ? selectedShip.name : "HALCÓN NOVA"}
-                    </span>
+                    <span className="text-white">HALCÓN NOVA</span>
                   </div>
-                  <div className="absolute bottom-4 right-4 text-right text-[9px] uppercase leading-5 tracking-[0.16em] text-cyan-100/55">
-                    SECTOR
-                    <br />
-                    <span className="text-white">{googlePlayer ? selectedStage.name : "—"}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 border-t border-white/10">
-                  <MenuStat
-                    label="Misiones"
-                    value={googlePlayer ? progress.stats.runs.toString().padStart(2, "0") : "00"}
-                  />
-                  <MenuStat
-                    label="Bajas"
-                    value={googlePlayer ? progress.stats.kills.toLocaleString() : "0"}
-                  />
-                  <MenuStat
-                    label="Naves"
-                    value={googlePlayer ? progress.ships.length.toString().padStart(2, "0") : "00"}
-                  />
                 </div>
               </div>
-              {googlePlayer && latestRun ? (
-                <p className="mt-3 text-right text-[9px] uppercase tracking-[0.15em] text-white/35">
-                  Última misión: {latestRun.victory ? "Victoria" : "Retirada"} · {latestRun.kills}{" "}
-                  bajas
-                </p>
-              ) : null}
             </div>
             <div className="w-full lg:col-span-2">
               <Leaderboard />
@@ -3329,15 +3326,6 @@ function BestiarySprite({
         />
       ) : null}
     </span>
-  );
-}
-
-function MenuStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border-r border-white/10 px-4 py-3 last:border-r-0">
-      <p className="text-[8px] uppercase tracking-[0.2em] text-white/35">{label}</p>
-      <p className="mt-1 text-sm font-bold tabular-nums text-cyan-100">{value}</p>
-    </div>
   );
 }
 
