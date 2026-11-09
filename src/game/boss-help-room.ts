@@ -94,7 +94,7 @@ export class BossHelpRoom extends DurableObject {
         return new Response("Invalid help notification.", { status: 400 });
       }
       this.broadcast({
-        type: "invite",
+        type: "boss_help_invite",
         sessionId: body.sessionId,
         bossId: body.bossId,
         bossName: body.bossName,
