@@ -778,7 +778,7 @@ function Index() {
         } catch {
           return;
         }
-        if (message["type"] === "invite" && typeof message["sessionId"] === "string") {
+            if (message["type"] === "boss_help_invite" && typeof message["sessionId"] === "string") {
           const invite = {
             sessionId: message["sessionId"],
             hostName: typeof message["hostName"] === "string" ? message["hostName"] : "PILOTO",
