@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+ import { useEffect, useState } from "react";
 import { Coins, Crown, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
 import {
   VIP_DURATION_DAYS,
@@ -29,35 +29,36 @@ interface Benefit {
 const GOLD = "#ffd700";
 const CYAN = "#22d3ee";
 const VIOLET = "#c4a1ff";
+const MAGENTA = "#ff4d9d";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const BENEFITS: Benefit[] = [
   {
-    label: "+35% DROPS EN COMBATE",
-    detail: "Más botiquines de reparación, imanes y PEM.",
+    label: "+35% drops en combate",
+    detail: "Más botiquines de reparación, imanes y PEM en cada partida.",
     Icon: Zap,
     color: CYAN,
   },
   {
-    label: "+20% CRÉDITOS",
+    label: "+20% créditos",
     detail: "Bonificación de chatarra por cada nave enemiga destruida.",
     Icon: Coins,
     color: GOLD,
   },
   {
-    label: "DISTINTIVO DORADO EN CHAT",
+    label: "Distintivo dorado en chat",
     detail: "Rango [VIP] y nombre en oro neón en el canal global.",
     Icon: Sparkles,
     color: GOLD,
   },
   {
-    label: "PASE DE TEMPORADA ÉLITE",
+    label: "Pase de temporada élite",
     detail: "Desbloquea el carril exclusivo de recompensas de temporada.",
     Icon: Trophy,
-    color: GOLD,
+    color: MAGENTA,
   },
   {
-    label: "COMANDO DE ALIANZA",
+    label: "Comando de alianza",
     detail: "Permiso para fundar alianzas espaciales y liderar guerras.",
     Icon: Users,
     color: VIOLET,
@@ -88,27 +89,25 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
   const active = hasVip({ vip_until: vipUntil }, now);
   const remainingMs = active && vipUntil !== null ? vipUntil - now : 0;
   const progress = Math.min(100, (remainingMs / (VIP_DURATION_DAYS * DAY_MS)) * 100);
-  const canAfford = canAffordVip(obsidian ?? 0);
-  const missing = Math.max(0, VIP_PRICE_OBSIDIAN - (obsidian ?? 0));
+  const balance = obsidian ?? 0;
+  const canAfford = canAffordVip(balance);
+  const missing = Math.max(0, VIP_PRICE_OBSIDIAN - balance);
 
   const handlePurchase = async () => {
     if (busy) return;
     if (!canAfford) {
-      setFeedback({
-        tone: "error",
-        text: `OBSIDIANA INSUFICIENTE · TE FALTAN ${missing} OBS`,
-      });
+      setFeedback({ tone: "error", text: `Obsidiana insuficiente: te faltan ${missing} OBS.` });
       return;
     }
     setBusy(true);
     setFeedback(null);
     try {
       await onPurchase();
-      setFeedback({ tone: "ok", text: `VIP ACTIVADO · +${VIP_DURATION_DAYS} DÍAS` });
+      setFeedback({ tone: "ok", text: `VIP activado: +${VIP_DURATION_DAYS} días de membresía.` });
     } catch (error) {
       setFeedback({
         tone: "error",
-        text: error instanceof Error ? error.message.toUpperCase() : "NO SE PUDO ACTIVAR EL VIP",
+        text: error instanceof Error ? error.message : "No se pudo activar el VIP.",
       });
     } finally {
       setBusy(false);
@@ -117,114 +116,126 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 font-pixel text-white"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 text-white sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label="Membresía VIP de flota"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-xl border border-[#ffd700]/50 bg-[#07070f] shadow-[0_0_40px_rgba(255,215,0,0.25),inset_0_0_30px_rgba(34,211,238,0.06)]"
+        className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[#ffd700]/50 bg-[#07070f] shadow-[0_0_50px_rgba(255,215,0,0.25),inset_0_0_40px_rgba(34,211,238,0.05)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-[#ffd700]/25 px-4 py-3">
+        <header className="flex items-center gap-4 border-b border-[#ffd700]/25 px-6 py-4">
           <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center border border-[#ffd700]/70 bg-[#ffd700]/10 shadow-[0_0_14px_rgba(255,215,0,0.4)]"
-            style={{
-              clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)",
-            }}
+            className="flex h-14 w-14 shrink-0 items-center justify-center border border-[#ffd700]/70 bg-[#ffd700]/10 shadow-[0_0_16px_rgba(255,215,0,0.4)]"
+            style={{ clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)" }}
           >
-            <Crown className="h-4 w-4 text-[#ffd700]" />
+            <Crown className="h-6 w-6 text-[#ffd700]" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-arcade text-[10px] leading-relaxed text-[#ffd700] drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">
+            <h2 className="font-arcade text-sm leading-relaxed text-[#ffd700] drop-shadow-[0_0_8px_rgba(255,215,0,0.6)] sm:text-base">
               MEMBRESÍA VIP DE FLOTA
-            </div>
-            <div className="text-[9px] tracking-widest text-white/50">
-              OBS DISPONIBLE: <span className="text-[#ff4d9d]">{obsidian ?? "--"}</span>
-            </div>
+            </h2>
+            <p className="text-sm text-white/65">Eleva tu nave con ventajas de élite.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="rounded border border-white/15 p-1 text-white/60 hover:text-white"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-white/20 text-white/70 transition hover:border-white/50 hover:text-white"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
-        </div>
+        </header>
 
-        <div className="space-y-4 p-4">
-          <div className="rounded border border-white/10 bg-black/50 p-3">
-            <div className="flex items-center justify-between text-[9px] tracking-widest">
-              <span className="text-white/50">ESTADO</span>
+        <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto p-6 md:grid-cols-[320px_1fr]">
+          <section className="flex flex-col gap-4">
+            <div className="rounded-lg border border-white/15 bg-black/50 p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/60">Estado</p>
               {active ? (
-                <span className="text-[#ffd700]">
-                  ACTIVO · EXPIRA EN {formatVipTimeRemaining(vipUntil, now)}
-                </span>
+                <>
+                  <p className="mt-1 font-arcade text-base text-[#ffd700] drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">
+                    ACTIVO
+                  </p>
+                  <p className="mt-2 text-lg text-white">
+                    Expira en{" "}
+                    <span className="font-bold text-[#ffd700]">
+                      {formatVipTimeRemaining(vipUntil, now)}
+                    </span>
+                  </p>
+                  <div className="mt-3 h-3 w-full bg-white/10">
+                    <div
+                      className="h-full bg-[#ffd700] shadow-[0_0_10px_rgba(255,215,0,0.7)]"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </>
               ) : (
-                <span className="text-cyan-400/60">ESTÁNDAR (INACTIVO)</span>
+                <>
+                  <p className="mt-1 font-arcade text-base text-cyan-300/80">ESTÁNDAR</p>
+                  <p className="mt-2 text-base text-white/70">Sin membresía activa.</p>
+                </>
               )}
             </div>
-            {active ? (
-              <div className="mt-2 h-1.5 w-full bg-white/10">
-                <div
-                  className="h-full bg-[#ffd700] shadow-[0_0_8px_rgba(255,215,0,0.7)]"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            ) : null}
-          </div>
 
-          <ul className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-white/15 bg-black/50 p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-white/60">Tu saldo</p>
+              <p className="mt-1 font-arcade text-xl tabular-nums text-[#ff4d9d] drop-shadow-[0_0_8px_rgba(255,77,157,0.6)]">
+                {obsidian ?? "--"} OBS
+              </p>
+              <p className="mt-2 text-sm text-white/65">
+                Costo: {VIP_PRICE_OBSIDIAN} OBS por {VIP_DURATION_DAYS} días.
+              </p>
+            </div>
+
+            {feedback ? (
+              <p
+                role="status"
+                className={`rounded-lg border px-4 py-3 text-sm font-semibold ${
+                  feedback.tone === "ok"
+                    ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300"
+                    : "border-rose-400/60 bg-rose-400/10 text-rose-300"
+                }`}
+              >
+                {feedback.text}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void handlePurchase()}
+              disabled={busy}
+              className="mt-auto flex min-h-16 w-full items-center justify-center border-2 border-[#ffd700] bg-linear-to-r from-[#ffd700]/25 via-cyan-400/15 to-[#ffd700]/25 px-4 py-4 text-center font-arcade text-[11px] leading-relaxed text-white shadow-[0_0_22px_rgba(255,215,0,0.35)] transition hover:brightness-125 disabled:cursor-wait disabled:opacity-60 sm:text-xs"
+            >
+              {busy
+                ? "PROCESANDO..."
+                : `${active ? "RENOVAR" : "ACTIVAR"} POR ${VIP_PRICE_OBSIDIAN} OBS · ${VIP_DURATION_DAYS} DÍAS`}
+            </button>
+          </section>
+
+          <section className="grid content-start gap-3 sm:grid-cols-2">
             {BENEFITS.map(({ label, detail, Icon, color }) => (
-              <li
+              <article
                 key={label}
-                className="flex gap-2.5 rounded border p-2.5"
-                style={{ borderColor: `${color}55`, background: `${color}0d` }}
+                className="flex gap-4 rounded-lg border p-4"
+                style={{ borderColor: `${color}66`, background: `${color}0f` }}
               >
                 <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded border"
-                  style={{ color, borderColor: `${color}80` }}
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border"
+                  style={{ color, borderColor: `${color}90`, background: `${color}14` }}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-6 w-6" />
                 </span>
-                <span className="min-w-0">
-                  <span
-                    className="block text-[8px] leading-relaxed tracking-wide"
-                    style={{ color }}
-                  >
-                    [ {label} ]
-                  </span>
-                  <span className="block text-[8px] leading-relaxed text-white/50">{detail}</span>
-                </span>
-              </li>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold leading-snug" style={{ color }}>
+                    {label}
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed text-white/75">{detail}</p>
+                </div>
+              </article>
             ))}
-          </ul>
-
-          {feedback ? (
-            <p
-              role="status"
-              className={`border px-3 py-2 text-[9px] tracking-wider ${
-                feedback.tone === "ok"
-                  ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
-                  : "border-rose-400/50 bg-rose-400/10 text-rose-300"
-              }`}
-            >
-              {feedback.text}
-            </p>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={() => void handlePurchase()}
-            disabled={busy}
-            className="flex h-12 w-full items-center justify-center gap-2 border-2 border-[#ffd700] bg-linear-to-r from-[#ffd700]/25 via-cyan-400/15 to-[#ffd700]/25 font-arcade text-[9px] uppercase tracking-wide text-white shadow-[0_0_20px_rgba(255,215,0,0.35)] transition hover:brightness-125 disabled:cursor-wait disabled:opacity-60"
-          >
-            {busy
-              ? "PROCESANDO..."
-              : `[ ${active ? "RENOVAR" : "ACTIVAR"} POR ${VIP_PRICE_OBSIDIAN} OBS (${VIP_DURATION_DAYS} DÍAS) ]`}
-          </button>
+          </section>
         </div>
       </div>
     </div>
