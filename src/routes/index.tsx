@@ -567,6 +567,10 @@ function Index() {
     [googlePlayer, marketPilot, profileName],
   );
 
+  // Mantiene la función de guardado actualizada sin reiniciar el motor de combate.
+  const saveProgressRef = useRef(saveProgress);
+  saveProgressRef.current = saveProgress;
+
   const publishMarketAd = async (input: P2PPublishInput) => {
     setMarketError("");
     try {
@@ -948,7 +952,7 @@ function Index() {
             setRunCredits(0);
           } else {
             const outcome = recordRun(ProgressStore.get(), result);
-            saveProgress(outcome.progress);
+            saveProgressRef.current(outcome.progress);
             setRunCredits(outcome.credits);
             setUnlockedSectors(outcome.newStages);
           }
@@ -1086,7 +1090,6 @@ function Index() {
     progress.upgrades,
     gameMode,
     bossCooldowns,
-    saveProgress,
   ]);
 
   useEffect(() => {
