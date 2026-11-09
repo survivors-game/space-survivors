@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+ import { useEffect, useState, type ReactNode } from "react";
 import { Check, LockKeyhole } from "lucide-react";
 import { spriteUrl } from "@/game/sprites";
 import {
@@ -33,6 +33,8 @@ interface MissionsSectionProps {
   onCommit: (next: Progress) => void;
   onNotice: (message: string) => void;
   onClaimed?: () => void;
+  /** Abre el modal de membresía VIP. */
+  onOpenVip?: () => void;
 }
 
 /* Sprites ya existentes del juego (src/game/art.ts). */
@@ -152,6 +154,7 @@ export function MissionsSection({
   onCommit,
   onNotice,
   onClaimed,
+  onOpenVip,
 }: MissionsSectionProps) {
   const [now, setNow] = useState(() => Date.now());
   const [tab, setTab] = useState<SeasonTab>("DAILY");
@@ -405,6 +408,15 @@ export function MissionsSection({
                 ? `VIP ACTIVO · ${season.claimedVip.length}/${SEASON_MAX_LEVEL}`
                 : "SIN VIP · el carril VIP solo se puede ver"}
             </span>
+            {!hasVip && onOpenVip ? (
+              <button
+                type="button"
+                onClick={onOpenVip}
+                className="border border-[#ffd700]/60 bg-[#ffd700]/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-[#ffd700] hover:bg-[#ffd700]/20"
+              >
+                [ ACTIVAR VIP ]
+              </button>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-[2.5rem_4.5rem_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white/50">

@@ -1,4 +1,4 @@
-import "./lib/error-capture";
+ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -24,7 +24,7 @@ import {
   type BossCombatEvent,
 } from "./game/meta/boss-combat-proof";
 import { handleChatRequest, type ChatWorkerEnv } from "./chat/chat-api";
-import { hasVip } from "./game/meta/vip";
+import { VIP_PRICE_OBSIDIAN, hasVip, nextVipUntil } from "./game/meta/vip";
 import { BossHelpRoom } from "./game/boss-help-room";
 import { bossById } from "./game/data/bosses";
 
@@ -443,6 +443,57 @@ async function ensurePilotReferralCode(db: D1Database, pilotId: string): Promise
   throw new Error("No se pudo generar un código de invitación único.");
 }
 
+async function handleVipBuy(request: Request, env: WorkerEnv | undefined): Promise<Response> {
+  const url = new URL(request.url);
+  if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
+  if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar la autenticación para VIP:", error);
+    return json({ error: "No se pudo preparar el sistema VIP." }, 503);
+  }
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con Google para activar el VIP." }, 401);
+
+  const pilotId = account.pilot_id;
+  const current = await db
+    .prepare("SELECT vip_until, obsidian FROM pilots WHERE pilot_id = ?")
+    .bind(pilotId)
+    .first<{ vip_until: number | null; obsidian: number }>();
+  if (!current) return json({ error: "No se encontró el piloto." }, 404);
+  if (current.obsidian < VIP_PRICE_OBSIDIAN)
+    return json({ error: `Obsidiana insuficiente. Requiere ${VIP_PRICE_OBSIDIAN} OBS.` }, 400);
+
+  const now = Date.now();
+  const vipUntil = nextVipUntil(current.vip_until, now);
+  // Cobro y extensión en una sola sentencia. Solo se aplica si el saldo y la
+  // expiración siguen siendo los leídos arriba, así que dos compras simultáneas
+  // no cobran dos veces ni suman mal los días.
+  const charged = await db
+    .prepare(
+      `UPDATE pilots
+       SET obsidian = obsidian - ?, vip_until = ?, updated_at = ?
+       WHERE pilot_id = ? AND obsidian >= ? AND COALESCE(vip_until, -1) = COALESCE(?, -1)`,
+    )
+    .bind(VIP_PRICE_OBSIDIAN, vipUntil, now, pilotId, VIP_PRICE_OBSIDIAN, current.vip_until)
+    .run();
+  if (charged.meta?.changes !== 1)
+    return json({ error: "Tu saldo o tu VIP cambiaron. Inténtalo de nuevo." }, 409);
+
+  const balance = await db
+    .prepare("SELECT obsidian, vip_until FROM pilots WHERE pilot_id = ?")
+    .bind(pilotId)
+    .first<{ obsidian: number; vip_until: number | null }>();
+  return json({
+    success: true,
+    vip_until: balance?.vip_until ?? vipUntil,
+    obsidian: balance?.obsidian ?? current.obsidian - VIP_PRICE_OBSIDIAN,
+  });
+}
+
 async function handleSocialRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -451,6 +502,7 @@ async function handleSocialRequest(
   if (url.pathname.startsWith("/api/alliance/") || url.pathname === "/api/admin/set-vip") {
     return handleAllianceRequest(request, env);
   }
+  if (url.pathname === "/api/vip/buy") return handleVipBuy(request, env);
   const isMine = url.pathname === "/api/referral/mine";
   const isLeaderboard = url.pathname === "/api/referral/leaderboard";
   const isMyCode = url.pathname === "/api/referral/my-code";
@@ -710,6 +762,7 @@ async function handleSocialRequest(
         alliance: membership ? { ...membership, members: members.results ?? [] } : null,
         invites: invites.results ?? [],
         vip: pilot ? hasVip(pilot, now) : false,
+        vip_until: pilot?.vip_until ?? null,
       });
     }
 

@@ -1,4 +1,5 @@
-import type { ChatMessage } from "./types";
+ import type { ChatMessage } from "./types";
+import { hasVip } from "../game/meta/vip";
 
 interface D1Statement {
   bind(...values: (string | number)[]): D1Statement;
@@ -28,6 +29,7 @@ interface PlayerAccount {
   pilot_id: string;
   display_name: string;
   alliance_tag: string | null;
+  vip: boolean;
 }
 
 const SESSION_COOKIE = "__Host-ss_session";
@@ -69,6 +71,7 @@ export async function handleChatRequest(
       pilotId: player.pilot_id,
       callsign: player.display_name,
       allianceTag: player.alliance_tag ?? "",
+      vip: player.vip ? "1" : "0",
       language,
     }).toString();
     return room.fetch(new Request(socketUrl, request));
@@ -116,6 +119,7 @@ export async function handleChatRequest(
             pilotId: player.pilot_id,
             callsign: player.display_name,
             allianceTag: player.alliance_tag,
+            vip: player.vip,
             type,
             language,
             text: `${player.display_name} ${language === "en" ? englishText : spanishText}`,
@@ -152,9 +156,10 @@ async function getChatPlayer(request: Request, db: ChatDatabase): Promise<Player
 
   const account = await db
     .prepare(
-      `SELECT a.google_sub, a.pilot_id, p.display_name, alliance.tag AS alliance_tag
+      `SELECT a.google_sub, a.pilot_id, p.display_name, alliance.tag AS alliance_tag, pilot.vip_until AS vip_until
        FROM player_accounts a
        LEFT JOIN player_profiles p ON p.pilot_id = a.pilot_id
+       LEFT JOIN pilots pilot ON pilot.pilot_id = a.pilot_id
        LEFT JOIN alliance_members member ON member.pilot_id = a.pilot_id
        LEFT JOIN alliances alliance ON alliance.alliance_id = member.alliance_id
        WHERE a.google_sub = ?`,
@@ -165,6 +170,7 @@ async function getChatPlayer(request: Request, db: ChatDatabase): Promise<Player
       pilot_id: string;
       display_name: string | null;
       alliance_tag: string | null;
+      vip_until: number | null;
     }>();
   if (!account || !PILOT_ID_PATTERN.test(account.pilot_id)) return null;
   return {
@@ -172,6 +178,7 @@ async function getChatPlayer(request: Request, db: ChatDatabase): Promise<Player
     pilot_id: account.pilot_id,
     display_name: account.display_name?.trim() || "PILOTO",
     alliance_tag: account.alliance_tag,
+    vip: hasVip({ vip_until: account.vip_until }),
   };
 }
 

@@ -1,8 +1,9 @@
-// SPACE SURVIVORS combat engine. Evolved from the template's Game class
+ // SPACE SURVIVORS combat engine. Evolved from the template's Game class
 // (section 12): same pools, state machine, update order and render loop,
 // extended with pixel-art ships, families, bosses, stages and hazards.
 import { CONFIG } from "./config";
 import { CREDIT_REWARD_MULT } from "./meta/progress";
+import { vipCreditMultiplier, vipDropMultiplier } from "./meta/vip";
 import { Audio } from "./audio";
 import { Input } from "./input";
 import { Pool } from "./pool";
@@ -119,6 +120,7 @@ export interface EngineOptions {
   isEndless?: boolean;
   bossCooldowns?: Record<string, number>;
   inventory?: Partial<Record<PickupKind, number>>;
+  vipActive?: boolean;
   callbacks: EngineCallbacks;
 }
 
@@ -214,6 +216,7 @@ export class Engine {
   energy = 0;
   evolutions = 0;
   creditsRaw = 0;
+  private vipActive = false;
   maxPhase = 0;
   lastHorde = 0;
   finalBossDead = false;
@@ -235,6 +238,7 @@ export class Engine {
     this.stage = o.stage;
     this.hangar = o.hangar;
     this.cb = o.callbacks;
+    this.vipActive = Boolean(o.vipActive);
     this.inventory = {
       repair: o.inventory?.repair ?? 0,
       magnet: o.inventory?.magnet ?? 0,
@@ -1509,7 +1513,7 @@ export class Engine {
     const d = e.def;
     this.kills++;
     this.killsByType[d.id] = (this.killsByType[d.id] ?? 0) + 1;
-    this.creditsRaw += d.credits * (e.elite ? 3 : 1);
+    this.creditsRaw += d.credits * (e.elite ? 3 : 1) * vipCreditMultiplier(this.vipActive);
     this.explosion(e.x, e.y, e.radius * (e.elite ? 1.5 : 1), d.color);
     Audio.SFX.enemyDie();
     const xp = d.xp * (e.elite ? 4 : 1);
@@ -1522,7 +1526,8 @@ export class Engine {
         : this.stage.id === WORLD1_ID && !this.isEndless
           ? WORLD1_PICKUP_CHANCE
           : 0.006;
-    if (Math.random() < pk) this.dropPickup(e.x, e.y);
+    if (Math.random() < Math.min(1, pk * vipDropMultiplier(this.vipActive)))
+      this.dropPickup(e.x, e.y);
     if (d.behavior === "parasite")
       for (let i = 0; i < 2; i++)
         this.spawnEnemyAt("spawnling", e.x + rand(-10, 10), e.y + rand(-10, 10));

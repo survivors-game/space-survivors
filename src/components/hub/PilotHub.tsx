@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+ import { useMemo } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Rocket,
@@ -34,6 +34,8 @@ export interface PilotHubProps {
   onOpenAlliance: () => void;
   onOpenMarket: () => void;
   onOpenProfile: () => void;
+  /** Abre la membresía VIP. Opcional: sin él, el distintivo no es interactivo. */
+  onOpenVip?: () => void;
 }
 
 const SEGMENTS = 10;
@@ -44,7 +46,8 @@ const VIOLET = "#c4a1ff";
 const ORANGE = "#ff8a3d";
 const GREEN = "#4ade80";
 
-const HEX_CLIP = "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
+const HEX_CLIP =
+  "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
 const CUT_CLIP =
   "polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)";
 
@@ -64,9 +67,12 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
 
 /** Normaliza las estadísticas reales de la nave (src/game/data/ships.ts) a 0..1. */
 function computeShipStats(ship: ShipDef) {
-  const attack = clamp01((ship.dmg / ship.cd - 0.9) / 0.35);
+  const attack = clamp01(((ship.dmg / ship.cd) - 0.9) / 0.35);
   const defense = clamp01(
-    0.25 + ((ship.hp - 80) / 70) * 0.5 + (ship.armor / 2) * 0.15 + (ship.shield / 30) * 0.1,
+    0.25 +
+      ((ship.hp - 80) / 70) * 0.5 +
+      (ship.armor / 2) * 0.15 +
+      (ship.shield / 30) * 0.1,
   );
   const speed = clamp01(0.2 + ((ship.speed - 200) / 75) * 0.8);
   return { attack, defense, speed };
@@ -149,7 +155,9 @@ function ActionTile({ label, sub, Icon, color, onClick }: ActionTileProps) {
         >
           {label}
         </span>
-        <span className="block truncate text-[8px] tracking-[0.2em] text-white/45">{sub}</span>
+        <span className="block truncate text-[8px] tracking-[0.2em] text-white/45">
+          {sub}
+        </span>
       </span>
     </button>
   );
@@ -173,12 +181,18 @@ export function PilotHub({
   onOpenAlliance,
   onOpenMarket,
   onOpenProfile,
+  onOpenVip,
 }: PilotHubProps) {
-  const shipImage = useMemo(() => spriteUrl(selectedShip.sprite, 4), [selectedShip.sprite]);
+  const shipImage = useMemo(
+    () => spriteUrl(selectedShip.sprite, 4),
+    [selectedShip.sprite],
+  );
   const stats = computeShipStats(selectedShip);
   const initial = pilotName.trim().charAt(0).toUpperCase() || "P";
   const shortId =
-    pilotId.length > 8 ? `${pilotId.slice(0, 8).toUpperCase()}…` : pilotId.toUpperCase();
+    pilotId.length > 8
+      ? `${pilotId.slice(0, 8).toUpperCase()}…`
+      : pilotId.toUpperCase();
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
 
@@ -206,10 +220,14 @@ export function PilotHub({
 
           <div className="min-w-0 flex-1">
             <div className="truncate font-arcade text-[8px] leading-relaxed text-white">
-              {allianceTag ? <span className="text-fuchsia-300">[{allianceTag}] </span> : null}
+              {allianceTag ? (
+                <span className="text-fuchsia-300">[{allianceTag}] </span>
+              ) : null}
               {pilotName}
             </div>
-            <div className="truncate text-[9px] tracking-wider text-cyan-300/70">ID {shortId}</div>
+            <div className="truncate text-[9px] tracking-wider text-cyan-300/70">
+              ID {shortId}
+            </div>
           </div>
 
           <button
@@ -222,6 +240,13 @@ export function PilotHub({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onOpenVip}
+            disabled={!onOpenVip}
+            title="Membresía VIP"
+            className="rounded-full transition enabled:hover:brightness-125 disabled:cursor-default"
+          >
           {vipActive ? (
             <span
               className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-arcade text-[8px]"
@@ -232,13 +257,15 @@ export function PilotHub({
                 boxShadow: "0 0 10px rgba(255,215,0,0.35)",
               }}
             >
-              <Sparkles className="h-3 w-3" />★ VIP PILOT
+              <Sparkles className="h-3 w-3" />
+              ★ VIP PILOT
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full border border-cyan-400/25 px-2.5 py-1 text-[9px] tracking-widest text-cyan-400/50">
               ESTÁNDAR
             </span>
           )}
+          </button>
 
           <div className="flex items-center gap-1.5 rounded border border-cyan-400/50 bg-cyan-400/5 px-2 py-1">
             <span className="text-[8px] text-cyan-300">CR</span>
@@ -296,7 +323,9 @@ export function PilotHub({
               <div className="font-arcade text-[11px] leading-relaxed text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
                 {selectedShip.name}
               </div>
-              <div className="text-[9px] tracking-wider text-white/50">{selectedShip.role}</div>
+              <div className="text-[9px] tracking-wider text-white/50">
+                {selectedShip.role}
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -402,9 +431,7 @@ export function PilotHub({
         </div>
         <div className="flex items-baseline gap-2">
           <span className="text-[8px] tracking-widest text-white/50">NAVES EN FLOTA</span>
-          <span className="font-arcade text-[11px] tabular-nums text-violet-300">
-            {fmt(shipsCount)}
-          </span>
+          <span className="font-arcade text-[11px] tabular-nums text-violet-300">{fmt(shipsCount)}</span>
         </div>
       </footer>
     </div>

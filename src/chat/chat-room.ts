@@ -1,10 +1,11 @@
-import { DurableObject } from "cloudflare:workers";
+ import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "cloudflare:workers";
 import type { ChatLanguage, ChatMessage, ChatMessageType as MessageType } from "./types";
 
-interface StoredMessage extends ChatMessage {
+interface StoredMessage extends Omit<ChatMessage, "vip"> {
   pilot_id: string;
   alliance_tag: string | null;
+  vip: number;
 }
 
 interface NewMessage {
@@ -13,6 +14,7 @@ interface NewMessage {
   pilotId: string;
   callsign: string;
   allianceTag: string | null;
+  vip: boolean;
   text: string;
 }
 
@@ -20,6 +22,7 @@ interface ChatAttachment {
   pilotId: string;
   callsign: string;
   allianceTag: string | null;
+  vip: boolean;
   language: ChatLanguage;
 }
 
@@ -38,6 +41,7 @@ interface IncomingEvent {
   pilotId: string;
   callsign: string;
   allianceTag: string | null;
+  vip?: boolean;
   type: "boss_kill";
   language: ChatLanguage;
   text: string;
@@ -73,6 +77,9 @@ export class ChatRoom extends DurableObject {
     if (!schema?.includes("alliance_tag")) {
       ctx.storage.sql.exec("ALTER TABLE chat_messages ADD COLUMN alliance_tag TEXT");
     }
+    if (!schema?.includes("vip INTEGER")) {
+      ctx.storage.sql.exec("ALTER TABLE chat_messages ADD COLUMN vip INTEGER NOT NULL DEFAULT 0");
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -86,6 +93,7 @@ export class ChatRoom extends DurableObject {
       const callsign = url.searchParams.get("callsign");
       const language = url.searchParams.get("language");
       const allianceTag = url.searchParams.get("allianceTag");
+      const vip = url.searchParams.get("vip") === "1";
       if (!pilotId || !callsign || !isChatLanguage(language)) {
         return new Response("Missing chat identity or language.", { status: 400 });
       }
@@ -97,6 +105,7 @@ export class ChatRoom extends DurableObject {
         pilotId,
         callsign,
         allianceTag: allianceTag || null,
+        vip,
         language,
       });
       this.ctx.acceptWebSocket(server);
@@ -123,6 +132,7 @@ export class ChatRoom extends DurableObject {
           pilotId: payload.pilotId,
           callsign: payload.callsign,
           allianceTag: payload.allianceTag,
+          vip: payload.vip === true,
           text: payload.text.trim(),
         }),
       );
@@ -161,6 +171,7 @@ export class ChatRoom extends DurableObject {
         pilotId: attachment.pilotId,
         callsign: attachment.callsign,
         allianceTag: attachment.allianceTag,
+        vip: attachment.vip === true,
         text: payload.text.trim(),
       }),
     );
@@ -184,8 +195,8 @@ export class ChatRoom extends DurableObject {
     const timestamp = Date.now();
     const result = this.ctx.storage.sql.exec<{ id: number }>(
       `INSERT INTO chat_messages
-        (type, pilot_id, callsign, text, language, alliance_tag, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        (type, pilot_id, callsign, text, language, alliance_tag, timestamp, vip)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       input.type,
       input.pilotId,
       input.callsign,
@@ -193,6 +204,7 @@ export class ChatRoom extends DurableObject {
       input.language,
       input.allianceTag,
       timestamp,
+      input.vip ? 1 : 0,
     );
     this.ctx.storage.sql.exec(
       `DELETE FROM chat_messages
@@ -207,6 +219,7 @@ export class ChatRoom extends DurableObject {
       pilotId: input.pilotId,
       callsign: input.callsign,
       allianceTag: input.allianceTag,
+      vip: input.vip,
       text: input.text,
       timestamp,
     };
@@ -215,7 +228,7 @@ export class ChatRoom extends DurableObject {
   sendHistory(socket: WebSocket, language: ChatLanguage): void {
     const messages = this.ctx.storage.sql
       .exec<StoredMessage>(
-        `SELECT id, type, pilot_id, callsign, text, language, alliance_tag, timestamp
+        `SELECT id, type, pilot_id, callsign, text, language, alliance_tag, vip, timestamp
          FROM chat_messages
          WHERE language = ? AND type NOT IN ('join', 'leave')
          ORDER BY id DESC LIMIT 50`,
@@ -232,6 +245,7 @@ export class ChatRoom extends DurableObject {
           pilotId: message.pilot_id,
           callsign: message.callsign,
           allianceTag: message.alliance_tag,
+          vip: message.vip === 1,
           text: message.text,
           timestamp: message.timestamp,
         }),

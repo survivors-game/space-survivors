@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -67,6 +67,7 @@ import { AllianceProfile } from "@/components/AllianceProfile";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { PilotHub } from "@/components/hub/PilotHub";
+import { VipModal } from "@/components/hub/VipModal";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import type {
   P2PHistoryOrder,
@@ -269,6 +270,8 @@ function Index() {
   const progressSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
   const [hasVip, setHasVip] = useState(false);
+  const [vipUntil, setVipUntil] = useState<number | null>(null);
+  const [vipModalOpen, setVipModalOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
@@ -773,12 +776,18 @@ function Index() {
       return;
     }
     let active = true;
-    void marketRequest<{ vip?: boolean }>("/api/alliance/mine")
+    void marketRequest<{ vip?: boolean; vip_until?: number | null }>("/api/alliance/mine")
       .then((result) => {
-        if (active) setHasVip(result.vip === true);
+        if (active) {
+          setHasVip(result.vip === true);
+          setVipUntil(typeof result.vip_until === "number" ? result.vip_until : null);
+        }
       })
       .catch(() => {
-        if (active) setHasVip(false);
+        if (active) {
+          setHasVip(false);
+          setVipUntil(null);
+        }
       });
     return () => {
       active = false;
@@ -961,6 +970,7 @@ function Index() {
       isEndless: gameMode === "ENDLESS",
       bossCooldowns,
       inventory: persistentInventoryRef.current,
+      vipActive: hasVip,
       callbacks: {
         onLevelUp: (nextChoices, nextRerolls) => {
           setChoices(nextChoices);
@@ -1111,6 +1121,18 @@ function Index() {
       setNotice("INICIA SESIÓN CON GOOGLE PARA ACCEDER AL HANGAR Y DESPLEGAR");
     }
   }, [googleSessionLoading, googlePlayer, screen]);
+
+  const purchaseVip = async () => {
+    const result = await marketRequest<{ success: boolean; vip_until: number; obsidian: number }>(
+      "/api/vip/buy",
+      { method: "POST" },
+    );
+    setHasVip(true);
+    setVipUntil(result.vip_until);
+    setMarketPilot((current) => (current ? { ...current, obsidian: result.obsidian } : current));
+    setMarketRefresh((version) => version + 1);
+    flashNotice("VIP ACTIVADO · +30 DÍAS DE MEMBRESÍA");
+  };
 
   const requireGoogleSession = () => {
     if (googleSessionLoading) {
@@ -1939,6 +1961,16 @@ function Index() {
           </div>
         ) : null}
 
+        {googlePlayer ? (
+          <VipModal
+            open={vipModalOpen}
+            onClose={() => setVipModalOpen(false)}
+            vipUntil={vipUntil}
+            obsidian={marketPilot?.obsidian ?? null}
+            onPurchase={purchaseVip}
+          />
+        ) : null}
+
         {screen === "MENU" && googlePlayer ? (
           <section className="min-w-0 flex-1 py-8 sm:py-12">
             <PilotHub
@@ -1978,6 +2010,7 @@ function Index() {
                 setHangarTab("PROFILE");
                 setScreen("HANGAR");
               }}
+              onOpenVip={() => setVipModalOpen(true)}
             />
           </section>
         ) : null}
@@ -2327,6 +2360,7 @@ function Index() {
                 onCommit={saveProgress}
                 onNotice={flashNotice}
                 onClaimed={() => Audio.SFX.levelUp?.()}
+                onOpenVip={() => setVipModalOpen(true)}
               />
             ) : hangarTab === "BESTIARY" ? (
               <div className="mt-7 space-y-10 lg:col-start-2">

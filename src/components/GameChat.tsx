@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+ import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Minus, Plus, Send, ZoomIn, ZoomOut } from "lucide-react";
 import type { ChatMessage } from "@/chat/types";
 
@@ -300,7 +300,11 @@ export function GameChat() {
               <p className="text-white" key={`${message.id}-${message.type}`}>
                 <span className="relative mr-1 inline-block">
                   <button
-                    className="font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                    className={
+                      message.vip
+                        ? "font-bold text-[#ffd700] hover:text-amber-300 drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]"
+                        : "font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                    }
                     onClick={() =>
                       setSelectedPlayer((current) =>
                         current?.messageId === message.id
@@ -317,6 +321,11 @@ export function GameChat() {
                   >
                     {message.callsign}
                   </button>
+                  {message.vip ? (
+                    <span className="ml-1 rounded border border-[#ffd700]/50 bg-[#ffd700]/15 px-1 py-px text-[8px] font-black uppercase text-[#ffd700] shadow-[0_0_6px_rgba(255,215,0,0.3)]">
+                      VIP
+                    </span>
+                  ) : null}
                   {message.allianceTag ? (
                     <span className="ml-1 font-bold text-fuchsia-300">[{message.allianceTag}]</span>
                   ) : null}

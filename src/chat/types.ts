@@ -1,4 +1,4 @@
-export type ChatLanguage = "en" | "es";
+ export type ChatLanguage = "en" | "es";
 
 export type ChatMessageType = "chat" | "boss_kill" | "drop";
 
@@ -9,6 +9,7 @@ export interface ChatMessage {
   pilotId: string;
   callsign: string;
   allianceTag?: string | null;
+  vip?: boolean;
   text: string;
   timestamp: number;
 }
