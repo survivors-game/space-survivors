@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -41,6 +41,7 @@ import { MarketSection } from "@/components/hangar/MarketSection";
 import { InventorySection } from "@/components/hangar/InventorySection";
 import { MissionsSection } from "@/components/hangar/MissionsSection";
 import { UpgradesSection } from "@/components/hangar/UpgradesSection";
+import { RoadmapPage, WikiPage } from "@/components/wiki/WikiPage";
 import { Audio } from "@/game/audio";
 import { BOSSES, bossById } from "@/game/data/bosses";
 import { WORLD1_ID } from "@/game/timeline";
@@ -91,7 +92,7 @@ import {
 import { hangarBonuses as calcHangarBonuses } from "@/game/meta/upgrades";
 import type { HudState, PickupKind, RunResult, UpgradeChoice } from "@/game/types";
 
-type Screen = "MENU" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER";
+type Screen = "MENU" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER" | "WIKI" | "ROADMAP";
 type GameMode = "CAMPAIGN" | "ENDLESS";
 
 export const Route = createFileRoute("/")({
@@ -192,6 +193,7 @@ async function refreshAccountProgress(): Promise<void> {
 
 function Index() {
   const [screen, setScreen] = useState<Screen>("MENU");
+  const [returnScreen, setReturnScreen] = useState<Screen>("MENU");
   const [gameMode, setGameMode] = useState<GameMode>("CAMPAIGN");
   const [progress, setProgress] = useState<Progress>(() => defaultProgress());
   const [selectedShipId, setSelectedShipId] = useState("falcon");
@@ -1790,6 +1792,31 @@ function Index() {
               </span>
             </span>
           </button>
+          {screen !== "GAMEOVER" ? (
+            <nav aria-label="Secciones principales" className="flex items-center gap-1.5 sm:gap-2">
+              {(["WIKI", "ROADMAP"] as const).map((item) => {
+                const active = screen === item;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => {
+                      if (screen !== "WIKI" && screen !== "ROADMAP") setReturnScreen(screen);
+                      setScreen(item);
+                    }}
+                    className={`font-arcade border px-2.5 py-2 text-[8px] uppercase tracking-widest transition sm:px-4 sm:text-[9px] ${
+                      active
+                        ? "border-cyan-300/70 bg-cyan-300/15 text-cyan-100 shadow-[0_0_14px_#00f0ff33]"
+                        : "border-cyan-500/25 bg-[#0b0d1c]/70 text-white/60 hover:text-cyan-100"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </nav>
+          ) : null}
           <div className="flex items-center gap-2 sm:gap-5">
             {googlePlayer ? (
               <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
@@ -1846,6 +1873,15 @@ function Index() {
             </Button>
           </div>
         </header>
+        {screen === "WIKI" || screen === "ROADMAP" ? (
+          <>
+            {screen === "WIKI" ? (
+              <WikiPage onClose={() => setScreen(returnScreen)} />
+            ) : (
+              <RoadmapPage onClose={() => setScreen(returnScreen)} />
+            )}
+          </>
+        ) : null}
         {notice ? (
           <p
             role="status"
