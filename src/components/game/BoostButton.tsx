@@ -34,7 +34,7 @@ export function BoostButton({ ready }: { ready: number }) {
         }}
       >
         <span
-          className={`grid size-[84%]] place-items-center rounded-full border bg-[#070814]/90 text-[9px] font-bold uppercase tracking-widest ${
+          className={`grid size-[84%] place-items-center rounded-full border bg-[#070814]/90 text-[9px] font-bold uppercase tracking-widest ${
             isReady ? "border-cyan-300/70 text-cyan-100" : "border-white/15 text-white/55"
           }`}
         >
