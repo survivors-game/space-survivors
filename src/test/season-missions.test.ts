@@ -1,4 +1,4 @@
- import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { RunResult } from "@/game/types";
 import {
@@ -90,7 +90,12 @@ describe("misiones de temporada: persistencia", () => {
 
   it("normaliza valores corruptos de temporada", () => {
     const p = sanitize({
-      season: { seasonId: getSeasonId(), pt: -5, claimedFree: [1, 99, "x", 1], dailyCompletedDate: "x" },
+      season: {
+        seasonId: getSeasonId(),
+        pt: -5,
+        claimedFree: [1, 99, "x", 1],
+        dailyCompletedDate: "x",
+      },
     });
     expect(p.season.pt).toBe(0);
     expect(p.season.claimedFree).toEqual([1]);
@@ -127,7 +132,12 @@ describe("misiones de temporada: avance y reclamos", () => {
   });
 
   it("no reclama una misión incompleta", () => {
-    const res = claimPeriodMission(defaultProgress(), "DAILY", getActiveDailyMissions("2026-11-08")[0]!.id, NOON_SUNDAY);
+    const res = claimPeriodMission(
+      defaultProgress(),
+      "DAILY",
+      getActiveDailyMissions("2026-11-08")[0]!.id,
+      NOON_SUNDAY,
+    );
     expect(res.ok).toBe(false);
   });
 
@@ -146,7 +156,15 @@ describe("misiones de temporada: avance y reclamos", () => {
   it("el cofre se desbloquea con 5 diarias reclamadas y se reclama una vez", () => {
     let p = applyRun(
       defaultProgress(),
-      run({ victory: true, kills: 999, bossesDefeated: ["leviathan"], evolutions: 9, level: 25, time: 1000, damageDealt: 999999 }),
+      run({
+        victory: true,
+        kills: 999,
+        bossesDefeated: ["leviathan"],
+        evolutions: 9,
+        level: 25,
+        time: 1000,
+        damageDealt: 999999,
+      }),
       NOON_SUNDAY,
     ).progress;
     let claimedCount = 0;
@@ -224,8 +242,13 @@ describe("temporadas: identificador, reinicio y línea base", () => {
     const now = SEASON_START_MS + 1000;
     const started = applyRun(base, run({ kills: 0 }), now).progress;
     expect(started.season.baseline.kills).toBe(1000);
-    expect(getSeasonBoard(started, now).challenges.find((c) => c.template.id === "s_kills_500")!.progress).toBe(0);
+    expect(
+      getSeasonBoard(started, now).challenges.find((c) => c.template.id === "s_kills_500")!
+        .progress,
+    ).toBe(0);
     const after = applyRun(started, run({ kills: 300 }), now).progress;
-    expect(getSeasonBoard(after, now).challenges.find((c) => c.template.id === "s_kills_500")!.progress).toBe(300);
+    expect(
+      getSeasonBoard(after, now).challenges.find((c) => c.template.id === "s_kills_500")!.progress,
+    ).toBe(300);
   });
 });

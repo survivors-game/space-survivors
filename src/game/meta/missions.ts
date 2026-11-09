@@ -1,4 +1,4 @@
- // Centro de operaciones de temporada: misiones diarias, semanales, desafíos mayores
+// Centro de operaciones de temporada: misiones diarias, semanales, desafíos mayores
 // y el Pase de Temporada de 20 niveles. Todo el cálculo de qué misiones están activas
 // es determinístico a partir de la fecha UTC, así que cada piloto ve el mismo conjunto.
 import type { RunResult } from "../types";
@@ -591,7 +591,7 @@ export function getDailyTimeRemaining(now: number = Date.now()): number {
 /** Milisegundos hasta el próximo reinicio semanal (lunes 00:00 UTC). */
 export function getWeeklyTimeRemaining(now: number = Date.now()): number {
   const d = new Date(now);
-  const daysAhead = ((1 - d.getUTCDay() + 7) % 7) || 7;
+  const daysAhead = (1 - d.getUTCDay() + 7) % 7 || 7;
   const nextMonday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysAhead);
   return Math.max(0, nextMonday - now);
 }

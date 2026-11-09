@@ -1,4 +1,4 @@
- // Permanent progression, persisted in localStorage (the storage the original
+// Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
@@ -150,7 +150,9 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   if (!raw || typeof raw !== "object") return defaultSeason();
   const r = raw as Partial<Record<keyof SeasonProgress, unknown>>;
   const ids = (v: unknown): string[] =>
-    Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === "string"))) : [];
+    Array.isArray(v)
+      ? Array.from(new Set(v.filter((x): x is string => typeof x === "string")))
+      : [];
   const levels = (v: unknown): number[] =>
     Array.isArray(v)
       ? Array.from(
@@ -168,7 +170,8 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   };
   const stamp = (v: unknown): string =>
     typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
-  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  const num = (v: unknown): number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
   const rawBase = (r.baseline ?? {}) as Partial<SeasonBaseline>;
   const pt = num(r.pt);
   return {
@@ -544,9 +547,7 @@ export function claimPeriodMission(
   now: number = Date.now(),
 ): BuyResult {
   const board = getSeasonBoard(prev, now);
-  const entry = (period === "DAILY" ? board.daily : board.weekly).find(
-    (e) => e.template.id === id,
-  );
+  const entry = (period === "DAILY" ? board.daily : board.weekly).find((e) => e.template.id === id);
   if (!entry) return { ok: false, reason: "Misión no activa" };
   if (entry.claimed) return { ok: false, reason: "Ya reclamada" };
   if (!entry.completed) return { ok: false, reason: "Objetivo incompleto" };
