@@ -1116,7 +1116,8 @@ function Index() {
 
   useEffect(() => {
     if (googleSessionLoading || googlePlayer) return;
-    if (screen !== "MENU") {
+    // La Wiki y el Roadmap son páginas públicas; no requieren iniciar sesión.
+    if (screen !== "MENU" && screen !== "WIKI" && screen !== "ROADMAP") {
       setScreen("MENU");
       setNotice("INICIA SESIÓN CON GOOGLE PARA ACCEDER AL HANGAR Y DESPLEGAR");
     }
