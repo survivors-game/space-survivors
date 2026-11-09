@@ -1,4 +1,4 @@
- import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageCircle, Minus, Plus, Send, ZoomIn, ZoomOut } from "lucide-react";
 import type { ChatMessage } from "@/chat/types";
 

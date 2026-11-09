@@ -1,4 +1,4 @@
- export type ChatLanguage = "en" | "es";
+export type ChatLanguage = "en" | "es";
 
 export type ChatMessageType = "chat" | "boss_kill" | "drop";
 

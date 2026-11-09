@@ -130,7 +130,9 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
         <div className="flex items-center gap-3 border-b border-[#ffd700]/25 px-4 py-3">
           <div
             className="flex h-10 w-10 shrink-0 items-center justify-center border border-[#ffd700]/70 bg-[#ffd700]/10 shadow-[0_0_14px_rgba(255,215,0,0.4)]"
-            style={{ clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)" }}
+            style={{
+              clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)",
+            }}
           >
             <Crown className="h-4 w-4 text-[#ffd700]" />
           </div>
@@ -188,7 +190,10 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
                   <Icon className="h-3.5 w-3.5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[8px] leading-relaxed tracking-wide" style={{ color }}>
+                  <span
+                    className="block text-[8px] leading-relaxed tracking-wide"
+                    style={{ color }}
+                  >
                     [ {label} ]
                   </span>
                   <span className="block text-[8px] leading-relaxed text-white/50">{detail}</span>

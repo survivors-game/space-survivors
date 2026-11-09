@@ -1,4 +1,4 @@
- export const VIP_DURATION_DAYS = 30;
+export const VIP_DURATION_DAYS = 30;
 export const VIP_PRICE_OBSIDIAN = 20;
 export const VIP_DROP_BONUS = 0.35;
 export const VIP_CREDIT_BONUS = 0.2;

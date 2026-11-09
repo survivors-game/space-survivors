@@ -1,4 +1,4 @@
- import type { ChatMessage } from "./types";
+import type { ChatMessage } from "./types";
 import { hasVip } from "../game/meta/vip";
 
 interface D1Statement {

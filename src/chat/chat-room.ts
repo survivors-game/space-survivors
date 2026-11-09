@@ -1,4 +1,4 @@
- import { DurableObject } from "cloudflare:workers";
+import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "cloudflare:workers";
 import type { ChatLanguage, ChatMessage, ChatMessageType as MessageType } from "./types";
 

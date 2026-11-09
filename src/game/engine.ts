@@ -1,4 +1,4 @@
- // SPACE SURVIVORS combat engine. Evolved from the template's Game class
+// SPACE SURVIVORS combat engine. Evolved from the template's Game class
 // (section 12): same pools, state machine, update order and render loop,
 // extended with pixel-art ships, families, bosses, stages and hazards.
 import { CONFIG } from "./config";
