@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Coins, Crown, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
+ import { useEffect, useState } from "react";
+import { Coins, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
 import {
   VIP_DURATION_DAYS,
   VIP_PRICE_OBSIDIAN,
@@ -27,42 +27,17 @@ interface Benefit {
 }
 
 const GOLD = "#ffd700";
-const CYAN = "#22d3ee";
+const CYAN = "#00f0ff";
 const VIOLET = "#c4a1ff";
 const MAGENTA = "#ff4d9d";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const BENEFITS: Benefit[] = [
-  {
-    label: "+35% drops en combate",
-    detail: "Más botiquines de reparación, imanes y PEM en cada partida.",
-    Icon: Zap,
-    color: CYAN,
-  },
-  {
-    label: "+20% créditos",
-    detail: "Bonificación de chatarra por cada nave enemiga destruida.",
-    Icon: Coins,
-    color: GOLD,
-  },
-  {
-    label: "Distintivo dorado en chat",
-    detail: "Rango [VIP] y nombre en oro neón en el canal global.",
-    Icon: Sparkles,
-    color: GOLD,
-  },
-  {
-    label: "Pase de temporada élite",
-    detail: "Desbloquea el carril exclusivo de recompensas de temporada.",
-    Icon: Trophy,
-    color: MAGENTA,
-  },
-  {
-    label: "Comando de alianza",
-    detail: "Permiso para fundar alianzas espaciales y liderar guerras.",
-    Icon: Users,
-    color: VIOLET,
-  },
+  { label: "+35% drops en combate", detail: "Más reparaciones, imanes y PEM.", Icon: Zap, color: CYAN },
+  { label: "+20% créditos", detail: "Bonificación por cada nave enemiga destruida.", Icon: Coins, color: GOLD },
+  { label: "Distintivo en chat", detail: "[VIP] y nombre dorado en el canal global.", Icon: Sparkles, color: GOLD },
+  { label: "Pase de temporada élite", detail: "Carril exclusivo de recompensas.", Icon: Trophy, color: MAGENTA },
+  { label: "Comando de alianza", detail: "Fundar alianzas y liderar guerras.", Icon: Users, color: VIOLET },
 ];
 
 interface Feedback {
@@ -103,7 +78,7 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
     setFeedback(null);
     try {
       await onPurchase();
-      setFeedback({ tone: "ok", text: `VIP activado: +${VIP_DURATION_DAYS} días de membresía.` });
+      setFeedback({ tone: "ok", text: `VIP activado: +${VIP_DURATION_DAYS} días.` });
     } catch (error) {
       setFeedback({
         tone: "error",
@@ -116,88 +91,72 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 text-white sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Membresía VIP de flota"
       onClick={onClose}
     >
       <div
-        className="relative flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-[#ffd700]/50 bg-[#07070f] shadow-[0_0_50px_rgba(255,215,0,0.25),inset_0_0_40px_rgba(34,211,238,0.05)]"
+        className="w-full max-w-2xl border border-cyan-500/25 bg-[#0b0d1c] shadow-[0_0_30px_#00f0ff12]"
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center gap-4 border-b border-[#ffd700]/25 px-6 py-4">
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center border border-[#ffd700]/70 bg-[#ffd700]/10 shadow-[0_0_16px_rgba(255,215,0,0.4)]"
-            style={{
-              clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)",
-            }}
-          >
-            <Crown className="h-6 w-6 text-[#ffd700]" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-arcade text-sm leading-relaxed text-[#ffd700] drop-shadow-[0_0_8px_rgba(255,215,0,0.6)] sm:text-base">
-              MEMBRESÍA VIP DE FLOTA
+        <header className="flex items-center justify-between border-b border-cyan-500/20 px-4 py-3">
+          <div>
+            <h2 className="font-arcade text-[10px] uppercase leading-relaxed text-[#ffd700]">
+              Membresía VIP de flota
             </h2>
-            <p className="text-sm text-white/65">Eleva tu nave con ventajas de élite.</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/45">
+              Ventajas de piloto de élite
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-white/20 text-white/70 transition hover:border-white/50 hover:text-white"
+            className="flex size-7 items-center justify-center border border-white/20 text-white/65 hover:text-white"
           >
-            <X className="h-5 w-5" />
+            <X className="size-3.5" />
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto p-6 md:grid-cols-[320px_1fr]">
-          <section className="flex flex-col gap-4">
-            <div className="rounded-lg border border-white/15 bg-black/50 p-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-white/60">Estado</p>
+        <div className="grid gap-3 p-4 md:grid-cols-[220px_1fr]">
+          <section className="space-y-3">
+            <div className="border border-cyan-500/20 bg-black/40 p-3">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">Estado</p>
               {active ? (
                 <>
-                  <p className="mt-1 font-arcade text-base text-[#ffd700] drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">
-                    ACTIVO
+                  <p className="mt-1 font-arcade text-[10px] text-[#ffd700]">ACTIVO</p>
+                  <p className="mt-1 text-xs text-white/85">
+                    Expira en <span className="font-bold text-[#ffd700]">{formatVipTimeRemaining(vipUntil, now)}</span>
                   </p>
-                  <p className="mt-2 text-lg text-white">
-                    Expira en{" "}
-                    <span className="font-bold text-[#ffd700]">
-                      {formatVipTimeRemaining(vipUntil, now)}
-                    </span>
-                  </p>
-                  <div className="mt-3 h-3 w-full bg-white/10">
-                    <div
-                      className="h-full bg-[#ffd700] shadow-[0_0_10px_rgba(255,215,0,0.7)]"
-                      style={{ width: `${progress}%` }}
-                    />
+                  <div className="mt-2 h-1.5 w-full bg-white/10">
+                    <div className="h-full bg-[#ffd700]" style={{ width: `${progress}%` }} />
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="mt-1 font-arcade text-base text-cyan-300/80">ESTÁNDAR</p>
-                  <p className="mt-2 text-base text-white/70">Sin membresía activa.</p>
+                  <p className="mt-1 font-arcade text-[10px] text-cyan-300/70">ESTÁNDAR</p>
+                  <p className="mt-1 text-xs text-white/65">Sin membresía activa.</p>
                 </>
               )}
             </div>
 
-            <div className="rounded-lg border border-white/15 bg-black/50 p-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-white/60">Tu saldo</p>
-              <p className="mt-1 font-arcade text-xl tabular-nums text-[#ff4d9d] drop-shadow-[0_0_8px_rgba(255,77,157,0.6)]">
-                {obsidian ?? "--"} OBS
-              </p>
-              <p className="mt-2 text-sm text-white/65">
-                Costo: {VIP_PRICE_OBSIDIAN} OBS por {VIP_DURATION_DAYS} días.
+            <div className="border border-cyan-500/20 bg-black/40 p-3">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">Tu saldo</p>
+              <p className="mt-1 font-arcade text-[10px] text-[#ff4d9d]">{obsidian ?? "--"} OBS</p>
+              <p className="mt-1 text-[11px] text-white/55">
+                Costo: {VIP_PRICE_OBSIDIAN} OBS · {VIP_DURATION_DAYS} días
               </p>
             </div>
 
             {feedback ? (
               <p
                 role="status"
-                className={`rounded-lg border px-4 py-3 text-sm font-semibold ${
+                className={`border px-3 py-2 text-[11px] ${
                   feedback.tone === "ok"
-                    ? "border-emerald-400/60 bg-emerald-400/10 text-emerald-300"
-                    : "border-rose-400/60 bg-rose-400/10 text-rose-300"
+                    ? "border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
+                    : "border-rose-400/50 bg-rose-400/10 text-rose-300"
                 }`}
               >
                 {feedback.text}
@@ -208,34 +167,23 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
               type="button"
               onClick={() => void handlePurchase()}
               disabled={busy}
-              className="mt-auto flex min-h-16 w-full items-center justify-center border-2 border-[#ffd700] bg-linear-to-r from-[#ffd700]/25 via-cyan-400/15 to-[#ffd700]/25 px-4 py-4 text-center font-arcade text-[11px] leading-relaxed text-white shadow-[0_0_22px_rgba(255,215,0,0.35)] transition hover:brightness-125 disabled:cursor-wait disabled:opacity-60 sm:text-xs"
+              className="font-arcade h-9 w-full rounded-none border border-[#ffd700] bg-[#ffd700]/15 text-[9px] uppercase tracking-[0.04em] text-[#ffd700] transition hover:bg-[#ffd700]/25 disabled:cursor-wait disabled:opacity-60"
             >
-              {busy
-                ? "PROCESANDO..."
-                : `${active ? "RENOVAR" : "ACTIVAR"} POR ${VIP_PRICE_OBSIDIAN} OBS · ${VIP_DURATION_DAYS} DÍAS`}
+              {busy ? "PROCESANDO..." : `${active ? "Renovar" : "Activar"} · ${VIP_PRICE_OBSIDIAN} OBS`}
             </button>
           </section>
 
-          <section className="grid content-start gap-3 sm:grid-cols-2">
+          <section className="divide-y divide-white/10 border border-cyan-500/20 bg-black/30">
             {BENEFITS.map(({ label, detail, Icon, color }) => (
-              <article
-                key={label}
-                className="flex gap-4 rounded-lg border p-4"
-                style={{ borderColor: `${color}66`, background: `${color}0f` }}
-              >
-                <span
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border"
-                  style={{ color, borderColor: `${color}90`, background: `${color}14` }}
-                >
-                  <Icon className="h-6 w-6" />
-                </span>
+              <div key={label} className="flex items-center gap-3 px-3 py-2">
+                <Icon className="size-3.5 shrink-0" style={{ color }} />
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold leading-snug" style={{ color }}>
+                  <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
                     {label}
-                  </h3>
-                  <p className="mt-1 text-sm leading-relaxed text-white/75">{detail}</p>
+                  </p>
+                  <p className="text-[11px] text-white/60">{detail}</p>
                 </div>
-              </article>
+              </div>
             ))}
           </section>
         </div>

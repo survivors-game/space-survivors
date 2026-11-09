@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -2034,14 +2034,14 @@ function Index() {
                 hordas enemigas, recolecta recursos, mejora tu arsenal y sobrevive hasta derrotar al
                 jefe del sector.
               </p>
-              <div className="mt-9 flex max-w-md flex-col gap-3">
+              <div className="mt-7 flex flex-col gap-3">
                 <Button
                   onClick={() => {
                     setReturnScreen("MENU");
                     setScreen("WIKI");
                   }}
                   title="Abrir la wiki"
-                  className="font-arcade h-14 w-full rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[10px] uppercase tracking-[0.08em] text-[#070814] shadow-[0_0_28px_#00f0ff45] hover:bg-cyan-200"
+                  className="font-arcade h-9 w-40 rounded-none border border-cyan-200 bg-[#00f0ff] px-2 text-[9px] uppercase tracking-[0.06em] text-[#070814] shadow-[0_0_20px_#00f0ff40] hover:bg-cyan-200"
                 >
                   WIKI
                 </Button>
@@ -2902,9 +2902,7 @@ function Index() {
           </section>
         ) : null}
 
-        {googlePlayer && (screen === "MENU" || screen === "HANGAR" || screen === "SELECT") && (
-          <GameChat />
-        )}
+        {googlePlayer && (screen === "MENU" || screen === "HANGAR" || screen === "SELECT") && <GameChat />}
 
         <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-cyan-500/15 pt-4 text-[9px] uppercase tracking-[0.18em] text-white/30">
           <span>
