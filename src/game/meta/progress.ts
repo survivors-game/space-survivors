@@ -1,4 +1,4 @@
- // Permanent progression, persisted in localStorage (the storage the original
+// Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
@@ -161,7 +161,9 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   if (!raw || typeof raw !== "object") return defaultSeason();
   const r = raw as Partial<Record<keyof SeasonProgress, unknown>>;
   const ids = (v: unknown): string[] =>
-    Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === "string"))) : [];
+    Array.isArray(v)
+      ? Array.from(new Set(v.filter((x): x is string => typeof x === "string")))
+      : [];
   const levels = (v: unknown): number[] =>
     Array.isArray(v)
       ? Array.from(
@@ -179,7 +181,8 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   };
   const stamp = (v: unknown): string =>
     typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
-  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  const num = (v: unknown): number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
   const rawBase = (r.baseline ?? {}) as Partial<SeasonBaseline>;
   const pt = num(r.pt);
   return {
@@ -429,7 +432,8 @@ export function upgradeStatus(prev: Progress, id: string): UpgradeStatus {
         met: req.progress(prev) >= req.goal,
       }
     : null;
-  if (prev.credits < cost) return { ok: false, reason: "Créditos insuficientes", cost, requirement };
+  if (prev.credits < cost)
+    return { ok: false, reason: "Créditos insuficientes", cost, requirement };
   if (requirement && !requirement.met)
     return { ok: false, reason: `Requisito: ${requirement.label}`, cost, requirement };
   return { ok: true, reason: "", cost, requirement };
@@ -449,7 +453,11 @@ export function buyUpgrade(prev: Progress, id: string): BuyResult {
  * Elige o cambia el módulo de una mejora en nivel 10. La primera elección es gratis;
  * cambiarlo cuesta CR.
  */
-export function chooseUpgradeModule(prev: Progress, upgradeId: string, moduleId: string): BuyResult {
+export function chooseUpgradeModule(
+  prev: Progress,
+  upgradeId: string,
+  moduleId: string,
+): BuyResult {
   const u = upgradeById(upgradeId);
   if (!u) return { ok: false, reason: "Mejora desconocida" };
   if ((prev.upgrades[upgradeId] ?? 0) < MODULE_UNLOCK_LEVEL)
@@ -616,9 +624,7 @@ export function claimPeriodMission(
   now: number = Date.now(),
 ): BuyResult {
   const board = getSeasonBoard(prev, now);
-  const entry = (period === "DAILY" ? board.daily : board.weekly).find(
-    (e) => e.template.id === id,
-  );
+  const entry = (period === "DAILY" ? board.daily : board.weekly).find((e) => e.template.id === id);
   if (!entry) return { ok: false, reason: "Misión no activa" };
   if (entry.claimed) return { ok: false, reason: "Ya reclamada" };
   if (!entry.completed) return { ok: false, reason: "Objetivo incompleto" };

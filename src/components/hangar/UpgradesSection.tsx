@@ -216,7 +216,9 @@ function UpgradeCard({
       {!maxed ? (
         <div className="mt-auto flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-bold tabular-nums text-[#ffd700]">{fmt(status.cost)} CR</span>
+            <span className="text-sm font-bold tabular-nums text-[#ffd700]">
+              {fmt(status.cost)} CR
+            </span>
             <ActionButton
               tone={status.ok ? "cyan" : "off"}
               disabled={!status.ok}
