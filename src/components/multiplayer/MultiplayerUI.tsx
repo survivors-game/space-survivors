@@ -50,7 +50,7 @@ export function MpPanel({
   return (
     <section
       className={cn(
-        "relative overflow-hidden border bg-[#0b0d1c]/80 p-4 backdrop-blur-sm sm:p-5",
+        "relative overflow-hidden border bg-[#0b0d1c]/80 p-3 backdrop-blur-sm sm:p-5",
         toneBorder[tone],
         className,
       )}
@@ -93,7 +93,7 @@ export function MpHeader({
           {title}
         </h3>
       </div>
-      {aside ? <div className="flex flex-wrap items-center gap-2">{aside}</div> : null}
+      {aside ? <div className="flex max-w-full flex-wrap items-center gap-2">{aside}</div> : null}
     </div>
   );
 }
@@ -102,7 +102,7 @@ export function MpBadge({ tone = "cyan", children }: { tone?: Tone; children: Re
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.18em]",
+        "inline-flex max-w-full items-center gap-1.5 truncate border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.18em]",
         toneBorder[tone],
         toneBg[tone],
         toneText[tone],
@@ -124,9 +124,9 @@ export function MpStat({
   tone?: Tone;
 }) {
   return (
-    <div className={cn("border px-3 py-2.5", toneBorder[tone], toneBg[tone])}>
+    <div className={cn("min-w-0 border px-2.5 py-2 sm:px-3 sm:py-2.5", toneBorder[tone], toneBg[tone])}>
       <p className="text-[8px] uppercase tracking-[0.2em] text-white/45">{label}</p>
-      <p className={cn("mt-1 text-sm font-black tabular-nums", toneText[tone])}>{value}</p>
+      <p className={cn("mt-1 truncate text-sm font-black tabular-nums", toneText[tone])}>{value}</p>
     </div>
   );
 }
@@ -237,14 +237,14 @@ export function MpTabs<T extends string>({
             aria-selected={selected}
             onClick={() => onChange(tab.id)}
             className={cn(
-              "relative flex min-w-0 flex-col items-center gap-1 px-2 py-2.5 text-[8px] font-bold uppercase tracking-[0.14em] transition sm:flex-row sm:justify-center sm:text-[9px]",
+              "relative flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 px-1 py-2 text-[8px] font-bold uppercase tracking-[0.14em] transition sm:flex-row sm:justify-center sm:text-[9px]",
               selected
                 ? "bg-gradient-to-b from-cyan-400/20 to-fuchsia-500/10 text-white shadow-[inset_0_-2px_0_#00f0ff]"
                 : "text-white/45 hover:bg-white/5 hover:text-white/80",
             )}
           >
-            <span className="text-sm leading-none">{tab.icon}</span>
-            <span className="truncate">{tab.label}</span>
+            <span className="text-base leading-none sm:text-sm">{tab.icon}</span>
+            <span className="w-full truncate text-center sm:w-auto">{tab.label}</span>
             {tab.count ? (
               <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-fuchsia-500 px-1 text-[8px] text-white">
                 {tab.count}

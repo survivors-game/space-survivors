@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  HordeTrack,
+  HpBar,
+  PilotAvatar,
+  ShipSprite,
+  WarClock,
+} from "@/components/multiplayer/WarSprites";
 
 type Opponent = {
   alliance_id: string;
@@ -107,7 +114,11 @@ function SideCard({
 }) {
   const alive = participants.filter((participant) => participant.alive).length;
   return (
-    <div className="border border-cyan-300/20 bg-[#090d1c]/90 p-3 sm:p-4">
+    <div className="relative overflow-hidden border border-cyan-300/20 bg-[linear-gradient(160deg,#0a1024_0%,#090d1c_70%)] p-3 sm:p-4">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent"
+      />
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[8px] uppercase tracking-[0.2em] text-cyan-200/60">FLOTA</p>
@@ -132,27 +143,35 @@ function SideCard({
             return (
               <div
                 key={participant.pilot_id}
-                className="border border-white/10 bg-white/[0.025] p-2"
+                className={`flex items-center gap-3 border p-2 ${participant.alive ? "border-cyan-300/15 bg-cyan-300/[0.03]" : "border-rose-400/20 bg-rose-500/[0.04]"}`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-[9px] font-bold uppercase tracking-wider text-white/80">
-                    {participant.ship_id}
-                  </span>
-                  <span
-                    className={`text-[8px] font-bold uppercase ${participant.alive ? "text-emerald-200" : "text-rose-300"}`}
-                  >
-                    {participant.alive ? "OPERATIVA" : "DESTRUIDA"}
-                  </span>
+                <PilotAvatar
+                  seed={participant.ship_id + participant.pilot_id}
+                  alive={!!participant.alive}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[9px] font-bold uppercase tracking-wider text-white/85">
+                      {participant.ship_id}
+                    </span>
+                    <span
+                      className={`shrink-0 text-[7px] font-bold uppercase tracking-wider ${participant.alive ? "text-emerald-200" : "text-rose-300"}`}
+                    >
+                      {participant.alive ? "● OPERATIVA" : "✕ DESTRUIDA"}
+                    </span>
+                  </div>
+                  <div className="mt-1.5">
+                    <HpBar percent={percent} alive={!!participant.alive} />
+                  </div>
+                  <p className="mt-1 flex justify-between gap-2 text-[7px] tabular-nums text-white/45">
+                    <span className="truncate">
+                      {participant.buff?.label ?? "SIN BONIFICACIÓN"}
+                    </span>
+                    <span className="shrink-0">
+                      {hp}/{maxHp} PS
+                    </span>
+                  </p>
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden bg-white/10">
-                  <div
-                    className={`h-full ${participant.alive ? "bg-cyan-300" : "bg-rose-400"}`}
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-right text-[8px] tabular-nums text-white/45">
-                  {hp}/{maxHp} PS · {participant.buff?.label ?? "SIN BONIFICACIÓN"}
-                </p>
               </div>
             );
           })
@@ -349,22 +368,35 @@ export function AllianceWars({ allianceId, role }: { allianceId: string; role: s
       {active ? (
         <div className="overflow-hidden border border-fuchsia-300/30 bg-[#0a0d1b]">
           <div className="border-b border-fuchsia-300/20 bg-fuchsia-300/[0.06] p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[8px] uppercase tracking-[0.25em] text-fuchsia-200/60">
-                  ENFRENTAMIENTO ACTUAL
-                </p>
-                <h4 className="mt-1 text-sm font-black uppercase tracking-wider text-white sm:text-base">
-                  {active.attacker_name} <span className="text-fuchsia-200">VS</span>{" "}
-                  {active.defender_name}
-                </h4>
-                <p className="mt-1 text-[8px] uppercase tracking-widest text-white/40">
-                  [{active.attacker_tag}] · [{active.defender_tag}]
-                </p>
-              </div>
-              <span className="border border-fuchsia-300/30 bg-fuchsia-300/10 px-3 py-2 text-[8px] font-bold uppercase tracking-wider text-fuchsia-100">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[8px] uppercase tracking-[0.25em] text-fuchsia-200/70">
+                ENFRENTAMIENTO ACTUAL
+              </p>
+              <span className="border border-fuchsia-300/30 bg-fuchsia-300/10 px-2 py-1 text-[7px] font-bold uppercase tracking-wider text-fuchsia-100 sm:text-[8px]">
                 {statusLabel[active.status] ?? active.status}
               </span>
+            </div>
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
+              <div className="flex min-w-0 flex-col items-center gap-1 text-center">
+                <ShipSprite seed={active.attacker_tag} size={44} />
+                <p className="w-full truncate text-[10px] font-black uppercase tracking-wider text-cyan-100 sm:text-xs">
+                  {active.attacker_name}
+                </p>
+                <p className="text-[8px] text-cyan-200/50">[{active.attacker_tag}]</p>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-xl font-black italic text-fuchsia-300 [text-shadow:0_0_12px_#ff4df0] sm:text-2xl">
+                  VS
+                </span>
+                <WarClock since={active.created_at} label="T+ MISIÓN" />
+              </div>
+              <div className="flex min-w-0 flex-col items-center gap-1 text-center">
+                <ShipSprite seed={active.defender_tag} size={44} className="rotate-180" />
+                <p className="w-full truncate text-[10px] font-black uppercase tracking-wider text-fuchsia-100 sm:text-xs">
+                  {active.defender_name}
+                </p>
+                <p className="text-[8px] text-fuchsia-200/50">[{active.defender_tag}]</p>
+              </div>
             </div>
           </div>
 
@@ -506,6 +538,12 @@ export function AllianceWars({ allianceId, role }: { allianceId: string; role: s
                   Combate activo
                 </span>
               </div>
+              <div className="border border-white/10 bg-[#050712]/70 p-3">
+                <p className="mb-2 text-[7px] uppercase tracking-[0.25em] text-white/40">
+                  PROGRESO DE HORDAS
+                </p>
+                <HordeTrack current={snapshot?.horde ?? 1} />
+              </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 <SideCard
                   name={active.attacker_name}
@@ -572,26 +610,45 @@ export function AllianceWars({ allianceId, role }: { allianceId: string; role: s
             {wars.map((war) => (
               <li
                 key={war.war_id}
-                className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-3"
               >
+                <div className="flex shrink-0 -space-x-2">
+                  <ShipSprite seed={war.attacker_tag} size={24} />
+                  <ShipSprite seed={war.defender_tag} size={24} className="rotate-180" />
+                </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase text-white/80">
+                  <p className="truncate text-[10px] font-bold uppercase text-white/85">
                     {war.attacker_name} <span className="text-fuchsia-200">VS</span>{" "}
                     {war.defender_name}
                   </p>
                   <p className="mt-1 text-[8px] uppercase tracking-wider text-white/35">
-                    [{war.attacker_tag}] · [{war.defender_tag}]
+                    [{war.attacker_tag}] {war.attacker_hordes_survived ?? 0} ·{" "}
+                    {war.defender_hordes_survived ?? 0} [{war.defender_tag}] HORDAS
                   </p>
                 </div>
-                <span className="shrink-0 self-start border border-white/10 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-cyan-100 sm:self-auto">
-                  {war.status === "COMPLETED"
-                    ? war.winner_alliance_id === allianceId
-                      ? "VICTORIA"
-                      : war.winner_alliance_id
-                        ? "DERROTA"
-                        : "EMPATE"
-                    : (statusLabel[war.status] ?? war.status)}
-                </span>
+                {(() => {
+                  const label =
+                    war.status === "COMPLETED"
+                      ? war.winner_alliance_id === allianceId
+                        ? "VICTORIA"
+                        : war.winner_alliance_id
+                          ? "DERROTA"
+                          : "EMPATE"
+                      : (statusLabel[war.status] ?? war.status);
+                  const tone =
+                    label === "VICTORIA"
+                      ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
+                      : label === "DERROTA"
+                        ? "border-rose-300/40 bg-rose-400/10 text-rose-200"
+                        : "border-white/15 bg-white/[0.03] text-cyan-100";
+                  return (
+                    <span
+                      className={`max-w-[7.5rem] shrink-0 truncate border px-2 py-1 text-[7px] font-black uppercase tracking-wider sm:text-[8px] ${tone}`}
+                    >
+                      {label}
+                    </span>
+                  );
+                })()}
               </li>
             ))}
           </ul>

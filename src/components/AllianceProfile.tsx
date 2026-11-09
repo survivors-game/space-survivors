@@ -1,3 +1,4 @@
+import { ShipSprite } from "@/components/multiplayer/WarSprites";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AllianceWars } from "@/components/AllianceWars";
@@ -185,23 +186,26 @@ export function AllianceProfile({
   );
 
   return (
-    <div className="mt-6 space-y-4 lg:col-start-2">
+    <div className="mt-6 min-w-0 space-y-3 sm:space-y-4 lg:col-start-2">
       {/* Hub banner */}
-      <div className="relative overflow-hidden border border-cyan-400/25 bg-[linear-gradient(120deg,#0b0d1c_0%,#160c2a_55%,#0b0d1c_100%)] px-4 py-4 sm:px-6">
+      <div className="relative overflow-hidden border border-cyan-400/25 bg-[linear-gradient(120deg,#0b0d1c_0%,#160c2a_55%,#0b0d1c_100%)] px-3 py-3 sm:px-6 sm:py-4">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-30 [background-image:repeating-linear-gradient(0deg,transparent_0,transparent_3px,rgba(0,240,255,0.08)_3px,rgba(0,240,255,0.08)_4px)]"
         />
-        <div className="relative flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-fuchsia-300">
-              RED MULTIJUGADOR
-            </p>
-            <h2 className="mt-1 text-lg font-black uppercase tracking-[0.16em] text-white sm:text-xl">
-              CENTRO DE OPERACIONES
-            </h2>
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <ShipSprite seed="centro-operaciones" size={40} />
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-fuchsia-300">
+                RED MULTIJUGADOR
+              </p>
+              <h2 className="mt-1 truncate text-base font-black uppercase tracking-[0.12em] text-white sm:text-xl sm:tracking-[0.16em]">
+                CENTRO DE OPERACIONES
+              </h2>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap gap-1.5 sm:gap-2">
             {alliance ? (
               <MpBadge tone="emerald">
                 [{alliance.tag}] {alliance.name}
@@ -241,8 +245,8 @@ export function AllianceProfile({
           {alliance ? (
             <>
               <MpPanel>
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="grid h-16 w-16 shrink-0 place-items-center border-2 border-cyan-300/60 bg-gradient-to-br from-cyan-500/20 to-fuchsia-600/25 text-sm font-black tracking-widest text-white shadow-[0_0_24px_#00f0ff33] [clip-path:polygon(50%_0,100%_25%,100%_75%,50%_100%,0_75%,0_25%)]">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                  <div className="grid h-14 w-14 sm:h-16 sm:w-16 shrink-0 place-items-center border-2 border-cyan-300/60 bg-gradient-to-br from-cyan-500/20 to-fuchsia-600/25 text-sm font-black tracking-widest text-white shadow-[0_0_24px_#00f0ff33] [clip-path:polygon(50%_0,100%_25%,100%_75%,50%_100%,0_75%,0_25%)]">
                     {alliance.tag}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -268,7 +272,7 @@ export function AllianceProfile({
                       onClick={() =>
                         void runAction("/api/alliance/leave", {}, "SALISTE DE LA ALIANZA")
                       }
-                      className="rounded-none border-rose-400/40 bg-transparent text-[9px] uppercase text-rose-200 hover:bg-rose-500/10"
+                      className="h-10 w-full rounded-none border-rose-400/40 bg-transparent text-[9px] uppercase text-rose-200 hover:bg-rose-500/10 sm:w-auto"
                     >
                       SALIR DE LA ALIANZA
                     </Button>
@@ -372,7 +376,7 @@ export function AllianceProfile({
                           void runAction("/api/alliance/dissolve", {}, "ALIANZA DISUELTA");
                         }
                       }}
-                      className="rounded-none border-rose-400/40 bg-transparent text-[9px] uppercase text-rose-200 hover:bg-rose-500/10"
+                      className="h-10 w-full rounded-none border-rose-400/40 bg-transparent text-[9px] uppercase text-rose-200 hover:bg-rose-500/10 sm:w-auto"
                     >
                       DISOLVER ALIANZA
                     </Button>
