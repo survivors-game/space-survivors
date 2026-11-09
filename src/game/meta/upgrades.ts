@@ -1,4 +1,4 @@
-// Permanent hangar upgrades. Levels 1..(eliteFrom-1) cost credits only and keep the
+ // Permanent hangar upgrades. Levels 1..(eliteFrom-1) cost credits only and keep the
 // original formula. From eliteFrom onward each level also needs a merit requirement that is
 // checked with data Progress already tracks.
 import type { Progress } from "./progress";
@@ -14,6 +14,8 @@ export interface HangarUpgrade {
   base: number;
   /** Primer nivel que exige mérito además de créditos. */
   eliteFrom: number;
+  /** Coste en CR del nivel máximo; los niveles de élite crecen hasta este valor. */
+  eliteTarget: number;
 }
 
 export const UPGRADES: HangarUpgrade[] = [
@@ -23,8 +25,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_maxhp",
     desc: "+10 integridad máxima",
     max: 10,
-    base: 120,
+    base: 60,
     eliteFrom: 6,
+    eliteTarget: 4000,
   },
   {
     id: "engine",
@@ -32,8 +35,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_engine",
     desc: "+4% velocidad de vuelo",
     max: 10,
-    base: 120,
+    base: 60,
     eliteFrom: 6,
+    eliteTarget: 4000,
   },
   {
     id: "power",
@@ -41,8 +45,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_damage",
     desc: "+5% daño de armas",
     max: 10,
-    base: 160,
+    base: 80,
     eliteFrom: 6,
+    eliteTarget: 5500,
   },
   {
     id: "cooling",
@@ -50,8 +55,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_rate",
     desc: "-3% tiempo de recarga",
     max: 10,
-    base: 160,
+    base: 80,
     eliteFrom: 6,
+    eliteTarget: 5500,
   },
   {
     id: "magnet",
@@ -59,8 +65,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_magnet",
     desc: "+10% radio de recolección",
     max: 10,
-    base: 100,
+    base: 50,
     eliteFrom: 6,
+    eliteTarget: 3000,
   },
   {
     id: "repair",
@@ -68,8 +75,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_regen",
     desc: "+0.2 reparación por segundo",
     max: 10,
-    base: 140,
+    base: 70,
     eliteFrom: 6,
+    eliteTarget: 4500,
   },
   {
     id: "salvage",
@@ -77,8 +85,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_salvage",
     desc: "+10% créditos por misión",
     max: 10,
-    base: 200,
+    base: 100,
     eliteFrom: 6,
+    eliteTarget: 5500,
   },
   {
     id: "reroll",
@@ -86,8 +95,9 @@ export const UPGRADES: HangarUpgrade[] = [
     icon: "ic_reroll",
     desc: "+1 recalibración de mejoras por partida",
     max: 5,
-    base: 300,
+    base: 150,
     eliteFrom: 4,
+    eliteTarget: 1200,
   },
 ];
 
@@ -122,15 +132,11 @@ export const MERIT_REQUIREMENTS: Record<string, MeritRequirement[]> = {
     { label: "Gana 10 misiones", goal: 10, progress: (p) => p.stats.wins },
   ],
   power: [
-    {
-      label: "Inflige 150.000 de daño en total",
-      goal: 150000,
-      progress: (p) => p.stats.damageDealt,
-    },
+    { label: "Inflige 100.000 de daño en total", goal: 100000, progress: (p) => p.stats.damageDealt },
     { label: "Consigue 5 evoluciones de arma", goal: 5, progress: (p) => p.stats.evolutions },
     { label: "Derrota 3 veces a COLOSO", goal: 3, progress: bossKill("colossus") },
-    { label: "Destruye 800 naves en una partida", goal: 800, progress: (p) => p.stats.bestKills },
-    { label: "Alcanza el nivel 22 en una partida", goal: 22, progress: (p) => p.stats.maxLevel },
+    { label: "Destruye 600 naves en una partida", goal: 600, progress: (p) => p.stats.bestKills },
+    { label: "Alcanza el nivel 20 en una partida", goal: 20, progress: (p) => p.stats.maxLevel },
   ],
   cooling: [
     { label: "Completa 15 partidas", goal: 15, progress: (p) => p.stats.runs },
@@ -157,7 +163,7 @@ export const MERIT_REQUIREMENTS: Record<string, MeritRequirement[]> = {
     { label: "Acumula 20.000 CR ganados", goal: 20000, progress: (p) => p.stats.creditsEarned },
     { label: "Completa 20 partidas", goal: 20, progress: (p) => p.stats.runs },
     { label: "Gana 25 misiones", goal: 25, progress: (p) => p.stats.wins },
-    { label: "Acumula 100.000 CR ganados", goal: 100000, progress: (p) => p.stats.creditsEarned },
+    { label: "Acumula 50.000 CR ganados", goal: 50000, progress: (p) => p.stats.creditsEarned },
     { label: "Derrota 5 veces a NÉMESIS", goal: 5, progress: bossKill("nemesis") },
   ],
   reroll: [
@@ -175,19 +181,16 @@ export function upgradeRequirement(id: string, nextLevel: number): MeritRequirem
 
 /* ---------------- Costes ---------------- */
 
-/** Multiplicador de coste por nivel de élite (los niveles base usan 1.65, como antes). */
-export const ELITE_COST_GROWTH = 1.75;
-
 /** Cost of buying the next level when currently at `level` (0-based). */
 export function upgradeCost(id: string, level: number): number {
   const u = upgradeById(id);
   if (!u) return Infinity;
-  const next = level + 1;
-  const lastBase = u.eliteFrom - 1;
-  const raw =
-    u.base *
-    Math.pow(1.65, Math.min(next, lastBase) - 1) *
-    Math.pow(ELITE_COST_GROWTH, Math.max(0, next - lastBase));
+  const n = level + 1;
+  const k = u.eliteFrom - 1; // último nivel de etapa base
+  const lastBaseCost = u.base * Math.pow(1.65, k - 1);
+  // La élite crece de forma geométrica desde el último nivel base hasta eliteTarget en el máximo.
+  const growth = Math.pow(u.eliteTarget / lastBaseCost, 1 / (u.max - k));
+  const raw = n <= k ? u.base * Math.pow(1.65, n - 1) : lastBaseCost * Math.pow(growth, n - k);
   return Math.round(raw / 10) * 10;
 }
 
@@ -342,7 +345,7 @@ export const moduleById = (upgradeId: string, moduleId: string): UpgradeModule |
 /** Coste en CR de cambiar un módulo ya instalado. */
 export function moduleSwapCost(upgradeId: string): number {
   const u = upgradeById(upgradeId);
-  return u ? Math.round((u.base * 5) / 10) * 10 : Infinity;
+  return u ? Math.round((u.eliteTarget * 0.1) / 10) * 10 : Infinity;
 }
 
 /**
