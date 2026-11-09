@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -15,7 +15,6 @@ import {
   Award,
   ChevronLeft,
   ChevronRight,
-  Check,
   CirclePause,
   Crosshair,
   Flame,
@@ -29,7 +28,6 @@ import {
   Shield,
   Skull,
   Sparkles,
-  Target,
   Volume2,
   VolumeX,
   Wallet,
@@ -41,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { HangarSidebar, type HangarTab } from "@/components/hangar/HangarSidebar";
 import { MarketSection } from "@/components/hangar/MarketSection";
 import { InventorySection } from "@/components/hangar/InventorySection";
+import { MissionsSection } from "@/components/hangar/MissionsSection";
 import { Audio } from "@/game/audio";
 import { BOSSES, bossById } from "@/game/data/bosses";
 import { WORLD1_ID } from "@/game/timeline";
@@ -65,7 +64,6 @@ import { AllianceProfile } from "@/components/AllianceProfile";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
-import { MISSIONS } from "@/game/meta/missions";
 import type {
   P2PHistoryOrder,
   P2PCountry,
@@ -82,9 +80,8 @@ import {
   ProgressStore,
   applyRun as recordRun,
   buyUpgrade,
-  claimMission,
   defaultProgress,
-  missionValue,
+  getSeasonClaimableCount,
   sanitize,
   type Progress,
   type RunSummary,
@@ -265,6 +262,7 @@ function Index() {
   const startingMissionRef = useRef(false);
   const progressSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [hangarTab, setHangarTab] = useState<HangarTab>("UPGRADES");
+  const [hasVip, setHasVip] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
@@ -761,10 +759,25 @@ function Index() {
   const selectedShip = SHIPS.find((ship) => ship.id === selectedShipId) ?? SHIPS[0]!;
   const selectedStage = STAGES.find((stage) => stage.id === selectedStageId) ?? STAGES[0]!;
   const latestRun: RunSummary | undefined = progress.history[0];
-  const claimableCount = MISSIONS.filter(
-    (mission) =>
-      !progress.claimed.includes(mission.id) && missionValue(progress, mission.id) >= mission.goal,
-  ).length;
+  const claimableCount = getSeasonClaimableCount(progress, hasVip);
+
+  useEffect(() => {
+    if (screen !== "HANGAR" || !googlePlayer) {
+      setHasVip(false);
+      return;
+    }
+    let active = true;
+    void marketRequest<{ vip?: boolean }>("/api/alliance/mine")
+      .then((result) => {
+        if (active) setHasVip(result.vip === true);
+      })
+      .catch(() => {
+        if (active) setHasVip(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [screen, googlePlayer]);
 
   useEffect(() => {
     if (!allianceId || !googlePlayer) return;
@@ -1183,14 +1196,9 @@ function Index() {
     window.setTimeout(() => setNotice(""), 1800);
   };
 
-  const handleClaimMission = (missionId: string) => {
-    const res = claimMission(progress, missionId);
-    if (res.ok && res.progress) {
-      saveProgress(res.progress);
-      Audio.SFX.levelUp?.();
-      setNotice("¡Recompensa de misión reclamada!");
-      window.setTimeout(() => setNotice(""), 1800);
-    }
+  const flashNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 1800);
   };
 
   const returnToMenu = () => {
@@ -2317,78 +2325,13 @@ function Index() {
                 })}
               </div>
             ) : hangarTab === "MISSIONS" ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 lg:col-start-2">
-                {MISSIONS.map((mission) => {
-                  const current = missionValue(progress, mission.id);
-                  const percentage = Math.min(100, Math.round((current / mission.goal) * 100));
-                  const isClaimed = progress.claimed.includes(mission.id);
-                  const canClaim = !isClaimed && current >= mission.goal;
-                  const MissionIcon =
-                    mission.icon === "ic_damage"
-                      ? Flame
-                      : mission.icon === "ic_speed"
-                        ? Zap
-                        : Target;
-                  return (
-                    <article
-                      key={mission.id}
-                      className="flex min-h-60 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-4 transition hover:border-cyan-400/45"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="grid size-10 shrink-0 place-items-center border border-cyan-400/25 bg-cyan-400/[0.07] text-cyan-200">
-                          <MissionIcon className="size-5" />
-                        </span>
-                        <span className="flex items-center gap-1 text-[10px] font-black tracking-widest text-[#ffd700]">
-                          <Award className="size-3.5" /> +{mission.reward.toLocaleString()} CR
-                        </span>
-                      </div>
-                      <h3 className="mt-4 text-xs font-black uppercase tracking-[0.13em]">
-                        {mission.name}
-                      </h3>
-                      <p className="mt-2 min-h-8 text-[10px] leading-4 text-white/45">
-                        {mission.desc}
-                      </p>
-                      <div className="mt-4">
-                        <div className="mb-1.5 flex justify-between text-[9px] uppercase tracking-widest text-cyan-100/55">
-                          <span>PROGRESO</span>
-                          <span>
-                            {current.toLocaleString()} / {mission.goal.toLocaleString()}
-                          </span>
-                        </div>
-                        <div
-                          className="h-2 overflow-hidden border border-cyan-400/20 bg-[#151727]"
-                          role="progressbar"
-                          aria-label={`Progreso: ${mission.name}`}
-                          aria-valuenow={percentage}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                        >
-                          <div
-                            className={`h-full transition-[width] duration-300 ${isClaimed ? "bg-cyan-300/50" : canClaim ? "bg-[#ffd700] shadow-[0_0_10px_#ffd70099]" : "bg-[#00f0ff] shadow-[0_0_8px_#00f0ff55]"}`}
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                      <Button
-                        disabled={!canClaim}
-                        onClick={() => handleClaimMission(mission.id)}
-                        variant="outline"
-                        className={`font-arcade mt-auto h-10 w-full rounded-none px-1 text-[7px] uppercase tracking-normal ${isClaimed ? "border-white/10 text-cyan-100/35" : canClaim ? "border-[#ffd700]/70 bg-[#ffd700]/10 text-[#ffd700] shadow-[0_0_16px_#ffd70022] hover:bg-[#ffd700]/20" : "border-cyan-400/20 text-cyan-100/45"}`}
-                      >
-                        {isClaimed ? (
-                          <>
-                            <Check /> RECLAMADA
-                          </>
-                        ) : canClaim ? (
-                          "¡RECLAMAR RECOMPENSA!"
-                        ) : (
-                          `EN PROGRESO (${current.toLocaleString()}/${mission.goal.toLocaleString()})`
-                        )}
-                      </Button>
-                    </article>
-                  );
-                })}
-              </div>
+              <MissionsSection
+                progress={progress}
+                hasVip={hasVip}
+                onCommit={saveProgress}
+                onNotice={flashNotice}
+                onClaimed={() => Audio.SFX.levelUp?.()}
+              />
             ) : hangarTab === "BESTIARY" ? (
               <div className="mt-7 space-y-10 lg:col-start-2">
                 <section>
@@ -2773,7 +2716,7 @@ function Index() {
                 {hangarTab === "UPGRADES"
                   ? "Las mejoras son permanentes y se aplican al próximo despliegue."
                   : hangarTab === "MISSIONS"
-                    ? "Completa objetivos y reclama créditos para financiar tu próxima misión."
+                    ? "Completa misiones diarias, semanales y desafíos para subir de nivel en el pase de temporada."
                     : hangarTab === "BESTIARY"
                       ? "Intel de combate recopilada en todos los sectores conocidos."
                       : hangarTab === "ARSENAL"
