@@ -1,13 +1,7 @@
-import { describe, expect, it } from "vitest";
+ import { describe, expect, it } from "vitest";
 
 import type { RunResult } from "@/game/types";
-import {
-  UPGRADES,
-  hangarBonuses,
-  moduleSwapCost,
-  upgradeCost,
-  upgradeById,
-} from "@/game/meta/upgrades";
+import { UPGRADES, hangarBonuses, moduleSwapCost, upgradeCost, upgradeById } from "@/game/meta/upgrades";
 import {
   applyRun,
   buyUpgrade,
@@ -79,11 +73,7 @@ describe("etapa base (niveles 1-5): sin cambios", () => {
 
   it("la recuperación de nivel 5 sube los créditos de misión igual que antes", () => {
     const base = applyRun(make({}), run({ victory: true, time: 600, level: 10 }), 0).credits;
-    const withSalvage = applyRun(
-      make({ upgrades: { salvage: 5 } }),
-      run({ victory: true, time: 600, level: 10 }),
-      0,
-    ).credits;
+    const withSalvage = applyRun(make({ upgrades: { salvage: 5 } }), run({ victory: true, time: 600, level: 10 }), 0).credits;
     expect(withSalvage).toBeGreaterThan(base);
   });
 });
@@ -97,14 +87,23 @@ describe("escala de costes", () => {
     }
   });
 
-  it("subir los 8 mejoras al nivel 5 cuesta la mitad que antes (~11.400 CR)", () => {
-    const total = UPGRADES.reduce((sum, u) => {
+  it("los niveles 1-5 de los atributos cuestan lo mismo que en el juego original (~17.300 CR)", () => {
+    const attributes = UPGRADES.filter((u) => u.id !== "reroll");
+    const total = attributes.reduce((sum, u) => {
       let t = 0;
       for (let l = 0; l < 5; l++) t += upgradeCost(u.id, l);
       return sum + t;
     }, 0);
-    expect(total).toBeLessThan(12000);
-    expect(total).toBeGreaterThan(10000);
+    expect(total).toBeGreaterThan(17000);
+    expect(total).toBeLessThan(17600);
+  });
+
+  it("el RECALIBRADOR conserva sus niveles 1-3 originales", () => {
+    const reroll = upgradeById("reroll")!;
+    expect(upgradeCost("reroll", 0)).toBe(300);
+    expect(upgradeCost("reroll", 1)).toBe(500);
+    expect(upgradeCost("reroll", 2)).toBe(820);
+    expect(reroll.eliteFrom).toBe(4);
   });
 });
 
@@ -140,24 +139,13 @@ describe("mérito y créditos en la etapa de élite", () => {
   it("el estado de compra informa el progreso del requisito", () => {
     const p = make({ credits: 1_000_000, upgrades: { hull: 5 }, stats: { runs: 10 } });
     const st = upgradeStatus(p, "hull");
-    expect(st.requirement).toEqual({
-      label: "Completa 25 partidas",
-      progress: 10,
-      goal: 25,
-      met: false,
-    });
+    expect(st.requirement).toEqual({ label: "Completa 25 partidas", progress: 10, goal: 25, met: false });
   });
 
   it("el RECALIBRADOR sube a 5 con mérito y el nivel 4 exige partidas", () => {
-    const blocked = buyUpgrade(
-      make({ credits: 1_000_000, upgrades: { reroll: 3 }, stats: { runs: 0 } }),
-      "reroll",
-    );
+    const blocked = buyUpgrade(make({ credits: 1_000_000, upgrades: { reroll: 3 }, stats: { runs: 0 } }), "reroll");
     expect(blocked.ok).toBe(false);
-    const ok = buyUpgrade(
-      make({ credits: 1_000_000, upgrades: { reroll: 3 }, stats: { runs: 10 } }),
-      "reroll",
-    );
+    const ok = buyUpgrade(make({ credits: 1_000_000, upgrades: { reroll: 3 }, stats: { runs: 10 } }), "reroll");
     expect(ok.ok).toBe(true);
     if (ok.ok) expect(ok.progress.upgrades["reroll"]).toBe(4);
   });
@@ -195,23 +183,11 @@ describe("módulos de especialización", () => {
   });
 
   it("la primera elección es gratis y cambiarlo cuesta CR", () => {
-    const first = chooseUpgradeModule(
-      make({ credits: 0, upgrades: { hull: 10 } }),
-      "hull",
-      "reinforced",
-    );
+    const first = chooseUpgradeModule(make({ credits: 0, upgrades: { hull: 10 } }), "hull", "reinforced");
     expect(first.ok).toBe(true);
-    const poor = chooseUpgradeModule(
-      make({ credits: 0, upgrades: { hull: 10 }, modules: { hull: "reinforced" } }),
-      "hull",
-      "light",
-    );
+    const poor = chooseUpgradeModule(make({ credits: 0, upgrades: { hull: 10 }, modules: { hull: "reinforced" } }), "hull", "light");
     expect(poor.ok).toBe(false);
-    const rich = make({
-      credits: 1_000_000,
-      upgrades: { hull: 10 },
-      modules: { hull: "reinforced" },
-    });
+    const rich = make({ credits: 1_000_000, upgrades: { hull: 10 }, modules: { hull: "reinforced" } });
     const swap = chooseUpgradeModule(rich, "hull", "light");
     expect(swap.ok).toBe(true);
     if (swap.ok) expect(swap.progress.credits).toBe(1_000_000 - moduleSwapCost("hull"));

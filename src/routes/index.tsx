@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -42,6 +42,7 @@ import { InventorySection } from "@/components/hangar/InventorySection";
 import { MissionsSection } from "@/components/hangar/MissionsSection";
 import { UpgradesSection } from "@/components/hangar/UpgradesSection";
 import { RoadmapPage, WikiPage } from "@/components/wiki/WikiPage";
+import { BoostButton } from "@/components/game/BoostButton";
 import { Audio } from "@/game/audio";
 import { BOSSES, bossById } from "@/game/data/bosses";
 import { WORLD1_ID } from "@/game/timeline";
@@ -1388,6 +1389,7 @@ function Index() {
         <TouchControls />
         <Hotbar inventory={hud?.inventory} onUse={(kind) => void activateInventoryItem(kind)} />
         <CombatStatsOverlay stats={hud?.playerStats} />
+        <BoostButton ready={hud?.boostReady ?? 1} />
         <WeaponHotbar weapons={hud?.weapons} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#070814]/95 via-[#070814]/65 to-transparent px-4 pb-10 pt-4 sm:px-7">
           <div className="mx-auto flex max-w-[1500px] items-start justify-between gap-4">
@@ -2358,16 +2360,16 @@ function Index() {
                                   {enemy.name}
                                 </h3>
                                 <span
-                                  className="shrink-0 text-[8px] font-bold text-[#ffd700]"
+                                  className="shrink-0 text-[10px] font-bold text-[#ffd700]"
                                   aria-label={`Amenaza ${enemy.threat} de 5`}
                                 >
                                   {enemy.threat}/5 ★
                                 </span>
                               </div>
-                              <p className="mt-0.5 truncate text-[8px] uppercase tracking-[0.12em] text-white/40">
+                              <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-white/40">
                                 {enemy.family}
                               </p>
-                              <p className="mt-1 line-clamp-2 text-[9px] leading-4 text-white/45">
+                              <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/45">
                                 {enemy.desc}
                               </p>
                             </div>
@@ -2379,17 +2381,17 @@ function Index() {
                               ["VEL.", enemy.speed],
                             ].map(([label, value]) => (
                               <div key={label}>
-                                <p className="text-[7px] uppercase tracking-widest text-white/35">
+                                <p className="text-[10px] uppercase tracking-widest text-white/35">
                                   {label}
                                 </p>
-                                <p className="mt-0.5 text-[10px] font-bold tabular-nums text-cyan-100">
+                                <p className="mt-0.5 text-xs font-bold tabular-nums text-cyan-100">
                                   {value}
                                 </p>
                               </div>
                             ))}
                           </div>
                           <p
-                            className={`mt-1.5 flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.14em] ${kills ? "text-[#ff9ab9]" : "text-white/25"}`}
+                            className={`mt-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] ${kills ? "text-[#ff9ab9]" : "text-white/25"}`}
                           >
                             <span>{kills ? "ELIMINACIONES" : "NO AVISTADO"}</span>
                             <span>{kills ? kills.toLocaleString() : ""}</span>
@@ -2422,7 +2424,7 @@ function Index() {
                               className="size-14"
                             />
                             <div className="min-w-0">
-                              <p className="truncate text-[8px] uppercase tracking-[0.16em] text-[#c7a1ff]">
+                              <p className="truncate text-[10px] uppercase tracking-[0.16em] text-[#c7a1ff]">
                                 {boss.title}
                               </p>
                               <h3
@@ -2431,12 +2433,12 @@ function Index() {
                               >
                                 {boss.name}
                               </h3>
-                              <p className="mt-1 line-clamp-2 text-[9px] leading-4 text-white/45">
+                              <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-white/45">
                                 {boss.desc}
                               </p>
                             </div>
                           </div>
-                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2 text-[8px] uppercase tracking-widest">
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2 text-[10px] uppercase tracking-widest">
                             <span className="text-white/50">
                               VIDA BASE{" "}
                               <strong className="ml-1 text-cyan-100">
@@ -2447,11 +2449,11 @@ function Index() {
                               {boss.phases.length + 1} FASES DE COMBATE
                             </span>
                           </div>
-                          <p className="mt-1 text-[8px] text-white/35">
+                          <p className="mt-1 text-[10px] text-white/35">
                             Umbrales de fase:{" "}
                             {boss.phases.map((phase) => `${Math.round(phase * 100)}%`).join(" · ")}
                           </p>
-                          <p className="mt-1.5 text-[8px] font-bold uppercase tracking-[0.16em] text-[#ff9ab9]">
+                          <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#ff9ab9]">
                             VICTORIAS: {victories.toLocaleString()}
                           </p>
                         </article>
@@ -2523,16 +2525,16 @@ function Index() {
                   </h2>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <p className="text-[8px] uppercase tracking-widest text-white/40">PILOT ID</p>
-                      <p className="mt-2 break-all text-[10px] text-cyan-100">
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">PILOT ID</p>
+                      <p className="mt-2 break-all text-xs text-cyan-100">
                         {googlePlayer?.playerId}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[8px] uppercase tracking-widest text-white/40">
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
                         CORREO PRIVADO DE ACCESO
                       </p>
-                      <p className="mt-2 break-all text-[10px] text-white/60">
+                      <p className="mt-2 break-all text-xs text-white/60">
                         {googlePlayer?.email}
                       </p>
                     </div>
@@ -2572,7 +2574,7 @@ function Index() {
                     }}
                   >
                     <label className="min-w-0 flex-1">
-                      <span className="mb-2 block text-[8px] uppercase tracking-widest text-white/45">
+                      <span className="mb-2 block text-[10px] uppercase tracking-widest text-white/45">
                         NOMBRE DE USUARIO (3–20 CARACTERES)
                       </span>
                       <input
@@ -2590,12 +2592,12 @@ function Index() {
                     <Button
                       type="submit"
                       disabled={profileSaving}
-                      className="mt-auto h-11 rounded-none bg-[#00f0ff] px-5 text-[9px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
+                      className="mt-auto h-11 rounded-none bg-[#00f0ff] px-5 text-[10px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
                     >
                       {profileSaving ? "GUARDANDO..." : "GUARDAR NOMBRE"}
                     </Button>
                   </form>
-                  <p className="mt-2 text-[8px] text-white/35">
+                  <p className="mt-2 text-[10px] text-white/35">
                     El nombre será visible en el juego. Tu correo se conserva únicamente para
                     iniciar sesión.
                   </p>
@@ -2604,7 +2606,7 @@ function Index() {
                     variant="outline"
                     onClick={() => void handleGoogleSignOut()}
                     disabled={googleConnecting}
-                    className="mt-5 h-10 rounded-none border-[#ff6b95]/40 bg-[#ff6b95]/5 px-4 text-[9px] uppercase tracking-widest text-[#ff9ab9] hover:bg-[#ff6b95]/10"
+                    className="mt-5 h-10 rounded-none border-[#ff6b95]/40 bg-[#ff6b95]/5 px-4 text-[10px] uppercase tracking-widest text-[#ff9ab9] hover:bg-[#ff6b95]/10"
                   >
                     CERRAR SESIÓN
                   </Button>
@@ -2653,7 +2655,7 @@ function Index() {
                         key={label}
                         className="border border-cyan-500/20 bg-[#0b0d1c]/85 p-4"
                       >
-                        <p className="text-[8px] uppercase tracking-[0.16em] text-white/40">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">
                           {label}
                         </p>
                         <p className={`mt-2 text-lg font-black tabular-nums ${color}`}>{value}</p>
@@ -2670,7 +2672,7 @@ function Index() {
                       {progress.history.slice(0, 10).map((run, index) => (
                         <article
                           key={`${run.date}-${run.stageId}-${index}`}
-                          className="grid gap-3 border border-white/10 bg-[#0b0d1c]/75 p-3 text-[9px] sm:grid-cols-[1fr_1.2fr_auto] sm:items-center"
+                          className="grid gap-3 border border-white/10 bg-[#0b0d1c]/75 p-3 text-[10px] sm:grid-cols-[1fr_1.2fr_auto] sm:items-center"
                         >
                           <div className="flex items-center gap-2">
                             <span
@@ -2697,10 +2699,10 @@ function Index() {
                   ) : (
                     <div className="border border-dashed border-cyan-400/20 bg-[#0b0d1c]/50 px-5 py-10 text-center">
                       <Rocket className="mx-auto size-7 text-cyan-200/50" />
-                      <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-white/45">
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-white/45">
                         Aún no hay misiones registradas.
                       </p>
-                      <p className="mt-2 text-[9px] uppercase tracking-wider text-cyan-100/35">
+                      <p className="mt-2 text-[10px] uppercase tracking-wider text-cyan-100/35">
                         Realiza tu primer despliegue para iniciar el registro de vuelo.
                       </p>
                     </div>
