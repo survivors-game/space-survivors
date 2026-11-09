@@ -3020,7 +3020,7 @@ function TouchControls() {
       <button
         type="button"
         aria-label="Turbo"
-        className="pointer-events-auto grid size-[70px] touch-none select-none place-items-center rounded-full border-2 border-[#ff0055] bg-[#ff0055]/20 text-[10px] font-black tracking-[0.14em] text-[#ff9ab9] shadow-[0_0_22px_#ff005544] transition active:scale-95 active:bg-[#ff0055]/35"
+        className="pointer-events-auto grid size-[70px] touch-none select-none place-items-center rounded-full border-2 border-[#ff0055] bg-[#ff0055]/20 text-[8px] font-black tracking-[0.14em] text-[#ff9ab9] shadow-[0_0_22px_#ff005544] transition active:scale-95 active:bg-[#ff0055]/35"
         onPointerDown={(event) => {
           event.preventDefault();
           Input.queueBoost();
