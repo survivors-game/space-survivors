@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /** Procedural pixel-art sprites for the war room (presentation only, no game logic). */
 
-const PALETTES = [
+const PALETTES: [string, string, string][] = [
   ["#00f0ff", "#7c3aed", "#e0fbff"],
   ["#ff4df0", "#3b82f6", "#ffe0fb"],
   ["#a78bfa", "#06b6d4", "#f5f3ff"],
