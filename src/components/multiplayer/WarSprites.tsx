@@ -65,8 +65,8 @@ export function ShipSprite({
   className?: string;
 }) {
   const h = hash(seed);
-  const hull = HULLS[h % HULLS.length];
-  const [c1, c2, c3] = PALETTES[(h >> 3) % PALETTES.length];
+  const hull = HULLS[h % HULLS.length] ?? HULLS[0]!;
+  const [c1, c2, c3] = PALETTES[(h >> 3) % PALETTES.length] ?? PALETTES[0]!;
   const colors: Record<string, string> = { "1": c1, "2": c2, "3": c3 };
   return (
     <svg
