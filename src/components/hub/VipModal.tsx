@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Coins, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
 import {
   VIP_DURATION_DAYS,
@@ -60,11 +60,6 @@ const BENEFITS: Benefit[] = [
     color: VIOLET,
   },
 ];
-
-interface Feedback {
-  tone: "ok" | "error";
-  text: string;
-}
 
 export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
 
