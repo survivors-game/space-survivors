@@ -1,9 +1,17 @@
-// Permanent progression, persisted in localStorage (the storage the original
+ // Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
 import { STAGES, stageById } from "../data/stages";
-import { upgradeById, upgradeCost } from "./upgrades";
+import {
+  MODULE_UNLOCK_LEVEL,
+  hangarBonuses,
+  moduleById,
+  moduleSwapCost,
+  upgradeById,
+  upgradeCost,
+  upgradeRequirement,
+} from "./upgrades";
 import {
   DAILY_CHEST,
   SEASON_CHALLENGES,
@@ -61,6 +69,8 @@ export interface Progress {
   selectedShip: string;
   selectedStage: string;
   upgrades: Record<string, number>;
+  /** Módulo de especialización elegido por mejora (solo desde nivel 10). */
+  modules: Record<string, string>;
   stats: {
     runs: number;
     wins: number;
@@ -121,6 +131,7 @@ export function defaultProgress(): Progress {
     selectedShip: "falcon",
     selectedStage: "nova",
     upgrades: {},
+    modules: {},
     stats: {
       runs: 0,
       wins: 0,
@@ -150,9 +161,7 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   if (!raw || typeof raw !== "object") return defaultSeason();
   const r = raw as Partial<Record<keyof SeasonProgress, unknown>>;
   const ids = (v: unknown): string[] =>
-    Array.isArray(v)
-      ? Array.from(new Set(v.filter((x): x is string => typeof x === "string")))
-      : [];
+    Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === "string"))) : [];
   const levels = (v: unknown): number[] =>
     Array.isArray(v)
       ? Array.from(
@@ -170,8 +179,7 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   };
   const stamp = (v: unknown): string =>
     typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
-  const num = (v: unknown): number =>
-    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0;
+  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
   const rawBase = (r.baseline ?? {}) as Partial<SeasonBaseline>;
   const pt = num(r.pt);
   return {
@@ -219,6 +227,12 @@ export function sanitize(raw: unknown): Progress {
         if (typeof n === "number" && Number.isFinite(n)) out[k] = n;
     return out;
   };
+  const strRec = (v: unknown) => {
+    const out: Record<string, string> = {};
+    if (v && typeof v === "object")
+      for (const [k, x] of Object.entries(v)) if (typeof x === "string") out[k] = x;
+    return out;
+  };
   const s = (r.stats ?? {}) as Partial<Progress["stats"]>;
   const p: Progress = {
     v: 1,
@@ -229,6 +243,7 @@ export function sanitize(raw: unknown): Progress {
     selectedShip: typeof r.selectedShip === "string" ? r.selectedShip : "falcon",
     selectedStage: typeof r.selectedStage === "string" ? r.selectedStage : "nova",
     upgrades: rec(r.upgrades),
+    modules: strRec(r.modules),
     stats: {
       runs: num(s.runs, 0),
       wins: num(s.wins, 0),
@@ -266,12 +281,12 @@ export const CREDIT_REWARD_MULT = 0.2;
 /** Credits awarded for a run. */
 export function computeRunCredits(
   r: Pick<RunResult, "credits" | "time" | "level" | "victory" | "stageId" | "duration">,
-  salvageLevel: number,
+  salvageBonus: number,
 ) {
   const stage = stageById(r.stageId);
   const base =
     r.credits + Math.floor(r.time / 60) * 15 * (900 / Math.max(300, r.duration)) + r.level * 4;
-  const mult = stage.rewardMult * (1 + salvageLevel * 0.1) * (r.victory ? 1.5 : 1);
+  const mult = stage.rewardMult * (1 + salvageBonus) * (r.victory ? 1.5 : 1);
   return Math.max(0, Math.round(base * mult * CREDIT_REWARD_MULT));
 }
 
@@ -322,7 +337,7 @@ export function applyRun(prev: Progress, r: RunResult, now: number = Date.now())
   const p: Progress = structuredClone(prev);
   // Antes de sumar la partida: la línea base debe ser el estado previo a esta partida.
   renewSeason(p, now);
-  const credits = computeRunCredits(r, p.upgrades["salvage"] ?? 0);
+  const credits = computeRunCredits(r, hangarBonuses(p.upgrades, p.modules).salvage);
   p.credits += credits;
   const st = p.stats;
   st.runs += 1;
@@ -383,16 +398,70 @@ export function applyRun(prev: Progress, r: RunResult, now: number = Date.now())
 
 export type BuyResult = { ok: true; progress: Progress } | { ok: false; reason: string };
 
-export function buyUpgrade(prev: Progress, id: string): BuyResult {
+export interface UpgradeRequirementState {
+  label: string;
+  progress: number;
+  goal: number;
+  met: boolean;
+}
+
+export interface UpgradeStatus {
+  ok: boolean;
+  /** Motivo en español si no se puede comprar. */
+  reason: string;
+  cost: number;
+  requirement: UpgradeRequirementState | null;
+}
+
+/** Estado de compra del siguiente nivel de una mejora. Misma lógica que buyUpgrade. */
+export function upgradeStatus(prev: Progress, id: string): UpgradeStatus {
   const u = upgradeById(id);
-  if (!u) return { ok: false, reason: "Mejora desconocida" };
+  if (!u) return { ok: false, reason: "Mejora desconocida", cost: Infinity, requirement: null };
   const lvl = prev.upgrades[id] ?? 0;
-  if (lvl >= u.max) return { ok: false, reason: "Nivel máximo" };
   const cost = upgradeCost(id, lvl);
+  if (lvl >= u.max) return { ok: false, reason: "Nivel máximo", cost, requirement: null };
+  const req = upgradeRequirement(id, lvl + 1);
+  const requirement = req
+    ? {
+        label: req.label,
+        progress: Math.min(req.progress(prev), req.goal),
+        goal: req.goal,
+        met: req.progress(prev) >= req.goal,
+      }
+    : null;
+  if (prev.credits < cost) return { ok: false, reason: "Créditos insuficientes", cost, requirement };
+  if (requirement && !requirement.met)
+    return { ok: false, reason: `Requisito: ${requirement.label}`, cost, requirement };
+  return { ok: true, reason: "", cost, requirement };
+}
+
+export function buyUpgrade(prev: Progress, id: string): BuyResult {
+  const st = upgradeStatus(prev, id);
+  if (!st.ok) return { ok: false, reason: st.reason };
+  const p = structuredClone(prev);
+  const lvl = prev.upgrades[id] ?? 0;
+  p.credits -= st.cost;
+  p.upgrades[id] = lvl + 1;
+  return { ok: true, progress: p };
+}
+
+/**
+ * Elige o cambia el módulo de una mejora en nivel 10. La primera elección es gratis;
+ * cambiarlo cuesta CR.
+ */
+export function chooseUpgradeModule(prev: Progress, upgradeId: string, moduleId: string): BuyResult {
+  const u = upgradeById(upgradeId);
+  if (!u) return { ok: false, reason: "Mejora desconocida" };
+  if ((prev.upgrades[upgradeId] ?? 0) < MODULE_UNLOCK_LEVEL)
+    return { ok: false, reason: `Disponible al nivel ${MODULE_UNLOCK_LEVEL}` };
+  if (!moduleById(upgradeId, moduleId)) return { ok: false, reason: "Módulo desconocido" };
+  const current = prev.modules[upgradeId];
+  if (current === moduleId) return { ok: false, reason: "Ya está instalado" };
+  const cost = current ? moduleSwapCost(upgradeId) : 0;
   if (prev.credits < cost) return { ok: false, reason: "Créditos insuficientes" };
   const p = structuredClone(prev);
   p.credits -= cost;
-  p.upgrades[id] = lvl + 1;
+  p.modules[upgradeId] = moduleId;
   return { ok: true, progress: p };
 }
 
@@ -547,7 +616,9 @@ export function claimPeriodMission(
   now: number = Date.now(),
 ): BuyResult {
   const board = getSeasonBoard(prev, now);
-  const entry = (period === "DAILY" ? board.daily : board.weekly).find((e) => e.template.id === id);
+  const entry = (period === "DAILY" ? board.daily : board.weekly).find(
+    (e) => e.template.id === id,
+  );
   if (!entry) return { ok: false, reason: "Misión no activa" };
   if (entry.claimed) return { ok: false, reason: "Ya reclamada" };
   if (!entry.completed) return { ok: false, reason: "Objetivo incompleto" };

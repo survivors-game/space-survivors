@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -40,6 +40,7 @@ import { HangarSidebar, type HangarTab } from "@/components/hangar/HangarSidebar
 import { MarketSection } from "@/components/hangar/MarketSection";
 import { InventorySection } from "@/components/hangar/InventorySection";
 import { MissionsSection } from "@/components/hangar/MissionsSection";
+import { UpgradesSection } from "@/components/hangar/UpgradesSection";
 import { Audio } from "@/game/audio";
 import { BOSSES, bossById } from "@/game/data/bosses";
 import { WORLD1_ID } from "@/game/timeline";
@@ -80,13 +81,14 @@ import {
   ProgressStore,
   applyRun as recordRun,
   buyUpgrade,
+  chooseUpgradeModule,
   defaultProgress,
   getSeasonClaimableCount,
   sanitize,
   type Progress,
   type RunSummary,
 } from "@/game/meta/progress";
-import { UPGRADES, hangarBonuses as calcHangarBonuses, upgradeCost } from "@/game/meta/upgrades";
+import { hangarBonuses as calcHangarBonuses } from "@/game/meta/upgrades";
 import type { HudState, PickupKind, RunResult, UpgradeChoice } from "@/game/types";
 
 type Screen = "MENU" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER";
@@ -950,7 +952,7 @@ function Index() {
       canvas,
       ship: selectedShip,
       stage: selectedStage,
-      hangar: calcHangarBonuses(progress.upgrades),
+      hangar: calcHangarBonuses(progress.upgrades, progress.modules),
       durationSec: 1200,
       isEndless: gameMode === "ENDLESS",
       bossCooldowns,
@@ -1193,6 +1195,18 @@ function Index() {
     }
     saveProgress(outcome.progress);
     setNotice("MEJORA INSTALADA");
+    window.setTimeout(() => setNotice(""), 1800);
+  };
+
+  const chooseModule = (upgradeId: string, moduleId: string) => {
+    const outcome = chooseUpgradeModule(progress, upgradeId, moduleId);
+    if (!outcome.ok) {
+      setNotice(outcome.reason);
+      window.setTimeout(() => setNotice(""), 1800);
+      return;
+    }
+    saveProgress(outcome.progress);
+    setNotice("MÓDULO INSTALADO");
     window.setTimeout(() => setNotice(""), 1800);
   };
 
@@ -2266,64 +2280,11 @@ function Index() {
               ) : null}
             </div>
             {hangarTab === "UPGRADES" ? (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:col-start-2">
-                {UPGRADES.map((upgrade, index) => {
-                  const level = progress.upgrades[upgrade.id] ?? 0;
-                  const maxed = level >= upgrade.max;
-                  const cost = upgradeCost(upgrade.id, level);
-                  const affordable = progress.credits >= cost;
-                  const Icon =
-                    [Shield, Zap, Crosshair, AudioLines, Radio, Heart, Award, Sparkles][index] ??
-                    Wrench;
-                  return (
-                    <article
-                      key={upgrade.id}
-                      className="flex min-h-56 flex-col border border-cyan-500/20 bg-[#0b0d1c]/85 p-4 transition hover:border-cyan-400/45"
-                    >
-                      <div className="flex items-start justify-between">
-                        <span className="grid size-10 place-items-center border border-cyan-400/25 bg-cyan-400/[0.07] text-cyan-200">
-                          <Icon className="size-5" />
-                        </span>
-                        <span className="text-[9px] uppercase tracking-widest text-white/40">
-                          NIVEL {level} / {upgrade.max}
-                        </span>
-                      </div>
-                      <h3 className="mt-4 text-xs font-black uppercase tracking-[0.13em]">
-                        {upgrade.name}
-                      </h3>
-                      <p className="mt-2 min-h-8 text-[10px] leading-4 text-white/45">
-                        {upgrade.desc}
-                      </p>
-                      <div
-                        className="mt-4 flex gap-1"
-                        aria-label={`Nivel ${level} de ${upgrade.max}`}
-                      >
-                        {Array.from({ length: upgrade.max }, (_, step) => (
-                          <span
-                            key={step}
-                            className={`h-1.5 flex-1 ${step < level ? "bg-[#00f0ff] shadow-[0_0_8px_#00f0ff55]" : "bg-white/10"}`}
-                          />
-                        ))}
-                      </div>
-                      <Button
-                        disabled={maxed || !affordable}
-                        onClick={() => purchaseUpgrade(upgrade.id)}
-                        variant="outline"
-                        className={`mt-auto h-10 w-full rounded-none text-[10px] font-bold uppercase tracking-widest ${maxed ? "border-white/10 text-white/35" : affordable ? "border-cyan-400/40 text-cyan-100 hover:bg-cyan-300/10" : "border-white/10 text-white/30"}`}
-                      >
-                        {maxed ? (
-                          "Nivel máximo"
-                        ) : (
-                          <>
-                            <span className="text-[#ffd700]">{cost} CR</span>
-                            <span className="text-white/35">·</span> Instalar
-                          </>
-                        )}
-                      </Button>
-                    </article>
-                  );
-                })}
-              </div>
+              <UpgradesSection
+                progress={progress}
+                onBuy={purchaseUpgrade}
+                onChooseModule={chooseModule}
+              />
             ) : hangarTab === "MISSIONS" ? (
               <MissionsSection
                 progress={progress}
