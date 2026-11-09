@@ -1123,17 +1123,7 @@ function Index() {
     }
   }, [googleSessionLoading, googlePlayer, screen]);
 
-  const purchaseVip = async () => {
-    const result = await marketRequest<{ success: boolean; vip_until: number; obsidian: number }>(
-      "/api/vip/buy",
-      { method: "POST" },
-    );
-    setHasVip(true);
-    setVipUntil(result.vip_until);
-    setMarketPilot((current) => (current ? { ...current, obsidian: result.obsidian } : current));
-    setMarketRefresh((version) => version + 1);
-    flashNotice("VIP ACTIVADO · +30 DÍAS DE MEMBRESÍA");
-  };
+
 
   const requireGoogleSession = () => {
     if (googleSessionLoading) {
@@ -1968,7 +1958,6 @@ function Index() {
             onClose={() => setVipModalOpen(false)}
             vipUntil={vipUntil}
             obsidian={marketPilot?.obsidian ?? null}
-            onPurchase={purchaseVip}
           />
         ) : null}
 
