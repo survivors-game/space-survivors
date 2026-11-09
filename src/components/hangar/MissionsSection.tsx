@@ -1,4 +1,4 @@
- import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, LockKeyhole } from "lucide-react";
 import { spriteUrl } from "@/game/sprites";
 import {
@@ -210,7 +210,9 @@ export function MissionsSection({
             <span
               key={i}
               className={`h-2 flex-1 ${
-                i < Math.floor(bar.fraction * 20) ? "bg-[#00f0ff] shadow-[0_0_6px_#00f0ff88]" : "bg-white/10"
+                i < Math.floor(bar.fraction * 20)
+                  ? "bg-[#00f0ff] shadow-[0_0_6px_#00f0ff88]"
+                  : "bg-white/10"
               }`}
             />
           ))}
@@ -412,7 +414,9 @@ export function MissionsSection({
                       reached ? "" : "opacity-60"
                     }`}
                   >
-                    <span className={`font-arcade text-[11px] ${reached ? "text-cyan-200" : "text-white/40"}`}>
+                    <span
+                      className={`font-arcade text-[11px] ${reached ? "text-cyan-200" : "text-white/40"}`}
+                    >
                       {pad(node.level)}
                     </span>
                     <span className="text-[10px] tabular-nums text-white/45">
@@ -421,7 +425,9 @@ export function MissionsSection({
 
                     {/* Carril gratuito */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="truncate text-[10px] text-white/80">{node.freeReward.label}</span>
+                      <span className="truncate text-[10px] text-white/80">
+                        {node.freeReward.label}
+                      </span>
                       <ActionButton
                         tone={freeClaimed ? "done" : reached ? "cyan" : "off"}
                         disabled={!reached || freeClaimed}
@@ -540,7 +546,10 @@ function MissionRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white">{title}</h3>
-          <span className="text-[8px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+          <span
+            className="text-[8px] font-bold uppercase tracking-widest"
+            style={{ color: accent }}
+          >
             {tag}
           </span>
         </div>
