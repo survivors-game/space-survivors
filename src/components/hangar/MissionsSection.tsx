@@ -1,4 +1,4 @@
- import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, LockKeyhole } from "lucide-react";
 import { spriteUrl } from "@/game/sprites";
 import {
@@ -120,15 +120,7 @@ function ActionButton({
 }
 
 /** Sprite del juego; si aún no carga o no existe, muestra un punto de color. */
-function SpriteIcon({
-  id,
-  color,
-  small = false,
-}: {
-  id: string;
-  color: string;
-  small?: boolean;
-}) {
+function SpriteIcon({ id, color, small = false }: { id: string; color: string; small?: boolean }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     try {
@@ -445,12 +437,10 @@ export function MissionsSection({
                     {/* Carril gratuito */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2">
-                        <SpriteIcon
-                          id={REWARD_SPRITE[node.freeReward.type]}
-                          color={CYAN}
-                          small
-                        />
-                        <span className="truncate text-xs text-white/85">{node.freeReward.label}</span>
+                        <SpriteIcon id={REWARD_SPRITE[node.freeReward.type]} color={CYAN} small />
+                        <span className="truncate text-xs text-white/85">
+                          {node.freeReward.label}
+                        </span>
                       </div>
                       <ActionButton
                         tone={freeClaimed ? "done" : reached ? "cyan" : "off"}
@@ -470,11 +460,7 @@ export function MissionsSection({
                     {/* Carril VIP */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2">
-                        <SpriteIcon
-                          id={REWARD_SPRITE[node.vipReward.type]}
-                          color={GOLD}
-                          small
-                        />
+                        <SpriteIcon id={REWARD_SPRITE[node.vipReward.type]} color={GOLD} small />
                         <div className="min-w-0">
                           <span className="block truncate text-xs text-white/85">
                             {node.vipReward.label}
@@ -577,7 +563,10 @@ function MissionRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-white">{title}</h3>
-          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: accent }}
+          >
             {tag}
           </span>
         </div>
