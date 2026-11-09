@@ -1,4 +1,4 @@
- import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Coins, Crown, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
 import {
   VIP_DURATION_DAYS,
@@ -129,7 +129,9 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
         <header className="flex items-center gap-4 border-b border-[#ffd700]/25 px-6 py-4">
           <div
             className="flex h-14 w-14 shrink-0 items-center justify-center border border-[#ffd700]/70 bg-[#ffd700]/10 shadow-[0_0_16px_rgba(255,215,0,0.4)]"
-            style={{ clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)" }}
+            style={{
+              clipPath: "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)",
+            }}
           >
             <Crown className="h-6 w-6 text-[#ffd700]" />
           </div>

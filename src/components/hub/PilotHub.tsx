@@ -1,4 +1,4 @@
- import { useMemo } from "react";
+import { useMemo } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Rocket,
@@ -47,8 +47,7 @@ const ORANGE = "#ff8a3d";
 const PINK = "#ff4d9d";
 const GREEN = "#4ade80";
 
-const HEX_CLIP =
-  "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
+const HEX_CLIP = "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
 const CUT_CLIP =
   "polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px)";
 
@@ -68,12 +67,9 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
 
 /** Normaliza las estadísticas reales de la nave (src/game/data/ships.ts) a 0..1. */
 function computeShipStats(ship: ShipDef) {
-  const attack = clamp01(((ship.dmg / ship.cd) - 0.9) / 0.35);
+  const attack = clamp01((ship.dmg / ship.cd - 0.9) / 0.35);
   const defense = clamp01(
-    0.25 +
-      ((ship.hp - 80) / 70) * 0.5 +
-      (ship.armor / 2) * 0.15 +
-      (ship.shield / 30) * 0.1,
+    0.25 + ((ship.hp - 80) / 70) * 0.5 + (ship.armor / 2) * 0.15 + (ship.shield / 30) * 0.1,
   );
   const speed = clamp01(0.2 + ((ship.speed - 200) / 75) * 0.8);
   return { attack, defense, speed };
@@ -147,7 +143,10 @@ function ActionTile({ label, sub, Icon, color, onClick }: ActionTileProps) {
         <Icon className="h-6 w-6" />
       </span>
       <span>
-        <span className="block text-base font-bold uppercase leading-snug tracking-wide" style={{ color }}>
+        <span
+          className="block text-base font-bold uppercase leading-snug tracking-wide"
+          style={{ color }}
+        >
           {label}
         </span>
         <span className="mt-1 block text-sm uppercase tracking-wide text-white/65">{sub}</span>
@@ -176,16 +175,11 @@ export function PilotHub({
   onOpenProfile,
   onOpenVip,
 }: PilotHubProps) {
-  const shipImage = useMemo(
-    () => spriteUrl(selectedShip.sprite, 4),
-    [selectedShip.sprite],
-  );
+  const shipImage = useMemo(() => spriteUrl(selectedShip.sprite, 4), [selectedShip.sprite]);
   const stats = computeShipStats(selectedShip);
   const initial = pilotName.trim().charAt(0).toUpperCase() || "P";
   const shortId =
-    pilotId.length > 8
-      ? `${pilotId.slice(0, 8).toUpperCase()}…`
-      : pilotId.toUpperCase();
+    pilotId.length > 8 ? `${pilotId.slice(0, 8).toUpperCase()}…` : pilotId.toUpperCase();
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
 
@@ -213,9 +207,7 @@ export function PilotHub({
 
           <div className="min-w-0 flex-1">
             <div className="truncate text-lg font-bold leading-tight">
-              {allianceTag ? (
-                <span className="text-fuchsia-300">[{allianceTag}] </span>
-              ) : null}
+              {allianceTag ? <span className="text-fuchsia-300">[{allianceTag}] </span> : null}
               {pilotName}
             </div>
             <div className="truncate text-sm tracking-wide text-cyan-300/80">ID {shortId}</div>
@@ -248,8 +240,7 @@ export function PilotHub({
                   boxShadow: "0 0 14px rgba(255,215,0,0.35)",
                 }}
               >
-                <Sparkles className="h-4 w-4" />
-                ★ VIP Pilot
+                <Sparkles className="h-4 w-4" />★ VIP Pilot
               </span>
             ) : (
               <span className="inline-flex items-center rounded-full border border-cyan-400/30 px-4 py-2 text-sm font-bold uppercase tracking-wide text-cyan-300/70">
@@ -400,18 +391,29 @@ export function PilotHub({
       {/* TELEMETRÍA */}
       <footer className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="flex items-center justify-between rounded-lg border border-cyan-400/30 bg-black/60 px-5 py-3">
-          <span className="text-sm font-bold uppercase tracking-wide text-white/70">Misiones completadas</span>
+          <span className="text-sm font-bold uppercase tracking-wide text-white/70">
+            Misiones completadas
+          </span>
           <span className="font-arcade text-xl tabular-nums text-cyan-300">{fmt(runs)}</span>
         </div>
-        <div className="flex items-center justify-between rounded-lg border bg-black/60 px-5 py-3" style={{ borderColor: `${ORANGE}55` }}>
-          <span className="text-sm font-bold uppercase tracking-wide text-white/70">Bajas enemigas</span>
+        <div
+          className="flex items-center justify-between rounded-lg border bg-black/60 px-5 py-3"
+          style={{ borderColor: `${ORANGE}55` }}
+        >
+          <span className="text-sm font-bold uppercase tracking-wide text-white/70">
+            Bajas enemigas
+          </span>
           <span className="font-arcade text-xl tabular-nums" style={{ color: ORANGE }}>
             {fmt(kills)}
           </span>
         </div>
         <div className="flex items-center justify-between rounded-lg border border-violet-400/40 bg-black/60 px-5 py-3">
-          <span className="text-sm font-bold uppercase tracking-wide text-white/70">Naves en flota</span>
-          <span className="font-arcade text-xl tabular-nums text-violet-300">{fmt(shipsCount)}</span>
+          <span className="text-sm font-bold uppercase tracking-wide text-white/70">
+            Naves en flota
+          </span>
+          <span className="font-arcade text-xl tabular-nums text-violet-300">
+            {fmt(shipsCount)}
+          </span>
         </div>
       </footer>
     </div>
