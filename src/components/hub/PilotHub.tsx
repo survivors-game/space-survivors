@@ -42,8 +42,7 @@ const GOLD = "#ffd700";
 const VIOLET = "#c4a1ff";
 const ORANGE = "#ff8a3d";
 
-const HEX_CLIP =
-  "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
+const HEX_CLIP = "polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%)";
 
 const KEYFRAMES = `
 @keyframes ph-pulse {
@@ -66,12 +65,9 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
 
 /** Normalizes the ship's real stats (see src/game/data/ships.ts) into 0..1 bars. */
 function computeShipStats(ship: ShipConfig) {
-  const attack = clamp01(((ship.dmg / ship.cd) - 0.9) / 0.35);
+  const attack = clamp01((ship.dmg / ship.cd - 0.9) / 0.35);
   const defense = clamp01(
-    0.25 +
-      ((ship.hp - 80) / 70) * 0.5 +
-      (ship.armor / 2) * 0.15 +
-      (ship.shield / 30) * 0.1,
+    0.25 + ((ship.hp - 80) / 70) * 0.5 + (ship.armor / 2) * 0.15 + (ship.shield / 30) * 0.1,
   );
   const speed = clamp01(0.2 + ((ship.speed - 200) / 75) * 0.8);
   return { attack, defense, speed };
@@ -140,9 +136,7 @@ export function PilotHub({
   const stats = computeShipStats(selectedShip);
   const initial = pilotName.trim().charAt(0).toUpperCase() || "P";
   const shortId =
-    pilotId.length > 8
-      ? `${pilotId.slice(0, 8).toUpperCase()}…`
-      : pilotId.toUpperCase();
+    pilotId.length > 8 ? `${pilotId.slice(0, 8).toUpperCase()}…` : pilotId.toUpperCase();
 
   const quickAccess = [
     {
@@ -205,14 +199,10 @@ export function PilotHub({
 
           <div className="min-w-0 flex-1">
             <div className="truncate font-arcade text-[10px] leading-relaxed text-white">
-              {allianceTag ? (
-                <span className="text-fuchsia-300">[{allianceTag}] </span>
-              ) : null}
+              {allianceTag ? <span className="text-fuchsia-300">[{allianceTag}] </span> : null}
               {pilotName}
             </div>
-            <div className="truncate text-[11px] tracking-wider text-cyan-300/70">
-              ID {shortId}
-            </div>
+            <div className="truncate text-[11px] tracking-wider text-cyan-300/70">ID {shortId}</div>
           </div>
 
           <button
@@ -235,8 +225,7 @@ export function PilotHub({
                 boxShadow: "0 0 14px rgba(255,215,0,0.35)",
               }}
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              ★ VIP PILOT
+              <Sparkles className="h-3.5 w-3.5" />★ VIP PILOT
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/25 px-3 py-1.5 text-[11px] tracking-widest text-cyan-400/50">
@@ -246,9 +235,7 @@ export function PilotHub({
 
           <div className="flex items-center gap-2 rounded-lg border border-cyan-400/60 bg-cyan-400/5 px-3 py-1.5 shadow-[0_0_12px_rgba(34,211,238,0.25)]">
             <span className="text-[10px] text-cyan-300">CR</span>
-            <span className="font-arcade text-xs tabular-nums text-cyan-100">
-              {fmt(credits)}
-            </span>
+            <span className="font-arcade text-xs tabular-nums text-cyan-100">{fmt(credits)}</span>
           </div>
 
           <div
@@ -261,9 +248,7 @@ export function PilotHub({
             <span className="text-[10px]" style={{ color: MAGENTA }}>
               OBS
             </span>
-            <span className="font-arcade text-xs tabular-nums text-pink-100">
-              {fmt(obsidian)}
-            </span>
+            <span className="font-arcade text-xs tabular-nums text-pink-100">{fmt(obsidian)}</span>
           </div>
         </div>
       </header>
@@ -277,9 +262,7 @@ export function PilotHub({
           <span className="pointer-events-none absolute bottom-2 left-2 h-4 w-4 border-b-2 border-l-2 border-cyan-400/70" />
           <span className="pointer-events-none absolute bottom-2 right-2 h-4 w-4 border-b-2 border-r-2 border-cyan-400/70" />
 
-          <div className="mb-2 text-[10px] tracking-[0.3em] text-cyan-400/60">
-            BAHÍA DE LA NAVE
-          </div>
+          <div className="mb-2 text-[10px] tracking-[0.3em] text-cyan-400/60">BAHÍA DE LA NAVE</div>
 
           <div className="relative h-[240px] w-full sm:h-[300px]">
             <MenuHeroShip ship={selectedShip} />
@@ -290,24 +273,9 @@ export function PilotHub({
           </h2>
 
           <div className="mt-4 space-y-3">
-            <PowerBar
-              label="ATAQUE"
-              value={stats.attack}
-              color={ORANGE}
-              Icon={Flame}
-            />
-            <PowerBar
-              label="BLINDAJE"
-              value={stats.defense}
-              color={CYAN}
-              Icon={Shield}
-            />
-            <PowerBar
-              label="VELOCIDAD"
-              value={stats.speed}
-              color={VIOLET}
-              Icon={Zap}
-            />
+            <PowerBar label="ATAQUE" value={stats.attack} color={ORANGE} Icon={Flame} />
+            <PowerBar label="BLINDAJE" value={stats.defense} color={CYAN} Icon={Shield} />
+            <PowerBar label="VELOCIDAD" value={stats.speed} color={VIOLET} Icon={Zap} />
           </div>
 
           <div className="mt-4 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/5 px-3 py-2 text-[11px] tracking-wider text-fuchsia-200">
@@ -349,12 +317,8 @@ export function PilotHub({
                 >
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="text-[11px] leading-snug tracking-wider text-white">
-                  {label}
-                </span>
-                <span className="text-[9px] tracking-[0.25em] text-white/40">
-                  {code}
-                </span>
+                <span className="text-[11px] leading-snug tracking-wider text-white">{label}</span>
+                <span className="text-[9px] tracking-[0.25em] text-white/40">{code}</span>
               </button>
             ))}
           </div>
@@ -368,9 +332,7 @@ export function PilotHub({
             key={label}
             className="rounded-xl border border-white/10 bg-black/60 p-3 text-center"
           >
-            <div
-              className="flex items-center justify-center gap-1.5 text-[9px] tracking-widest text-white/50 sm:text-[10px]"
-            >
+            <div className="flex items-center justify-center gap-1.5 text-[9px] tracking-widest text-white/50 sm:text-[10px]">
               <Icon className="h-3 w-3" style={{ color }} />
               {label}
             </div>
