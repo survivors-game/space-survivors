@@ -444,6 +444,7 @@ async function ensurePilotReferralCode(db: D1Database, pilotId: string): Promise
 }
 
 async function handleVipBuy(request: Request, env: WorkerEnv | undefined): Promise<Response> {
+  return json({ error: "La compra de VIP con OBS está temporalmente deshabilitada. El VIP solo puede ser asignado por la administración." }, 403);
   const url = new URL(request.url);
   if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
   if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
