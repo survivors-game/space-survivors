@@ -1,4 +1,4 @@
- import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Award,
   Check,
@@ -263,7 +263,10 @@ export function MissionsSection({
                 </div>
               </div>
               <div className="flex w-full flex-col gap-2 sm:w-56">
-                <div className="flex gap-1" aria-label={`Misiones reclamadas: ${board.chest.claimedCount} de ${board.chest.threshold}`}>
+                <div
+                  className="flex gap-1"
+                  aria-label={`Misiones reclamadas: ${board.chest.claimedCount} de ${board.chest.threshold}`}
+                >
                   {Array.from({ length: board.chest.threshold }, (_, i) => (
                     <span
                       key={i}

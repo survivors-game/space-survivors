@@ -1,4 +1,4 @@
- // Permanent progression, persisted in localStorage (the storage the original
+// Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
@@ -132,14 +132,14 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   if (!raw || typeof raw !== "object") return d;
   const r = raw as Partial<Record<keyof SeasonProgress, unknown>>;
   const ids = (v: unknown): string[] =>
-    Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === "string"))) : [];
+    Array.isArray(v)
+      ? Array.from(new Set(v.filter((x): x is string => typeof x === "string")))
+      : [];
   const levels = (v: unknown): number[] =>
     Array.isArray(v)
       ? Array.from(
           new Set(
-            v.filter(
-              (x): x is number => Number.isInteger(x) && x >= 1 && x <= SEASON_MAX_LEVEL,
-            ),
+            v.filter((x): x is number => Number.isInteger(x) && x >= 1 && x <= SEASON_MAX_LEVEL),
           ),
         )
       : [];
@@ -471,7 +471,11 @@ export function getSeasonBoard(p: Progress, now: number = Date.now()): SeasonBoa
 }
 
 /** Número de recompensas pendientes de reclamar (para el badge del Hangar). */
-export function getSeasonClaimableCount(p: Progress, hasVip: boolean, now: number = Date.now()): number {
+export function getSeasonClaimableCount(
+  p: Progress,
+  hasVip: boolean,
+  now: number = Date.now(),
+): number {
   const board = getSeasonBoard(p, now);
   let count =
     board.daily.filter((e) => e.completed && !e.claimed).length +
@@ -496,9 +500,7 @@ export function claimPeriodMission(
   now: number = Date.now(),
 ): BuyResult {
   const board = getSeasonBoard(prev, now);
-  const entry = (period === "DAILY" ? board.daily : board.weekly).find(
-    (e) => e.template.id === id,
-  );
+  const entry = (period === "DAILY" ? board.daily : board.weekly).find((e) => e.template.id === id);
   if (!entry) return { ok: false, reason: "Misión no activa" };
   if (entry.claimed) return { ok: false, reason: "Ya reclamada" };
   if (!entry.completed) return { ok: false, reason: "Objetivo incompleto" };

@@ -1,4 +1,4 @@
- import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { RunResult } from "@/game/types";
 import {
@@ -85,7 +85,9 @@ describe("misiones de temporada: persistencia", () => {
   });
 
   it("normaliza valores corruptos de temporada", () => {
-    const p = sanitize({ season: { pt: -5, claimedFree: [1, 99, "x", 1], dailyCompletedDate: "x" } });
+    const p = sanitize({
+      season: { pt: -5, claimedFree: [1, 99, "x", 1], dailyCompletedDate: "x" },
+    });
     expect(p.season.pt).toBe(0);
     expect(p.season.claimedFree).toEqual([1]);
     expect(p.season.dailyCompletedDate).toBe("");
@@ -121,7 +123,12 @@ describe("misiones de temporada: avance y reclamos", () => {
   });
 
   it("no reclama una misión incompleta", () => {
-    const res = claimPeriodMission(defaultProgress(), "DAILY", getActiveDailyMissions("2026-11-08")[0]!.id, NOON_SUNDAY);
+    const res = claimPeriodMission(
+      defaultProgress(),
+      "DAILY",
+      getActiveDailyMissions("2026-11-08")[0]!.id,
+      NOON_SUNDAY,
+    );
     expect(res.ok).toBe(false);
   });
 
@@ -140,7 +147,15 @@ describe("misiones de temporada: avance y reclamos", () => {
   it("el cofre se desbloquea con 5 diarias reclamadas y se reclama una vez", () => {
     let p = applyRun(
       defaultProgress(),
-      run({ victory: true, kills: 999, bossesDefeated: ["leviathan"], evolutions: 9, level: 25, time: 1000, damageDealt: 999999 }),
+      run({
+        victory: true,
+        kills: 999,
+        bossesDefeated: ["leviathan"],
+        evolutions: 9,
+        level: 25,
+        time: 1000,
+        damageDealt: 999999,
+      }),
       NOON_SUNDAY,
     ).progress;
     let claimedCount = 0;
