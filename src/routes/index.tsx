@@ -1083,14 +1083,7 @@ function Index() {
       engine.stop();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [
-    screen,
-    selectedShip,
-    selectedStage,
-    progress.upgrades,
-    gameMode,
-    bossCooldowns,
-  ]);
+  }, [screen, selectedShip, selectedStage, progress.upgrades, gameMode, bossCooldowns]);
 
   useEffect(() => {
     if (googleSessionLoading || googlePlayer) return;
