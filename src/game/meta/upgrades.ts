@@ -1,4 +1,4 @@
- // Permanent hangar upgrades. Levels 1..(eliteFrom-1) cost credits only and keep the
+// Permanent hangar upgrades. Levels 1..(eliteFrom-1) cost credits only and keep the
 // original formula. From eliteFrom onward each level also needs a merit requirement that is
 // checked with data Progress already tracks.
 import type { Progress } from "./progress";
@@ -132,7 +132,11 @@ export const MERIT_REQUIREMENTS: Record<string, MeritRequirement[]> = {
     { label: "Gana 10 misiones", goal: 10, progress: (p) => p.stats.wins },
   ],
   power: [
-    { label: "Inflige 100.000 de daño en total", goal: 100000, progress: (p) => p.stats.damageDealt },
+    {
+      label: "Inflige 100.000 de daño en total",
+      goal: 100000,
+      progress: (p) => p.stats.damageDealt,
+    },
     { label: "Consigue 5 evoluciones de arma", goal: 5, progress: (p) => p.stats.evolutions },
     { label: "Derrota 3 veces a COLOSO", goal: 3, progress: bossKill("colossus") },
     { label: "Destruye 600 naves en una partida", goal: 600, progress: (p) => p.stats.bestKills },

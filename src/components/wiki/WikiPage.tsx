@@ -1,4 +1,4 @@
- import { useState } from "react";
+import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { WIKI_SECTIONS } from "./wikiSections";
 

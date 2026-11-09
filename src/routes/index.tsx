@@ -1,4 +1,4 @@
- import {
+import {
   useCallback,
   useEffect,
   useRef,
@@ -2525,7 +2525,9 @@ function Index() {
                   </h2>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <p className="text-[10px] uppercase tracking-widest text-white/40">PILOT ID</p>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40">
+                        PILOT ID
+                      </p>
                       <p className="mt-2 break-all text-xs text-cyan-100">
                         {googlePlayer?.playerId}
                       </p>
@@ -2534,9 +2536,7 @@ function Index() {
                       <p className="text-[10px] uppercase tracking-widest text-white/40">
                         CORREO PRIVADO DE ACCESO
                       </p>
-                      <p className="mt-2 break-all text-xs text-white/60">
-                        {googlePlayer?.email}
-                      </p>
+                      <p className="mt-2 break-all text-xs text-white/60">{googlePlayer?.email}</p>
                     </div>
                   </div>
                   <form

@@ -1,4 +1,4 @@
- import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { spriteUrl } from "@/game/sprites";
 
 /** Sprite del juego dentro de la wiki. Si no existe o aún no carga, muestra un punto de color. */

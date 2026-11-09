@@ -1,4 +1,4 @@
- import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ART } from "@/game/art";
 import { BOSSES } from "@/game/data/bosses";
