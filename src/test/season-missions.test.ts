@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+ import { describe, expect, it } from "vitest";
 
 import type { RunResult } from "@/game/types";
 import {
@@ -8,6 +8,10 @@ import {
   getWeeklyTimeRemaining,
   getUtcWeekStr,
   getSeasonBarInfo,
+  getSeasonId,
+  SEASON_CHALLENGES,
+  SEASON_START_MS,
+  SEASON_LENGTH_MS,
   seasonLevelFor,
 } from "@/game/meta/missions";
 import {
@@ -86,7 +90,7 @@ describe("misiones de temporada: persistencia", () => {
 
   it("normaliza valores corruptos de temporada", () => {
     const p = sanitize({
-      season: { pt: -5, claimedFree: [1, 99, "x", 1], dailyCompletedDate: "x" },
+      season: { seasonId: getSeasonId(), pt: -5, claimedFree: [1, 99, "x", 1], dailyCompletedDate: "x" },
     });
     expect(p.season.pt).toBe(0);
     expect(p.season.claimedFree).toEqual([1]);
@@ -94,7 +98,7 @@ describe("misiones de temporada: persistencia", () => {
   });
 
   it("sobrevive a un ciclo JSON", () => {
-    const base = applyRun(defaultProgress(), run({ victory: true }), NOON_SUNDAY).progress;
+    const base = applyRun(defaultProgress(), run({ victory: true }), Date.now()).progress;
     expect(sanitize(JSON.parse(JSON.stringify(base))).season).toEqual(base.season);
   });
 });
@@ -123,12 +127,7 @@ describe("misiones de temporada: avance y reclamos", () => {
   });
 
   it("no reclama una misión incompleta", () => {
-    const res = claimPeriodMission(
-      defaultProgress(),
-      "DAILY",
-      getActiveDailyMissions("2026-11-08")[0]!.id,
-      NOON_SUNDAY,
-    );
+    const res = claimPeriodMission(defaultProgress(), "DAILY", getActiveDailyMissions("2026-11-08")[0]!.id, NOON_SUNDAY);
     expect(res.ok).toBe(false);
   });
 
@@ -147,15 +146,7 @@ describe("misiones de temporada: avance y reclamos", () => {
   it("el cofre se desbloquea con 5 diarias reclamadas y se reclama una vez", () => {
     let p = applyRun(
       defaultProgress(),
-      run({
-        victory: true,
-        kills: 999,
-        bossesDefeated: ["leviathan"],
-        evolutions: 9,
-        level: 25,
-        time: 1000,
-        damageDealt: 999999,
-      }),
+      run({ victory: true, kills: 999, bossesDefeated: ["leviathan"], evolutions: 9, level: 25, time: 1000, damageDealt: 999999 }),
       NOON_SUNDAY,
     ).progress;
     let claimedCount = 0;
@@ -180,7 +171,7 @@ describe("misiones de temporada: avance y reclamos", () => {
     const res = claimSeasonChallenge(p, "s_kills_500");
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.progress.season.pt).toBe(150);
+    expect(res.progress.season.pt).toBe(SEASON_CHALLENGES.find((c) => c.id === "s_kills_500")!.pt);
     expect(claimSeasonChallenge(res.progress, "s_kills_500").ok).toBe(false);
   });
 });
@@ -188,19 +179,53 @@ describe("misiones de temporada: avance y reclamos", () => {
 describe("pase de temporada", () => {
   it("calcula el nivel según el PT acumulado", () => {
     expect(seasonLevelFor(0)).toBe(1);
-    expect(seasonLevelFor(260)).toBe(3);
+    expect(seasonLevelFor(130)).toBe(3);
     expect(seasonLevelFor(999_999)).toBe(20);
     expect(getSeasonBarInfo(999_999).nextPt).toBeNull();
   });
 
   it("bloquea el carril VIP sin VIP y lo permite con VIP", () => {
-    const p = addSeasonPt(defaultProgress(), 260);
+    const p = addSeasonPt(defaultProgress(), 130);
     expect(claimSeasonLevel(p, "FREE", 2, false).ok).toBe(true);
     expect(claimSeasonLevel(p, "FREE", 4, false).ok).toBe(false);
     const noVip = claimSeasonLevel(p, "VIP", 1, false);
     expect(noVip.ok).toBe(false);
     const withVip = claimSeasonLevel(p, "VIP", 1, true);
     expect(withVip.ok).toBe(true);
-    if (withVip.ok) expect(withVip.progress.credits).toBe(p.credits + 90);
+    if (withVip.ok) expect(withVip.progress.credits).toBe(p.credits + 20);
+  });
+});
+
+describe("temporadas: identificador, reinicio y línea base", () => {
+  it("numera las temporadas cada 30 días", () => {
+    expect(getSeasonId(SEASON_START_MS)).toBe("S01");
+    expect(getSeasonId(SEASON_START_MS + SEASON_LENGTH_MS - 1)).toBe("S01");
+    expect(getSeasonId(SEASON_START_MS + SEASON_LENGTH_MS)).toBe("S02");
+  });
+
+  it("al cambiar de temporada reinicia el pase pero conserva créditos y naves", () => {
+    const prev = defaultProgress();
+    prev.credits = 500;
+    prev.ships = ["falcon", "nova"];
+    prev.season = { ...prev.season, seasonId: "S00", pt: 900 };
+    const out = applyRun(prev, run(), SEASON_START_MS + 1000);
+    expect(out.progress.season.seasonId).toBe("S01");
+    expect(out.progress.season.pt).toBe(0);
+    expect(out.progress.credits).toBe(prev.credits + out.credits);
+    expect(out.progress.ships).toEqual(["falcon", "nova"]);
+  });
+
+  it("los desafíos miden solo desde el inicio de la temporada", () => {
+    // Jugador de una temporada anterior con 1000 kills de vida: al entrar a la nueva,
+    // esas kills ya no deben contar para los desafíos.
+    const base = defaultProgress();
+    base.stats.kills = 1000;
+    base.season = { ...base.season, seasonId: "S00" };
+    const now = SEASON_START_MS + 1000;
+    const started = applyRun(base, run({ kills: 0 }), now).progress;
+    expect(started.season.baseline.kills).toBe(1000);
+    expect(getSeasonBoard(started, now).challenges.find((c) => c.template.id === "s_kills_500")!.progress).toBe(0);
+    const after = applyRun(started, run({ kills: 300 }), now).progress;
+    expect(getSeasonBoard(after, now).challenges.find((c) => c.template.id === "s_kills_500")!.progress).toBe(300);
   });
 });

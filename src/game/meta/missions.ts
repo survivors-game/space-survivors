@@ -1,4 +1,4 @@
-// Centro de operaciones de temporada: misiones diarias, semanales, desafíos mayores
+ // Centro de operaciones de temporada: misiones diarias, semanales, desafíos mayores
 // y el Pase de Temporada de 20 niveles. Todo el cálculo de qué misiones están activas
 // es determinístico a partir de la fecha UTC, así que cada piloto ve el mismo conjunto.
 import type { RunResult } from "../types";
@@ -55,11 +55,31 @@ export interface SeasonChallengeTemplate {
   goal: number;
   reward: number;
   pt: number;
-  progress: (p: Progress) => number;
+  progress: (p: Progress, base: SeasonBaseline) => number;
 }
 
-export const SEASON_NAME = "TEMPORADA 01";
 export const SEASON_MAX_LEVEL = 20;
+
+/** Cada temporada dura 30 días exactos (UTC). Inicio de la temporada 1. */
+export const SEASON_LENGTH_MS = 30 * 86_400_000;
+export const SEASON_START_MS = Date.UTC(2026, 10, 9);
+
+/** Índice de temporada (empieza en S01). Cambia solo con la fecha de inicio. */
+export function getSeasonId(now: number = Date.now()): string {
+  const index = Math.max(0, Math.floor((now - SEASON_START_MS) / SEASON_LENGTH_MS));
+  return `S${String(index + 1).padStart(2, "0")}`;
+}
+
+export function getSeasonName(now: number = Date.now()): string {
+  return `TEMPORADA ${getSeasonId(now).slice(1)}`;
+}
+
+/** Estadísticas de vida al inicio de la temporada. Los desafíos miden desde aquí. */
+export interface SeasonBaseline {
+  kills: number;
+  wins: number;
+  bossKills: Record<string, number>;
+}
 
 export const DAILY_TIERS: readonly MissionTier[] = ["BASIC", "PILOT", "ELITE"];
 export const DAILY_PER_TIER = 2;
@@ -69,8 +89,8 @@ export const WEEKLY_PICK_COUNT = 8;
 export const DAILY_CHEST = {
   id: "CHEST",
   threshold: 5,
-  reward: 150,
-  pt: 50,
+  reward: 20,
+  pt: 25,
 } as const;
 
 const bossHit = (id: string) => (r: RunResult) => (r.bossesDefeated.includes(id) ? 1 : 0);
@@ -85,8 +105,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "BASIC",
     agg: "sum",
     goal: 1,
-    reward: 40,
-    pt: 10,
+    reward: 5,
+    pt: 5,
     progress: () => 1,
   },
   {
@@ -97,8 +117,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "BASIC",
     agg: "sum",
     goal: 60,
-    reward: 40,
-    pt: 10,
+    reward: 5,
+    pt: 5,
     progress: (r) => r.kills,
   },
   {
@@ -109,8 +129,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "BASIC",
     agg: "max",
     goal: 300,
-    reward: 35,
-    pt: 10,
+    reward: 4,
+    pt: 5,
     progress: (r) => r.time,
   },
   {
@@ -121,8 +141,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "BASIC",
     agg: "max",
     goal: 10,
-    reward: 35,
-    pt: 10,
+    reward: 4,
+    pt: 5,
     progress: (r) => r.level,
   },
   {
@@ -133,8 +153,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "PILOT",
     agg: "sum",
     goal: 180,
-    reward: 90,
-    pt: 20,
+    reward: 8,
+    pt: 10,
     progress: (r) => r.kills,
   },
   {
@@ -145,8 +165,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "PILOT",
     agg: "sum",
     goal: 1,
-    reward: 110,
-    pt: 25,
+    reward: 10,
+    pt: 12,
     progress: (r) => (r.victory ? 1 : 0),
   },
   {
@@ -157,8 +177,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "PILOT",
     agg: "sum",
     goal: 25000,
-    reward: 85,
-    pt: 20,
+    reward: 8,
+    pt: 10,
     progress: (r) => Math.round(r.damageDealt),
   },
   {
@@ -169,8 +189,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "PILOT",
     agg: "sum",
     goal: 2,
-    reward: 80,
-    pt: 20,
+    reward: 7,
+    pt: 10,
     progress: () => 1,
   },
   {
@@ -181,8 +201,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "ELITE",
     agg: "sum",
     goal: 1,
-    reward: 180,
-    pt: 35,
+    reward: 16,
+    pt: 15,
     progress: (r) => r.bossesDefeated.length,
   },
   {
@@ -193,8 +213,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "ELITE",
     agg: "sum",
     goal: 2,
-    reward: 150,
-    pt: 30,
+    reward: 14,
+    pt: 15,
     progress: (r) => r.evolutions,
   },
   {
@@ -205,8 +225,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "ELITE",
     agg: "max",
     goal: 20,
-    reward: 160,
-    pt: 30,
+    reward: 14,
+    pt: 15,
     progress: (r) => r.level,
   },
   {
@@ -217,8 +237,8 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: "ELITE",
     agg: "sum",
     goal: 1,
-    reward: 170,
-    pt: 35,
+    reward: 15,
+    pt: 15,
     progress: (r) => (r.victory && r.stageId === "ash" ? 1 : 0),
   },
 ];
@@ -233,8 +253,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 3600,
-    reward: 400,
-    pt: 80,
+    reward: 30,
+    pt: 40,
     progress: (r) => r.time,
   },
   {
@@ -245,8 +265,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 2000,
-    reward: 500,
-    pt: 100,
+    reward: 45,
+    pt: 55,
     progress: (r) => r.kills,
   },
   {
@@ -257,8 +277,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 3,
-    reward: 600,
-    pt: 120,
+    reward: 55,
+    pt: 65,
     progress: (r) => r.bossesDefeated.length,
   },
   {
@@ -269,8 +289,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 5,
-    reward: 550,
-    pt: 110,
+    reward: 50,
+    pt: 60,
     progress: (r) => (r.victory ? 1 : 0),
   },
   {
@@ -281,8 +301,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 6,
-    reward: 450,
-    pt: 90,
+    reward: 40,
+    pt: 50,
     progress: (r) => r.evolutions,
   },
   {
@@ -293,8 +313,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 400000,
-    reward: 480,
-    pt: 95,
+    reward: 45,
+    pt: 50,
     progress: (r) => Math.round(r.damageDealt),
   },
   {
@@ -305,8 +325,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 12,
-    reward: 350,
-    pt: 70,
+    reward: 30,
+    pt: 40,
     progress: () => 1,
   },
   {
@@ -317,8 +337,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "max",
     goal: 25,
-    reward: 420,
-    pt: 85,
+    reward: 35,
+    pt: 45,
     progress: (r) => r.level,
   },
   {
@@ -329,8 +349,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 1,
-    reward: 500,
-    pt: 100,
+    reward: 45,
+    pt: 55,
     progress: bossHit("nemesis"),
   },
   {
@@ -341,8 +361,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 1,
-    reward: 500,
-    pt: 100,
+    reward: 45,
+    pt: 55,
     progress: bossHit("colossus"),
   },
   {
@@ -353,8 +373,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "sum",
     goal: 2,
-    reward: 480,
-    pt: 95,
+    reward: 42,
+    pt: 50,
     progress: bossHit("leviathan"),
   },
   {
@@ -365,8 +385,8 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     tier: null,
     agg: "max",
     goal: 900,
-    reward: 520,
-    pt: 100,
+    reward: 45,
+    pt: 55,
     progress: (r) => r.time,
   },
 ];
@@ -379,9 +399,9 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Destruye 500 naves enemigas en total",
     icon: "crosshair",
     goal: 500,
-    reward: 150,
-    pt: 150,
-    progress: (p) => p.stats.kills,
+    reward: 40,
+    pt: 60,
+    progress: (p, b) => Math.max(0, p.stats.kills - b.kills),
   },
   {
     id: "s_kills_5000",
@@ -389,9 +409,9 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Destruye 5.000 naves enemigas en total",
     icon: "crosshair",
     goal: 5000,
-    reward: 400,
-    pt: 400,
-    progress: (p) => p.stats.kills,
+    reward: 120,
+    pt: 150,
+    progress: (p, b) => Math.max(0, p.stats.kills - b.kills),
   },
   {
     id: "s_leviathan",
@@ -399,9 +419,10 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Derrota a LEVIATÁN",
     icon: "skull",
     goal: 1,
-    reward: 250,
-    pt: 200,
-    progress: (p) => p.stats.bossKills["leviathan"] ?? 0,
+    reward: 80,
+    pt: 100,
+    progress: (p, b) =>
+      Math.max(0, (p.stats.bossKills["leviathan"] ?? 0) - (b.bossKills["leviathan"] ?? 0)),
   },
   {
     id: "s_nemesis",
@@ -409,9 +430,10 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Derrota a NÉMESIS",
     icon: "skull",
     goal: 1,
-    reward: 300,
-    pt: 250,
-    progress: (p) => p.stats.bossKills["nemesis"] ?? 0,
+    reward: 100,
+    pt: 120,
+    progress: (p, b) =>
+      Math.max(0, (p.stats.bossKills["nemesis"] ?? 0) - (b.bossKills["nemesis"] ?? 0)),
   },
   {
     id: "s_colossus",
@@ -419,9 +441,10 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Derrota al COLOSO",
     icon: "skull",
     goal: 1,
-    reward: 350,
-    pt: 300,
-    progress: (p) => p.stats.bossKills["colossus"] ?? 0,
+    reward: 120,
+    pt: 140,
+    progress: (p, b) =>
+      Math.max(0, (p.stats.bossKills["colossus"] ?? 0) - (b.bossKills["colossus"] ?? 0)),
   },
   {
     id: "s_fleet",
@@ -429,8 +452,8 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Desbloquea las cuatro naves",
     icon: "shield",
     goal: 4,
-    reward: 300,
-    pt: 200,
+    reward: 100,
+    pt: 80,
     progress: (p) => p.ships.length,
   },
   {
@@ -439,8 +462,8 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Usa las 9 armas y módulos",
     icon: "zap",
     goal: 9,
-    reward: 200,
-    pt: 150,
+    reward: 60,
+    pt: 60,
     progress: (p) => p.weaponsUsed.length,
   },
   {
@@ -449,62 +472,62 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     desc: "Gana 10 misiones en total",
     icon: "crown",
     goal: 10,
-    reward: 300,
-    pt: 250,
-    progress: (p) => p.stats.wins,
+    reward: 100,
+    pt: 120,
+    progress: (p, b) => Math.max(0, p.stats.wins - b.wins),
   },
 ];
 
 /* ---------------- Pase de Temporada: 20 niveles ---------------- */
 // requiredPt es el PT acumulado necesario para alcanzar cada nivel.
 const LEVEL_REQUIRED_PT = [
-  0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700, 3250, 3850, 4500, 5200, 5950, 6750, 7600,
-  8500, 9450, 10500,
+  0, 50, 120, 220, 340, 480, 650, 840, 1060, 1300, 1560, 1850, 2160, 2500, 2860, 3240, 3650, 4080,
+  4540, 5040,
 ] as const;
 
 const FREE_REWARDS: SeasonRewardNode["freeReward"][] = [
-  { type: "CR", amount: 50, label: "50 CR" },
-  { type: "CR", amount: 40, label: "40 CR" },
+  { type: "CR", amount: 10, label: "10 CR" },
+  { type: "CR", amount: 8, label: "8 CR" },
   { type: "TITLE", amount: 1, label: "Insignia: Recluta" },
-  { type: "CR", amount: 60, label: "60 CR" },
-  { type: "CR", amount: 80, label: "80 CR" },
+  { type: "CR", amount: 12, label: "12 CR" },
+  { type: "CR", amount: 16, label: "16 CR" },
   { type: "TITLE", amount: 1, label: "Insignia: Escolta" },
-  { type: "CR", amount: 100, label: "100 CR" },
-  { type: "CR", amount: 110, label: "110 CR" },
-  { type: "CR", amount: 130, label: "130 CR" },
+  { type: "CR", amount: 20, label: "20 CR" },
+  { type: "CR", amount: 22, label: "22 CR" },
+  { type: "CR", amount: 26, label: "26 CR" },
   { type: "TITLE", amount: 1, label: "Insignia: Vanguardia" },
-  { type: "CR", amount: 150, label: "150 CR" },
-  { type: "CR", amount: 170, label: "170 CR" },
-  { type: "CR", amount: 190, label: "190 CR" },
+  { type: "CR", amount: 30, label: "30 CR" },
+  { type: "CR", amount: 34, label: "34 CR" },
+  { type: "CR", amount: 38, label: "38 CR" },
   { type: "TITLE", amount: 1, label: "Insignia: Centinela" },
-  { type: "CR", amount: 220, label: "220 CR" },
-  { type: "CR", amount: 250, label: "250 CR" },
-  { type: "CR", amount: 280, label: "280 CR" },
+  { type: "CR", amount: 44, label: "44 CR" },
+  { type: "CR", amount: 50, label: "50 CR" },
+  { type: "CR", amount: 56, label: "56 CR" },
   { type: "TITLE", amount: 1, label: "Insignia: Cazador Estelar" },
-  { type: "CR", amount: 320, label: "320 CR" },
-  { type: "CR", amount: 400, label: "400 CR · Gran premio" },
+  { type: "CR", amount: 64, label: "64 CR" },
+  { type: "CR", amount: 80, label: "80 CR · Gran premio" },
 ];
 
 const VIP_REWARDS: SeasonRewardNode["vipReward"][] = [
-  { type: "CR", amount: 90, label: "90 CR" },
+  { type: "CR", amount: 20, label: "20 CR" },
   { type: "SKIN", amount: 1, label: "Pintura: Ceniza Cromada" },
-  { type: "CR", amount: 120, label: "120 CR" },
-  { type: "CR", amount: 140, label: "140 CR" },
+  { type: "CR", amount: 24, label: "24 CR" },
+  { type: "CR", amount: 28, label: "28 CR" },
   { type: "SKIN", amount: 1, label: "Estela: Plasma Ámbar" },
-  { type: "CR", amount: 170, label: "170 CR" },
-  { type: "CR", amount: 200, label: "200 CR" },
-  { type: "CR", amount: 230, label: "230 CR" },
+  { type: "CR", amount: 34, label: "34 CR" },
+  { type: "CR", amount: 40, label: "40 CR" },
+  { type: "CR", amount: 46, label: "46 CR" },
   { type: "SKIN", amount: 1, label: "Pintura: Neón Nocturno" },
   { type: "TITLE", amount: 1, label: "Título: Ala Dorada" },
-  { type: "CR", amount: 270, label: "270 CR" },
-  { type: "CR", amount: 300, label: "300 CR" },
-  { type: "CR", amount: 340, label: "340 CR" },
+  { type: "CR", amount: 54, label: "54 CR" },
+  { type: "CR", amount: 60, label: "60 CR" },
+  { type: "CR", amount: 68, label: "68 CR" },
   { type: "SKIN", amount: 1, label: "Escudo: Halo Violeta" },
-  { type: "CR", amount: 380, label: "380 CR" },
-  { type: "CR", amount: 420, label: "420 CR" },
-  { type: "CR", amount: 460, label: "460 CR" },
+  { type: "CR", amount: 76, label: "76 CR" },
+  { type: "CR", amount: 84, label: "84 CR" },
+  { type: "CR", amount: 92, label: "92 CR" },
   { type: "SKIN", amount: 1, label: "Pintura: Eclipse Dorado" },
-  { type: "CR", amount: 520, label: "520 CR" },
+  { type: "CR", amount: 104, label: "104 CR" },
   { type: "TITLE", amount: 1, label: "Título: Comandante Supremo" },
 ];
 
@@ -568,7 +591,7 @@ export function getDailyTimeRemaining(now: number = Date.now()): number {
 /** Milisegundos hasta el próximo reinicio semanal (lunes 00:00 UTC). */
 export function getWeeklyTimeRemaining(now: number = Date.now()): number {
   const d = new Date(now);
-  const daysAhead = (1 - d.getUTCDay() + 7) % 7 || 7;
+  const daysAhead = ((1 - d.getUTCDay() + 7) % 7) || 7;
   const nextMonday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysAhead);
   return Math.max(0, nextMonday - now);
 }

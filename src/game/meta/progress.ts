@@ -1,4 +1,4 @@
-// Permanent progression, persisted in localStorage (the storage the original
+ // Permanent progression, persisted in localStorage (the storage the original
 // template already used). Pure functions + a tiny subscribable store.
 import type { RunResult } from "../types";
 import { SHIPS } from "../data/ships";
@@ -11,10 +11,12 @@ import {
   SEASON_MAX_LEVEL,
   getActiveDailyMissions,
   getActiveWeeklyMissions,
+  getSeasonId,
   getUtcDateStr,
   getUtcWeekStr,
   seasonLevelFor,
   type RunMissionTemplate,
+  type SeasonBaseline,
   type SeasonChallengeTemplate,
 } from "./missions";
 
@@ -31,11 +33,15 @@ export interface RunSummary {
 
 /**
  * Estado del Centro de Operaciones de Temporada.
- * - `dailyCompletedDate` / `weeklyCompletedWeek` son los sellos de ventana: si no coinciden
- *   con la fecha/semana UTC actual, las listas y contadores se consideran vacíos (reinicio).
- * - `dailyProgress` / `weeklyProgress` guardan el avance por id de misión dentro de la ventana.
+ * - `seasonId` identifica la temporada (S01, S02...). Si no coincide con la vigente,
+ *   el progreso de temporada se reinicia; los créditos y naves nunca se tocan.
+ * - `baseline` guarda las estadísticas de vida al inicio de la temporada, para que los
+ *   desafíos midan solo lo jugado dentro de la temporada.
+ * - `dailyCompletedDate` / `weeklyCompletedWeek` son los sellos de ventana UTC.
  */
 export interface SeasonProgress {
+  seasonId: string;
+  baseline: SeasonBaseline;
   pt: number;
   claimedFree: number[];
   claimedVip: number[];
@@ -79,8 +85,17 @@ export interface Progress {
   season: SeasonProgress;
 }
 
-export function defaultSeason(): SeasonProgress {
+const EMPTY_BASELINE: SeasonBaseline = { kills: 0, wins: 0, bossKills: {} };
+
+function baselineOf(stats: Progress["stats"]): SeasonBaseline {
+  return { kills: stats.kills, wins: stats.wins, bossKills: { ...stats.bossKills } };
+}
+
+/** Temporada vacía para `seasonId`, con la línea base dada. */
+function freshSeason(seasonId: string, baseline: SeasonBaseline): SeasonProgress {
   return {
+    seasonId,
+    baseline,
     pt: 0,
     claimedFree: [],
     claimedVip: [],
@@ -92,6 +107,10 @@ export function defaultSeason(): SeasonProgress {
     weeklyProgress: {},
     seasonClaimedIds: [],
   };
+}
+
+export function defaultSeason(): SeasonProgress {
+  return freshSeason(getSeasonId(), EMPTY_BASELINE);
 }
 
 export function defaultProgress(): Progress {
@@ -128,13 +147,10 @@ export function defaultProgress(): Progress {
 
 /** Sanea el bloque de temporada. Datos viejos o corruptos caen a valores limpios. */
 function sanitizeSeason(raw: unknown): SeasonProgress {
-  const d = defaultSeason();
-  if (!raw || typeof raw !== "object") return d;
+  if (!raw || typeof raw !== "object") return defaultSeason();
   const r = raw as Partial<Record<keyof SeasonProgress, unknown>>;
   const ids = (v: unknown): string[] =>
-    Array.isArray(v)
-      ? Array.from(new Set(v.filter((x): x is string => typeof x === "string")))
-      : [];
+    Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === "string"))) : [];
   const levels = (v: unknown): number[] =>
     Array.isArray(v)
       ? Array.from(
@@ -152,10 +168,17 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   };
   const stamp = (v: unknown): string =>
     typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
-  const pt =
-    typeof r.pt === "number" && Number.isFinite(r.pt) ? Math.max(0, Math.floor(r.pt)) : d.pt;
+  const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+  const rawBase = (r.baseline ?? {}) as Partial<SeasonBaseline>;
+  const pt = num(r.pt);
   return {
-    pt,
+    seasonId: typeof r.seasonId === "string" ? r.seasonId : "",
+    baseline: {
+      kills: num(rawBase.kills),
+      wins: num(rawBase.wins),
+      bossKills: counters(rawBase.bossKills),
+    },
+    pt: Math.floor(pt),
     claimedFree: levels(r.claimedFree),
     claimedVip: levels(r.claimedVip),
     dailyCompletedDate: stamp(r.dailyCompletedDate),
@@ -166,6 +189,16 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
     weeklyProgress: counters(r.weeklyProgress),
     seasonClaimedIds: ids(r.seasonClaimedIds),
   };
+}
+
+/**
+ * Si la temporada guardada no es la vigente (o nunca existió), la reinicia.
+ * La nueva línea base son las estadísticas actuales, así que los desafíos empiezan en cero.
+ * Créditos, naves, mejoras y estadísticas no se tocan.
+ */
+function renewSeason(p: Progress, now: number): void {
+  const id = getSeasonId(now);
+  if (p.season.seasonId !== id) p.season = freshSeason(id, baselineOf(p.stats));
 }
 
 /** Merge unknown/corrupt stored data onto defaults. */
@@ -220,6 +253,7 @@ export function sanitize(raw: unknown): Progress {
   };
   if (!p.ships.includes(p.selectedShip)) p.selectedShip = "falcon";
   if (!p.stages.includes(p.selectedStage)) p.selectedStage = "nova";
+  renewSeason(p, Date.now());
   return p;
 }
 
@@ -247,7 +281,7 @@ export interface ApplyOutcome {
 
 /* ---------------- Temporada: ventanas y avance ---------------- */
 
-/** Devuelve la temporada con los sellos al día; si la ventana cambió, vacía sus contadores. */
+/** Devuelve la temporada con los sellos UTC al día; si la ventana cambió, vacía sus contadores. */
 function rolled(s: SeasonProgress, now: number): SeasonProgress {
   const today = getUtcDateStr(now);
   const week = getUtcWeekStr(now);
@@ -283,6 +317,8 @@ function accumulateSeasonRun(s: SeasonProgress, r: RunResult, now: number): Seas
 
 export function applyRun(prev: Progress, r: RunResult, now: number = Date.now()): ApplyOutcome {
   const p: Progress = structuredClone(prev);
+  // Antes de sumar la partida: la línea base debe ser el estado previo a esta partida.
+  renewSeason(p, now);
   const credits = computeRunCredits(r, p.upgrades["salvage"] ?? 0);
   p.credits += credits;
   const st = p.stats;
@@ -370,8 +406,9 @@ export function buyShip(prev: Progress, id: string): BuyResult {
 }
 
 /** Suma PT de temporada sin tocar créditos. */
-export function addSeasonPt(prev: Progress, amount: number): Progress {
+export function addSeasonPt(prev: Progress, amount: number, now: number = Date.now()): Progress {
   const p = structuredClone(prev);
+  renewSeason(p, now);
   p.season.pt += Math.max(0, Math.floor(amount));
   return p;
 }
@@ -384,6 +421,12 @@ function grant(p: Progress, credits: number, pt: number) {
 }
 
 /* ---------------- Vistas de solo lectura para la UI ---------------- */
+
+/** Temporada vigente para este progreso, sin mutar nada. */
+export function currentSeason(p: Progress, now: number = Date.now()): SeasonProgress {
+  const id = getSeasonId(now);
+  return p.season.seasonId === id ? p.season : freshSeason(id, baselineOf(p.stats));
+}
 
 export interface SeasonBoardEntry {
   template: RunMissionTemplate;
@@ -415,7 +458,7 @@ export interface SeasonBoard {
 export function getSeasonBoard(p: Progress, now: number = Date.now()): SeasonBoard {
   const dateStr = getUtcDateStr(now);
   const weekStr = getUtcWeekStr(now);
-  const s = p.season;
+  const s = currentSeason(p, now);
   const dailyFresh = s.dailyCompletedDate === dateStr;
   const weeklyFresh = s.weeklyCompletedWeek === weekStr;
   const dailyDone = dailyFresh ? s.dailyCompletedIds : [];
@@ -441,7 +484,7 @@ export function getSeasonBoard(p: Progress, now: number = Date.now()): SeasonBoa
   const daily = toEntries(getActiveDailyMissions(dateStr), dailyDone, dailyCounters);
   const weekly = toEntries(getActiveWeeklyMissions(weekStr), weeklyDone, weeklyCounters);
   const challenges: SeasonChallengeEntry[] = SEASON_CHALLENGES.map((template) => {
-    const progress = template.progress(p);
+    const progress = template.progress(p, s.baseline);
     return {
       template,
       progress,
@@ -477,16 +520,17 @@ export function getSeasonClaimableCount(
   now: number = Date.now(),
 ): number {
   const board = getSeasonBoard(p, now);
+  const s = currentSeason(p, now);
   let count =
     board.daily.filter((e) => e.completed && !e.claimed).length +
     board.weekly.filter((e) => e.completed && !e.claimed).length +
     board.challenges.filter((e) => e.completed && !e.claimed).length +
     (board.chest.claimable ? 1 : 0);
-  const level = seasonLevelFor(p.season.pt);
+  const level = seasonLevelFor(s.pt);
   for (const node of SEASON_LEVELS) {
     if (node.level > level) break;
-    if (!p.season.claimedFree.includes(node.level)) count += 1;
-    if (hasVip && !p.season.claimedVip.includes(node.level)) count += 1;
+    if (!s.claimedFree.includes(node.level)) count += 1;
+    if (hasVip && !s.claimedVip.includes(node.level)) count += 1;
   }
   return count;
 }
@@ -500,11 +544,14 @@ export function claimPeriodMission(
   now: number = Date.now(),
 ): BuyResult {
   const board = getSeasonBoard(prev, now);
-  const entry = (period === "DAILY" ? board.daily : board.weekly).find((e) => e.template.id === id);
+  const entry = (period === "DAILY" ? board.daily : board.weekly).find(
+    (e) => e.template.id === id,
+  );
   if (!entry) return { ok: false, reason: "Misión no activa" };
   if (entry.claimed) return { ok: false, reason: "Ya reclamada" };
   if (!entry.completed) return { ok: false, reason: "Objetivo incompleto" };
   const p = structuredClone(prev);
+  renewSeason(p, now);
   p.season = rolled(p.season, now);
   if (period === "DAILY") p.season.dailyCompletedIds.push(id);
   else p.season.weeklyCompletedIds.push(id);
@@ -517,18 +564,25 @@ export function claimDailyChest(prev: Progress, now: number = Date.now()): BuyRe
   if (board.chest.claimed) return { ok: false, reason: "Cofre ya reclamado" };
   if (!board.chest.claimable) return { ok: false, reason: "Faltan misiones diarias" };
   const p = structuredClone(prev);
+  renewSeason(p, now);
   p.season = rolled(p.season, now);
   p.season.dailyCompletedIds.push(DAILY_CHEST.id);
   grant(p, DAILY_CHEST.reward, DAILY_CHEST.pt);
   return { ok: true, progress: p };
 }
 
-export function claimSeasonChallenge(prev: Progress, id: string): BuyResult {
+export function claimSeasonChallenge(
+  prev: Progress,
+  id: string,
+  now: number = Date.now(),
+): BuyResult {
   const t = SEASON_CHALLENGES.find((x) => x.id === id);
   if (!t) return { ok: false, reason: "Desafío desconocido" };
-  if (prev.season.seasonClaimedIds.includes(id)) return { ok: false, reason: "Ya reclamado" };
-  if (t.progress(prev) < t.goal) return { ok: false, reason: "Objetivo incompleto" };
+  const s = currentSeason(prev, now);
+  if (s.seasonClaimedIds.includes(id)) return { ok: false, reason: "Ya reclamado" };
+  if (t.progress(prev, s.baseline) < t.goal) return { ok: false, reason: "Objetivo incompleto" };
   const p = structuredClone(prev);
+  renewSeason(p, now);
   p.season.seasonClaimedIds.push(id);
   grant(p, t.reward, t.pt);
   return { ok: true, progress: p };
@@ -544,16 +598,19 @@ export function claimSeasonLevel(
   track: "FREE" | "VIP",
   level: number,
   hasVip: boolean,
+  now: number = Date.now(),
 ): BuyResult {
   const node = SEASON_LEVELS.find((n) => n.level === level);
   if (!node) return { ok: false, reason: "Nivel desconocido" };
-  if (seasonLevelFor(prev.season.pt) < level) return { ok: false, reason: "Nivel no alcanzado" };
+  const s = currentSeason(prev, now);
+  if (seasonLevelFor(s.pt) < level) return { ok: false, reason: "Nivel no alcanzado" };
   if (track === "VIP" && !hasVip) return { ok: false, reason: "Requiere VIP" };
-  const claimedList = track === "FREE" ? prev.season.claimedFree : prev.season.claimedVip;
+  const claimedList = track === "FREE" ? s.claimedFree : s.claimedVip;
   if (claimedList.includes(level)) return { ok: false, reason: "Ya reclamado" };
   const reward: { type: string; amount: number } =
     track === "FREE" ? node.freeReward : node.vipReward;
   const p = structuredClone(prev);
+  renewSeason(p, now);
   if (track === "FREE") p.season.claimedFree.push(level);
   else p.season.claimedVip.push(level);
   if (reward.type === "CR") grant(p, reward.amount, 0);

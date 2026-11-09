@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+ import { useEffect, useState, type ReactNode } from "react";
 import { Check, LockKeyhole } from "lucide-react";
 import { spriteUrl } from "@/game/sprites";
 import {
@@ -6,7 +6,7 @@ import {
   DAILY_TIERS,
   SEASON_LEVELS,
   SEASON_MAX_LEVEL,
-  SEASON_NAME,
+  getSeasonName,
   getDailyTimeRemaining,
   getSeasonBarInfo,
   getWeeklyTimeRemaining,
@@ -18,6 +18,7 @@ import {
   claimPeriodMission,
   claimSeasonChallenge,
   claimSeasonLevel,
+  currentSeason,
   getSeasonBoard,
   type BuyResult,
   type Progress,
@@ -120,7 +121,15 @@ function ActionButton({
 }
 
 /** Sprite del juego; si aún no carga o no existe, muestra un punto de color. */
-function SpriteIcon({ id, color, small = false }: { id: string; color: string; small?: boolean }) {
+function SpriteIcon({
+  id,
+  color,
+  small = false,
+}: {
+  id: string;
+  color: string;
+  small?: boolean;
+}) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     try {
@@ -161,8 +170,9 @@ export function MissionsSection({
   }, []);
 
   const board = getSeasonBoard(progress, now);
-  const bar = getSeasonBarInfo(progress.season.pt);
-  const pt = progress.season.pt;
+  const season = currentSeason(progress, now);
+  const bar = getSeasonBarInfo(season.pt);
+  const pt = season.pt;
 
   const apply = (result: BuyResult, okMessage: string) => {
     if (result.ok) {
@@ -191,7 +201,7 @@ export function MissionsSection({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.25em] text-cyan-300/70">
-              CENTRO DE OPERACIONES · {SEASON_NAME}
+              CENTRO DE OPERACIONES · {getSeasonName(now)}
             </p>
             <p className="font-arcade mt-1.5 text-base text-[#00f0ff] drop-shadow-[0_0_10px_#00f0ff80] sm:text-xl">
               NIVEL {bar.level}
@@ -396,11 +406,11 @@ export function MissionsSection({
         <section className="border border-cyan-500/20 bg-[#070914]/80">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/20 px-3 py-2 text-xs font-bold uppercase tracking-widest">
             <span className="text-cyan-100/70">
-              GRATUITO · {progress.season.claimedFree.length}/{SEASON_MAX_LEVEL}
+              GRATUITO · {season.claimedFree.length}/{SEASON_MAX_LEVEL}
             </span>
             <span className={hasVip ? "text-[#ffd700]" : "text-white/50"}>
               {hasVip
-                ? `VIP ACTIVO · ${progress.season.claimedVip.length}/${SEASON_MAX_LEVEL}`
+                ? `VIP ACTIVO · ${season.claimedVip.length}/${SEASON_MAX_LEVEL}`
                 : "SIN VIP · el carril VIP solo se puede ver"}
             </span>
           </div>
@@ -416,8 +426,8 @@ export function MissionsSection({
             <ul>
               {SEASON_LEVELS.map((node) => {
                 const reached = bar.level >= node.level;
-                const freeClaimed = progress.season.claimedFree.includes(node.level);
-                const vipClaimed = progress.season.claimedVip.includes(node.level);
+                const freeClaimed = season.claimedFree.includes(node.level);
+                const vipClaimed = season.claimedVip.includes(node.level);
                 return (
                   <li
                     key={node.level}
@@ -437,10 +447,12 @@ export function MissionsSection({
                     {/* Carril gratuito */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2">
-                        <SpriteIcon id={REWARD_SPRITE[node.freeReward.type]} color={CYAN} small />
-                        <span className="truncate text-xs text-white/85">
-                          {node.freeReward.label}
-                        </span>
+                        <SpriteIcon
+                          id={REWARD_SPRITE[node.freeReward.type]}
+                          color={CYAN}
+                          small
+                        />
+                        <span className="truncate text-xs text-white/85">{node.freeReward.label}</span>
                       </div>
                       <ActionButton
                         tone={freeClaimed ? "done" : reached ? "cyan" : "off"}
@@ -460,7 +472,11 @@ export function MissionsSection({
                     {/* Carril VIP */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-2">
-                        <SpriteIcon id={REWARD_SPRITE[node.vipReward.type]} color={GOLD} small />
+                        <SpriteIcon
+                          id={REWARD_SPRITE[node.vipReward.type]}
+                          color={GOLD}
+                          small
+                        />
                         <div className="min-w-0">
                           <span className="block truncate text-xs text-white/85">
                             {node.vipReward.label}
@@ -563,10 +579,7 @@ function MissionRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-white">{title}</h3>
-          <span
-            className="text-[10px] font-bold uppercase tracking-widest"
-            style={{ color: accent }}
-          >
+          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
             {tag}
           </span>
         </div>
