@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+ import { useEffect, useState, type ReactNode } from "react";
 import { Check, LockKeyhole } from "lucide-react";
 import { spriteUrl } from "@/game/sprites";
 import {
@@ -49,6 +49,14 @@ const MISSION_SPRITE: Record<MissionIcon, string> = {
   crosshair: "ic_lock",
 };
 
+/** Sprite según el tipo de recompensa del pase. */
+const REWARD_SPRITE: Record<"CR" | "OBS" | "TITLE" | "SKIN", string> = {
+  CR: "ic_credits",
+  OBS: "ic_salvage",
+  TITLE: "ic_xp",
+  SKIN: "ic_nova",
+};
+
 const TIER_STYLE: Record<MissionTier, { label: string; color: string }> = {
   BASIC: { label: "BÁSICO", color: "#00f0ff" },
   PILOT: { label: "PILOTO", color: "#a3e635" },
@@ -58,6 +66,7 @@ const TIER_STYLE: Record<MissionTier, { label: string; color: string }> = {
 const WEEKLY_COLOR = "#d946ef";
 const CHALLENGE_COLOR = "#fb7185";
 const GOLD = "#ffd700";
+const CYAN = "#00f0ff";
 
 const fmt = (n: number) => Math.floor(n).toLocaleString();
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -83,7 +92,7 @@ const TONE: Record<Tone, string> = {
   done: "border-white/10 bg-transparent text-white/35",
 };
 const BTN =
-  "h-8 min-w-[6.5rem] shrink-0 border px-3 text-[10px] font-bold uppercase tracking-widest transition disabled:cursor-not-allowed";
+  "h-9 min-w-[7rem] shrink-0 border px-3 text-xs font-bold uppercase tracking-widest transition disabled:cursor-not-allowed";
 
 function ActionButton({
   tone,
@@ -111,7 +120,15 @@ function ActionButton({
 }
 
 /** Sprite del juego; si aún no carga o no existe, muestra un punto de color. */
-function SpriteIcon({ id, color }: { id: string; color: string }) {
+function SpriteIcon({
+  id,
+  color,
+  small = false,
+}: {
+  id: string;
+  color: string;
+  small?: boolean;
+}) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     try {
@@ -120,13 +137,15 @@ function SpriteIcon({ id, color }: { id: string; color: string }) {
       setSrc(null);
     }
   }, [id]);
+  const box = small ? "size-8" : "size-10";
+  const img = small ? "size-6" : "size-7";
   return (
     <span
-      className="grid size-9 shrink-0 place-items-center border bg-black/40"
+      className={`grid ${box} shrink-0 place-items-center border bg-black/40`}
       style={{ borderColor: `${color}66` }}
     >
       {src ? (
-        <img src={src} alt="" className="size-7 [image-rendering:pixelated]" />
+        <img src={src} alt="" className={`${img} [image-rendering:pixelated]`} />
       ) : (
         <span className="size-2" style={{ background: color }} />
       )}
@@ -179,14 +198,14 @@ export function MissionsSection({
       <header className="border border-cyan-400/30 bg-[#070914]/90 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[9px] uppercase tracking-[0.25em] text-cyan-300/70">
+            <p className="text-xs uppercase tracking-[0.25em] text-cyan-300/70">
               CENTRO DE OPERACIONES · {SEASON_NAME}
             </p>
             <p className="font-arcade mt-1.5 text-base text-[#00f0ff] drop-shadow-[0_0_10px_#00f0ff80] sm:text-xl">
               NIVEL {bar.level}
               <span className="text-white/40"> / {SEASON_MAX_LEVEL}</span>
             </p>
-            <p className="mt-1 text-[10px] uppercase tracking-widest text-white/55 tabular-nums">
+            <p className="mt-1 text-xs uppercase tracking-widest text-white/55 tabular-nums">
               {fmt(pt)} PT
               {bar.nextPt !== null
                 ? ` · ${fmt(bar.nextPt - pt)} PT PARA EL NIVEL ${bar.level + 1}`
@@ -230,7 +249,7 @@ export function MissionsSection({
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`h-9 border px-2 text-[10px] font-bold uppercase tracking-widest transition ${
+              className={`h-10 border px-2 text-xs font-bold uppercase tracking-widest transition ${
                 active
                   ? "border-cyan-300/70 bg-cyan-300/15 text-cyan-100"
                   : "border-cyan-500/20 bg-[#0b0d1c] text-white/55 hover:text-cyan-100"
@@ -250,7 +269,7 @@ export function MissionsSection({
             return (
               <section key={tier} className="border border-cyan-500/20 bg-[#0b0d1c]/80">
                 <h3
-                  className="border-b border-cyan-500/15 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em]"
+                  className="border-b border-cyan-500/15 px-3 py-2 text-sm font-bold uppercase tracking-[0.2em]"
                   style={{ color: style.color }}
                 >
                   {style.label}
@@ -287,10 +306,10 @@ export function MissionsSection({
           <div className="flex flex-wrap items-center gap-4 border border-[#ffd700]/35 bg-[#0b0d1c]/80 p-3">
             <SpriteIcon id="ic_salvage" color={GOLD} />
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#ffd700]">
+              <p className="text-sm font-bold uppercase tracking-[0.12em] text-[#ffd700]">
                 COFRE DIARIO
               </p>
-              <p className="mt-0.5 text-[10px] text-white/50">
+              <p className="mt-0.5 text-xs text-white/50">
                 Reclama {DAILY_CHEST.threshold} de 6 misiones · +{fmt(DAILY_CHEST.reward)} CR · +
                 {DAILY_CHEST.pt} PT
               </p>
@@ -383,7 +402,7 @@ export function MissionsSection({
 
       {tab === "PASS" ? (
         <section className="border border-cyan-500/20 bg-[#070914]/80">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/20 px-3 py-2 text-[9px] font-bold uppercase tracking-widest">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/20 px-3 py-2 text-xs font-bold uppercase tracking-widest">
             <span className="text-cyan-100/70">
               GRATUITO · {progress.season.claimedFree.length}/{SEASON_MAX_LEVEL}
             </span>
@@ -394,14 +413,14 @@ export function MissionsSection({
             </span>
           </div>
 
-          <div className="grid grid-cols-[2.5rem_4rem_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-white/40">
+          <div className="grid grid-cols-[2.5rem_4.5rem_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white/50">
             <span>NV</span>
             <span>PT</span>
-            <span className="text-cyan-200/70">GRATUITO</span>
-            <span className="text-[#ffd700]/80">VIP</span>
+            <span className="text-sm text-cyan-200">GRATUITO</span>
+            <span className="text-sm text-[#ffd700]">VIP</span>
           </div>
 
-          <div className="max-h-[30rem] overflow-y-auto [scrollbar-width:thin]">
+          <div className="max-h-[32rem] overflow-y-auto [scrollbar-width:thin]">
             <ul>
               {SEASON_LEVELS.map((node) => {
                 const reached = bar.level >= node.level;
@@ -410,24 +429,29 @@ export function MissionsSection({
                 return (
                   <li
                     key={node.level}
-                    className={`grid grid-cols-[2.5rem_4rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 border-b border-white/5 px-3 py-2 ${
+                    className={`grid grid-cols-[2.5rem_4.5rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 border-b border-white/5 px-3 py-2.5 ${
                       reached ? "" : "opacity-60"
                     }`}
                   >
                     <span
-                      className={`font-arcade text-[11px] ${reached ? "text-cyan-200" : "text-white/40"}`}
+                      className={`font-arcade text-sm ${reached ? "text-cyan-200" : "text-white/40"}`}
                     >
                       {pad(node.level)}
                     </span>
-                    <span className="text-[10px] tabular-nums text-white/45">
+                    <span className="text-xs tabular-nums text-white/50">
                       {fmt(node.requiredPt)}
                     </span>
 
                     {/* Carril gratuito */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="truncate text-[10px] text-white/80">
-                        {node.freeReward.label}
-                      </span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <SpriteIcon
+                          id={REWARD_SPRITE[node.freeReward.type]}
+                          color={CYAN}
+                          small
+                        />
+                        <span className="truncate text-xs text-white/85">{node.freeReward.label}</span>
+                      </div>
                       <ActionButton
                         tone={freeClaimed ? "done" : reached ? "cyan" : "off"}
                         disabled={!reached || freeClaimed}
@@ -437,7 +461,7 @@ export function MissionsSection({
                             `Nivel ${node.level} gratuito reclamado`,
                           )
                         }
-                        className="h-7 min-w-[5.5rem]"
+                        className="h-8 min-w-[6rem]"
                       >
                         {freeClaimed ? "RECLAMADO" : "RECLAMAR"}
                       </ActionButton>
@@ -445,15 +469,22 @@ export function MissionsSection({
 
                     {/* Carril VIP */}
                     <div className="flex min-w-0 items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="block truncate text-[10px] text-white/80">
-                          {node.vipReward.label}
-                        </span>
-                        {!hasVip ? (
-                          <span className="mt-0.5 inline-block border border-[#ffd700]/50 px-1 text-[7px] font-bold uppercase tracking-widest text-[#ffd700]">
-                            REQUIERE VIP
+                      <div className="flex min-w-0 items-center gap-2">
+                        <SpriteIcon
+                          id={REWARD_SPRITE[node.vipReward.type]}
+                          color={GOLD}
+                          small
+                        />
+                        <div className="min-w-0">
+                          <span className="block truncate text-xs text-white/85">
+                            {node.vipReward.label}
                           </span>
-                        ) : null}
+                          {!hasVip ? (
+                            <span className="mt-0.5 inline-block border border-[#ffd700]/50 px-1 text-[10px] font-bold uppercase tracking-widest text-[#ffd700]">
+                              REQUIERE VIP
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <ActionButton
                         tone={vipClaimed ? "done" : reached && hasVip ? "gold" : "off"}
@@ -464,15 +495,15 @@ export function MissionsSection({
                             `Nivel ${node.level} VIP reclamado`,
                           )
                         }
-                        className="h-7 min-w-[5.5rem]"
+                        className="h-8 min-w-[6rem]"
                       >
                         {vipClaimed ? (
                           <>
-                            <Check className="size-3" /> RECLAMADO
+                            <Check className="size-3.5" /> RECLAMADO
                           </>
                         ) : !hasVip ? (
                           <>
-                            <LockKeyhole className="size-3" /> VIP
+                            <LockKeyhole className="size-3.5" /> VIP
                           </>
                         ) : reached ? (
                           "RECLAMAR"
@@ -495,8 +526,8 @@ export function MissionsSection({
 function Countdown({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-cyan-400/20 bg-black/30 px-2.5 py-1.5">
-      <p className="text-[8px] tracking-[0.18em] text-white/45">{label}</p>
-      <p className="font-arcade mt-1 text-[10px] tabular-nums text-cyan-100">{value}</p>
+      <p className="text-[10px] tracking-[0.18em] text-white/50">{label}</p>
+      <p className="font-arcade mt-1 text-xs tabular-nums text-cyan-100">{value}</p>
     </div>
   );
 }
@@ -537,7 +568,7 @@ function MissionRow({
 
   return (
     <li
-      className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b border-cyan-500/15 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_11rem_6.5rem_6.5rem] sm:gap-x-4 ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 border-b border-cyan-500/15 px-3 py-3 sm:grid-cols-[auto_minmax(0,1fr)_12rem_7rem_7rem] sm:gap-x-4 ${
         claimed ? "opacity-50" : ""
       }`}
     >
@@ -545,26 +576,23 @@ function MissionRow({
 
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-white">{title}</h3>
-          <span
-            className="text-[8px] font-bold uppercase tracking-widest"
-            style={{ color: accent }}
-          >
+          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-white">{title}</h3>
+          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
             {tag}
           </span>
         </div>
-        <p className="mt-0.5 text-[10px] text-white/50">{desc}</p>
+        <p className="mt-0.5 text-xs text-white/55">{desc}</p>
       </div>
 
       <div className="col-span-2 sm:col-span-1">
-        <div className="mb-1 flex justify-between text-[9px] tabular-nums text-white/55">
+        <div className="mb-1 flex justify-between text-xs tabular-nums text-white/60">
           <span>
             {fmt(shown)} / {fmt(goal)}
           </span>
           <span>{percentage}%</span>
         </div>
         <div
-          className="h-1.5 bg-white/10"
+          className="h-2 bg-white/10"
           role="progressbar"
           aria-label={`Progreso: ${title}`}
           aria-valuenow={percentage}
@@ -578,7 +606,7 @@ function MissionRow({
         </div>
       </div>
 
-      <div className="flex gap-3 text-[10px] font-bold tabular-nums sm:flex-col sm:gap-0.5 sm:text-right">
+      <div className="flex gap-3 text-xs font-bold tabular-nums sm:flex-col sm:gap-0.5 sm:text-right">
         <span className="text-[#ffd700]">+{fmt(reward)} CR</span>
         <span className="text-[#00f0ff]">+{fmt(pt)} PT</span>
       </div>
@@ -591,7 +619,7 @@ function MissionRow({
       >
         {claimed ? (
           <>
-            <Check className="size-3" /> RECLAMADA
+            <Check className="size-3.5" /> RECLAMADA
           </>
         ) : completed ? (
           "RECLAMAR"
