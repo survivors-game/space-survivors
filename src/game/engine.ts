@@ -2385,9 +2385,12 @@ export class Engine {
         // Al acercarse demasiado, se separan y la rodean en movimiento.
         if (d < 90) {
           const orbit = e.uid % 2 === 0 ? 1 : -1;
+          const distance = Math.hypot(dx, dy);
+          const awayX = distance > 0.001 ? -dx : Math.cos(e.uid);
+          const awayY = distance > 0.001 ? -dy : Math.sin(e.uid);
           const radial = d < 50 ? 1.5 : 0.25;
-          let vx = -dx * radial - dy * orbit;
-          let vy = -dy * radial + dx * orbit;
+          const vx = awayX * radial - awayY * orbit;
+          const vy = awayY * radial + awayX * orbit;
           const mag = Math.hypot(vx, vy) || 1;
           e.vx = (vx / mag) * e.speed;
           e.vy = (vy / mag) * e.speed;
