@@ -2381,9 +2381,21 @@ export class Engine {
         break;
       }
       case "spawnling": {
-        const a = Math.atan2(dy, dx) + Math.sin(e.t * 9 + e.uid) * 0.4;
-        e.vx = Math.cos(a) * e.speed;
-        e.vy = Math.sin(a) * e.speed;
+        // Las larvas persiguen a la nave, pero no deben quedarse pegadas a ella.
+        // Al acercarse demasiado, se separan y la rodean en movimiento.
+        if (d < 90) {
+          const orbit = e.uid % 2 === 0 ? 1 : -1;
+          const radial = d < 50 ? 1.5 : 0.25;
+          let vx = -dx * radial - dy * orbit;
+          let vy = -dy * radial + dx * orbit;
+          const mag = Math.hypot(vx, vy) || 1;
+          e.vx = (vx / mag) * e.speed;
+          e.vy = (vy / mag) * e.speed;
+        } else {
+          const a = Math.atan2(dy, dx) + Math.sin(e.t * 9 + e.uid) * 0.4;
+          e.vx = Math.cos(a) * e.speed;
+          e.vy = Math.sin(a) * e.speed;
+        }
         break;
       }
       case "generator": {
