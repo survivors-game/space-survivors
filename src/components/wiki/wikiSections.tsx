@@ -177,16 +177,28 @@ const inicio: WikiSection = {
     <>
       <H>Bienvenida, piloto</H>
       <P>
-        SPACE SURVIVORS es un juego arcade de supervivencia. Pilotas una nave en un campo de
-        batalla donde las oleadas enemigas no se detienen. Durante la partida mejoras tu arsenal,
-        y entre partidas mejoras tu cuenta en el hangar para llegar más lejos.
+        SPACE SURVIVORS es un juego arcade de supervivencia. Pilotas una nave en un campo de batalla
+        donde las oleadas enemigas no se detienen. Durante la partida mejoras tu arsenal, y entre
+        partidas mejoras tu cuenta en el hangar para llegar más lejos.
       </P>
       <Steps
         items={[
-          { title: "Elige nave y sector", text: "Selecciona una nave del carrusel y el sector donde combatirás." },
-          { title: "Sobrevive", text: "Destruye enemigos, sube de nivel y elige mejoras para tu arsenal." },
-          { title: "Mejora en el hangar", text: "Usa los créditos ganados en MEJORAS para hacer más fuerte a tu flota." },
-          { title: "Completa objetivos", text: "Misiones diarias, semanales y el pase de temporada te dan recompensas extra." },
+          {
+            title: "Elige nave y sector",
+            text: "Selecciona una nave del carrusel y el sector donde combatirás.",
+          },
+          {
+            title: "Sobrevive",
+            text: "Destruye enemigos, sube de nivel y elige mejoras para tu arsenal.",
+          },
+          {
+            title: "Mejora en el hangar",
+            text: "Usa los créditos ganados en MEJORAS para hacer más fuerte a tu flota.",
+          },
+          {
+            title: "Completa objetivos",
+            text: "Misiones diarias, semanales y el pase de temporada te dan recompensas extra.",
+          },
         ]}
       />
       <H>Primeros consejos</H>
@@ -215,9 +227,9 @@ const controles: WikiSection = {
       <Stat label="Pausa" value="Esc o P" />
       <div className="h-4" />
       <P>
-        El impulso multiplica tu velocidad por {CONFIG.boost.mult} durante{" "}
-        {CONFIG.boost.duration} segundos. Después se recarga durante {CONFIG.boost.cooldown}{" "}
-        segundos. Úsalo para atravesar enjambres o escapar de un jefe.
+        El impulso multiplica tu velocidad por {CONFIG.boost.mult} durante {CONFIG.boost.duration}{" "}
+        segundos. Después se recarga durante {CONFIG.boost.cooldown} segundos. Úsalo para atravesar
+        enjambres o escapar de un jefe.
       </P>
       <H>Mando</H>
       <P>
@@ -226,8 +238,8 @@ const controles: WikiSection = {
       </P>
       <H>Pantalla táctil</H>
       <P>
-        En móvil aparece un joystick en pantalla para moverte. Basta con arrastrar el dedo desde
-        el centro hacia la dirección que quieras.
+        En móvil aparece un joystick en pantalla para moverte. Basta con arrastrar el dedo desde el
+        centro hacia la dirección que quieras.
       </P>
     </>
   ),
@@ -249,16 +261,16 @@ const partida: WikiSection = {
         </Card>
         <Card title="INFINITO" subtitle="Sin límite de tiempo">
           <P>
-            Sobrevive todo lo que puedas. Los jefes aparecen en orden: LEVIATÁN, NÉMESIS y
-            COLOSO. El objetivo es llegar lo más lejos posible.
+            Sobrevive todo lo que puedas. Los jefes aparecen en orden: LEVIATÁN, NÉMESIS y COLOSO.
+            El objetivo es llegar lo más lejos posible.
           </P>
         </Card>
       </Grid>
       <H>La dificultad sube</H>
       <P>
         Mientras avanza la misión, los enemigos ganan vida (+{pct(CONFIG.difficulty.hpScalePerMin)}{" "}
-        por minuto) y causan más daño (+{pct(CONFIG.difficulty.dmgScalePerMin)} por minuto). Por
-        eso una partida larga es más peligrosa que una corta, aunque te dé más recompensa.
+        por minuto) y causan más daño (+{pct(CONFIG.difficulty.dmgScalePerMin)} por minuto). Por eso
+        una partida larga es más peligrosa que una corta, aunque te dé más recompensa.
       </P>
       <H>Experiencia y niveles</H>
       <P>
@@ -274,8 +286,8 @@ const partida: WikiSection = {
       </P>
       <H>Resultado</H>
       <P>
-        Al terminar una partida, ganes o pierdas, recibes créditos según tu tiempo de
-        supervivencia, tu nivel y el sector. Ganar la misión multiplica esa recompensa por 1,5.
+        Al terminar una partida, ganes o pierdas, recibes créditos según tu tiempo de supervivencia,
+        tu nivel y el sector. Ganar la misión multiplica esa recompensa por 1,5.
       </P>
     </>
   ),
@@ -289,8 +301,8 @@ const sectores: WikiSection = {
     <>
       <H>Mapa de sectores</H>
       <P>
-        Hay cuatro sectores. Cada uno es más difícil que el anterior, pero también paga más
-        créditos por partida.
+        Hay cuatro sectores. Cada uno es más difícil que el anterior, pero también paga más créditos
+        por partida.
       </P>
       <Grid>
         {STAGES.map((s) => (
@@ -374,8 +386,8 @@ const jefes: WikiSection = {
       <H>Enfriamiento</H>
       <P>
         Después de derrotar a un jefe, queda bloqueado durante 1 hora. Si su turno llega mientras
-        está bloqueado, aparece un aviso y se salta esa aparición. Mientras tanto, el resto de
-        jefes sigue disponible.
+        está bloqueado, aparece un aviso y se salta esa aparición. Mientras tanto, el resto de jefes
+        sigue disponible.
       </P>
       <Tip>
         Un jefe bloqueado no pierde nada: simplemente vuelve a estar disponible cuando termina su
@@ -427,7 +439,10 @@ const armas: WikiSection = {
           <Card key={w.id} sprite={w.icon} color={w.color} title={w.name}>
             <P>{w.desc}</P>
             <Stat label="Niveles" value={`Hasta ${w.levels.length}`} />
-            <Stat label="Evolución" value={`${w.evo.name} (requiere ${passiveName(w.evo.passive)})`} />
+            <Stat
+              label="Evolución"
+              value={`${w.evo.name} (requiere ${passiveName(w.evo.passive)})`}
+            />
           </Card>
         ))}
       </Grid>
@@ -449,8 +464,8 @@ const pasivas: WikiSection = {
     <>
       <H>Pasivas</H>
       <P>
-        Las pasivas mejoran tu nave de forma continua durante la partida, como más daño,
-        velocidad o blindaje. Puedes tener hasta {CONFIG.player.maxPassives} pasivas distintas.
+        Las pasivas mejoran tu nave de forma continua durante la partida, como más daño, velocidad o
+        blindaje. Puedes tener hasta {CONFIG.player.maxPassives} pasivas distintas.
       </P>
       <Grid>
         {PASSIVES.map((p) => (
@@ -491,8 +506,8 @@ const combate: WikiSection = {
       />
       <H>Recalibrar</H>
       <P>
-        Si no te gustan las opciones, puedes recalibrarlas. El número de recalibraciones depende
-        de tu mejora RECALIBRADOR en el hangar: cada nivel suma una recalibración por partida.
+        Si no te gustan las opciones, puedes recalibrarlas. El número de recalibraciones depende de
+        tu mejora RECALIBRADOR en el hangar: cada nivel suma una recalibración por partida.
       </P>
       <Tip>
         Un build sólido combina pocas armas bien evolucionadas con pasivas que las potencien. Es
@@ -529,9 +544,9 @@ const mejoras: WikiSection = {
       </Grid>
       <H>Etapa de élite (niveles 6 al 10)</H>
       <P>
-        Cada nivel de élite pide un requisito de mérito, como partidas completadas, jefes
-        derrotados o sectores superados. Los requisitos son distintos para cada mejora, así que
-        conviene elegir cuáles subir primero según cómo juegas.
+        Cada nivel de élite pide un requisito de mérito, como partidas completadas, jefes derrotados
+        o sectores superados. Los requisitos son distintos para cada mejora, así que conviene elegir
+        cuáles subir primero según cómo juegas.
       </P>
       <P>
         Además, cada nivel de élite aporta el {pct(ELITE_EFFICIENCY)} de lo que aporta un nivel
@@ -582,8 +597,8 @@ const misiones: WikiSection = {
     <>
       <H>Misiones diarias</H>
       <P>
-        Cada día se eligen {DAILY_PER_TIER} misiones de cada grupo: básico, piloto y élite, con
-        un total de {DAILY_PER_TIER * 3}. Se reinician a medianoche UTC.
+        Cada día se eligen {DAILY_PER_TIER} misiones de cada grupo: básico, piloto y élite, con un
+        total de {DAILY_PER_TIER * 3}. Se reinician a medianoche UTC.
       </P>
       <Grid>
         {DAILY_MISSION_TEMPLATES.map((m) => (
@@ -633,7 +648,8 @@ const misiones: WikiSection = {
       <Bullets
         items={[
           <>
-            <strong>Carril gratuito:</strong> lo puede reclamar cualquier piloto al alcanzar el nivel.
+            <strong>Carril gratuito:</strong> lo puede reclamar cualquier piloto al alcanzar el
+            nivel.
           </>,
           <>
             <strong>Carril VIP:</strong> necesita VIP activo para reclamar. Sin VIP puedes ver sus
@@ -642,7 +658,9 @@ const misiones: WikiSection = {
         ]}
       />
       <Grid>
-        {SEASON_LEVELS.filter((n) => n.level === 1 || n.level === 10 || n.level === SEASON_MAX_LEVEL).map((n) => (
+        {SEASON_LEVELS.filter(
+          (n) => n.level === 1 || n.level === 10 || n.level === SEASON_MAX_LEVEL,
+        ).map((n) => (
           <Card key={n.level} title={`Nivel ${n.level}`} subtitle={`${fmt(n.requiredPt)} PT`}>
             <Stat label="Gratuito" value={n.freeReward.label} />
             <Stat label="VIP" value={n.vipReward.label} />
@@ -708,8 +726,8 @@ const mercado: WikiSection = {
     <>
       <H>Comprar y vender</H>
       <P>
-        En la pestaña MERCADO puedes comprar y vender naves y objetos con otros pilotos. Solo
-        puedes publicar naves que ya tienes desbloqueadas.
+        En la pestaña MERCADO puedes comprar y vender naves y objetos con otros pilotos. Solo puedes
+        publicar naves que ya tienes desbloqueadas.
       </P>
       <Bullets
         items={[
@@ -810,7 +828,10 @@ const glosario: WikiSection = {
           ["XP", "Experiencia. Se gana con enemigos y sube tu nivel durante la partida."],
           ["Integridad", "Vida de tu nave. Si llega a cero, la partida termina."],
           ["Velocidad", "Qué tan rápido te mueves."],
-          ["Recarga", "Tiempo entre disparos de tus armas. Menos recarga significa disparar más seguido."],
+          [
+            "Recarga",
+            "Tiempo entre disparos de tus armas. Menos recarga significa disparar más seguido.",
+          ],
           ["Reparación", "Vida que recuperas por segundo."],
           ["Evolución", "Versión potenciada de un arma, al combinar nivel máximo con su pasiva."],
           ["Enfriamiento", "Tiempo de espera después de derrotar a un jefe."],
@@ -818,7 +839,9 @@ const glosario: WikiSection = {
           ["Módulo", "Especialización elegida al llegar al nivel 10 de una mejora."],
         ].map(([term, def]) => (
           <div key={term} className="border border-cyan-500/20 bg-[#0b0d1c]/85 p-3">
-            <p className="font-arcade text-[10px] uppercase tracking-wider text-[#ffd700]">{term}</p>
+            <p className="font-arcade text-[10px] uppercase tracking-wider text-[#ffd700]">
+              {term}
+            </p>
             <p className="mt-2 text-xs leading-5 text-white/65">{def}</p>
           </div>
         ))}
