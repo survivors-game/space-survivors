@@ -1,4 +1,4 @@
- import {
+import {
   useCallback,
   useEffect,
   useRef,
@@ -2902,7 +2902,9 @@ function Index() {
           </section>
         ) : null}
 
-        {googlePlayer && (screen === "MENU" || screen === "HANGAR" || screen === "SELECT") && <GameChat />}
+        {googlePlayer && (screen === "MENU" || screen === "HANGAR" || screen === "SELECT") && (
+          <GameChat />
+        )}
 
         <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-cyan-500/15 pt-4 text-[9px] uppercase tracking-[0.18em] text-white/30">
           <span>

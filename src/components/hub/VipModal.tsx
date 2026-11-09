@@ -1,4 +1,4 @@
- import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Coins, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
 import {
   VIP_DURATION_DAYS,
@@ -33,11 +33,36 @@ const MAGENTA = "#ff4d9d";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const BENEFITS: Benefit[] = [
-  { label: "+35% drops en combate", detail: "Más reparaciones, imanes y PEM.", Icon: Zap, color: CYAN },
-  { label: "+20% créditos", detail: "Bonificación por cada nave enemiga destruida.", Icon: Coins, color: GOLD },
-  { label: "Distintivo en chat", detail: "[VIP] y nombre dorado en el canal global.", Icon: Sparkles, color: GOLD },
-  { label: "Pase de temporada élite", detail: "Carril exclusivo de recompensas.", Icon: Trophy, color: MAGENTA },
-  { label: "Comando de alianza", detail: "Fundar alianzas y liderar guerras.", Icon: Users, color: VIOLET },
+  {
+    label: "+35% drops en combate",
+    detail: "Más reparaciones, imanes y PEM.",
+    Icon: Zap,
+    color: CYAN,
+  },
+  {
+    label: "+20% créditos",
+    detail: "Bonificación por cada nave enemiga destruida.",
+    Icon: Coins,
+    color: GOLD,
+  },
+  {
+    label: "Distintivo en chat",
+    detail: "[VIP] y nombre dorado en el canal global.",
+    Icon: Sparkles,
+    color: GOLD,
+  },
+  {
+    label: "Pase de temporada élite",
+    detail: "Carril exclusivo de recompensas.",
+    Icon: Trophy,
+    color: MAGENTA,
+  },
+  {
+    label: "Comando de alianza",
+    detail: "Fundar alianzas y liderar guerras.",
+    Icon: Users,
+    color: VIOLET,
+  },
 ];
 
 interface Feedback {
@@ -128,7 +153,10 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
                 <>
                   <p className="mt-1 font-arcade text-[10px] text-[#ffd700]">ACTIVO</p>
                   <p className="mt-1 text-xs text-white/85">
-                    Expira en <span className="font-bold text-[#ffd700]">{formatVipTimeRemaining(vipUntil, now)}</span>
+                    Expira en{" "}
+                    <span className="font-bold text-[#ffd700]">
+                      {formatVipTimeRemaining(vipUntil, now)}
+                    </span>
                   </p>
                   <div className="mt-2 h-1.5 w-full bg-white/10">
                     <div className="h-full bg-[#ffd700]" style={{ width: `${progress}%` }} />
@@ -169,7 +197,9 @@ export function VipModal({ open, onClose, vipUntil, obsidian, onPurchase }: VipM
               disabled={busy}
               className="font-arcade h-9 w-full rounded-none border border-[#ffd700] bg-[#ffd700]/15 text-[9px] uppercase tracking-[0.04em] text-[#ffd700] transition hover:bg-[#ffd700]/25 disabled:cursor-wait disabled:opacity-60"
             >
-              {busy ? "PROCESANDO..." : `${active ? "Renovar" : "Activar"} · ${VIP_PRICE_OBSIDIAN} OBS`}
+              {busy
+                ? "PROCESANDO..."
+                : `${active ? "Renovar" : "Activar"} · ${VIP_PRICE_OBSIDIAN} OBS`}
             </button>
           </section>
 

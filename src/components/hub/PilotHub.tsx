@@ -1,4 +1,4 @@
- import { useMemo } from "react";
+import { useMemo } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
@@ -51,12 +51,9 @@ const fmt = (n: number) => n.toLocaleString("es-CO");
 
 /** Normaliza las estadísticas reales de la nave (src/game/data/ships.ts) a 0..1. */
 function computeShipBars(ship: ShipDef) {
-  const attack = clamp01(((ship.dmg / ship.cd) - 0.9) / 0.35);
+  const attack = clamp01((ship.dmg / ship.cd - 0.9) / 0.35);
   const defense = clamp01(
-    0.25 +
-      ((ship.hp - 80) / 70) * 0.5 +
-      (ship.armor / 2) * 0.15 +
-      (ship.shield / 30) * 0.1,
+    0.25 + ((ship.hp - 80) / 70) * 0.5 + (ship.armor / 2) * 0.15 + (ship.shield / 30) * 0.1,
   );
   const speed = clamp01(0.2 + ((ship.speed - 200) / 75) * 0.8);
   return { attack, defense, speed };
@@ -159,7 +156,8 @@ export function PilotHub({
   const combatRows = shipCombatRows(selectedShip);
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
-  const shortId = pilotId.length > 8 ? `${pilotId.slice(0, 8).toUpperCase()}…` : pilotId.toUpperCase();
+  const shortId =
+    pilotId.length > 8 ? `${pilotId.slice(0, 8).toUpperCase()}…` : pilotId.toUpperCase();
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-3 text-white">
@@ -239,9 +237,18 @@ export function PilotHub({
                     ))}
                   </span>
                 </div>
-                <p className="font-arcade text-[9px] leading-relaxed text-white">{selectedStage.name}</p>
-                <p className="flex items-center gap-1 text-[10px] font-semibold" style={{ color: hasHazard ? "#fbbf24" : GREEN }}>
-                  {hasHazard ? <TriangleAlert className="size-3 shrink-0" /> : <Shield className="size-3 shrink-0" />}
+                <p className="font-arcade text-[9px] leading-relaxed text-white">
+                  {selectedStage.name}
+                </p>
+                <p
+                  className="flex items-center gap-1 text-[10px] font-semibold"
+                  style={{ color: hasHazard ? "#fbbf24" : GREEN }}
+                >
+                  {hasHazard ? (
+                    <TriangleAlert className="size-3 shrink-0" />
+                  ) : (
+                    <Shield className="size-3 shrink-0" />
+                  )}
                   {selectedStage.hazardName}
                 </p>
               </div>
@@ -263,11 +270,18 @@ export function PilotHub({
 
           <MenuRow label="Hangar & mejoras" Icon={Wrench} color={CYAN} onClick={onOpenHangar} />
           <MenuRow label="Misiones & pase" Icon={Trophy} color={GOLD} onClick={onOpenMissions} />
-          <MenuRow label="Centro multijugador" Icon={Users} color={VIOLET} onClick={onOpenAlliance} />
+          <MenuRow
+            label="Centro multijugador"
+            Icon={Users}
+            color={VIOLET}
+            onClick={onOpenAlliance}
+          />
           <MenuRow label="Mercado P2P" Icon={ShoppingCart} color={MAGENTA} onClick={onOpenMarket} />
 
           <div className="mt-1 border border-cyan-500/20 bg-[#0b0d1c]/80 p-2.5">
-            <p className="mb-1.5 text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">Combate · base</p>
+            <p className="mb-1.5 text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">
+              Combate · base
+            </p>
             <dl className="space-y-0.5">
               {combatRows.map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-2">
