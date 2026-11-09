@@ -124,7 +124,9 @@ export function MpStat({
   tone?: Tone;
 }) {
   return (
-    <div className={cn("min-w-0 border px-2.5 py-2 sm:px-3 sm:py-2.5", toneBorder[tone], toneBg[tone])}>
+    <div
+      className={cn("min-w-0 border px-2.5 py-2 sm:px-3 sm:py-2.5", toneBorder[tone], toneBg[tone])}
+    >
       <p className="text-[8px] uppercase tracking-[0.2em] text-white/45">{label}</p>
       <p className={cn("mt-1 truncate text-sm font-black tabular-nums", toneText[tone])}>{value}</p>
     </div>

@@ -82,11 +82,13 @@ export function ShipSprite({
       )}
     >
       {hull.flatMap((row, y) =>
-        row.split("").map((cell, x) =>
-          colors[cell] ? (
-            <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={colors[cell]} />
-          ) : null,
-        ),
+        row
+          .split("")
+          .map((cell, x) =>
+            colors[cell] ? (
+              <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={colors[cell]} />
+            ) : null,
+          ),
       )}
       {!destroyed ? <rect x={4} y={8} width={1} height={1} fill="#fde047" opacity={0.9} /> : null}
     </svg>
