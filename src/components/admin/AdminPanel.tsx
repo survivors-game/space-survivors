@@ -562,7 +562,9 @@ function SectionView({
         </div>
       ) : null}
 
-      {def.id === "resumen" ? (\n        <AdminSummarySection />\n      ) : def.id === "economia" ? (
+      {def.id === "resumen" ? (
+        <AdminSummarySection />
+      ) : def.id === "economia" ? (
         <EconomySection />
       ) : def.id === "jugadores" ? (
         <PlayersSection />
