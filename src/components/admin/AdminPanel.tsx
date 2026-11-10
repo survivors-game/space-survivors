@@ -313,17 +313,15 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   };
 
   const closeAdmin = async () => {
-    if (unlocked) {
-      try {
-        await fetch("/api/admin/auth/logout", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: "{}",
-        });
-      } catch {
-        // La sesión también vence automáticamente en el servidor.
-      }
+    try {
+      await fetch("/api/admin/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+    } catch {
+      // La sesión también vence automáticamente en el servidor.
     }
     onClose();
   };
