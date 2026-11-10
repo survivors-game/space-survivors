@@ -564,6 +564,8 @@ function SectionView({
         <PaymentsSection />
       ) : def.id === "mercado" ? (
         <MarketAdminSection />
+      ) : def.id === "chat" ? (
+        <ChatAdminSection />
       ) : (
         <>
           {def.stats ? (
@@ -709,6 +711,73 @@ function SectionView({
   );
 }
 
+function ChatAdminSection() {
+  type Message = { id: number; type: string; pilotId: string; callsign: string; text: string; language: string; timestamp: number };
+  type Report = { id: string; message_id: number; language: string; reporter_pilot_id: string; target_pilot_id: string; reason: string; status: string; created_at: number; reporter_name: string; target_name: string; resolution_note: string | null };
+  type Mute = { pilotId: string; expiresAt: number | null; reason: string; createdAt: number };
+  type Log = { action: string; target_pilot_id: string | null; message_id: number | null; reason: string; admin_email: string; created_at: number };
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [mutes, setMutes] = useState<Mute[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [tab, setTab] = useState<"mensajes" | "denuncias" | "silenciados" | "historial">("mensajes");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const load = async () => {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/admin/chat", { credentials: "same-origin" });
+      const data = (await response.json()) as { messages?: Message[]; reports?: Report[]; mutes?: Mute[]; logs?: Log[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo cargar el chat.");
+      setMessages(data.messages ?? []); setReports(data.reports ?? []); setMutes(data.mutes ?? []); setLogs(data.logs ?? []);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo cargar el chat."); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+  const act = async (payload: Record<string, string | number>) => {
+    const reason = typeof payload.reason === "string" ? payload.reason : "";
+    if (reason.trim().length < 5) { setError("Escribe un motivo de al menos 5 caracteres."); return; }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/admin/chat", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo completar la acción.");
+      setNotice("Acción aplicada correctamente."); await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo completar la acción."); }
+    finally { setBusy(false); }
+  };
+  const askReason = (label: string) => window.prompt(label, "Revisión administrativa");
+  const filteredMessages = messages.filter((item) => `${item.callsign} ${item.text} ${item.pilotId}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredReports = reports.filter((item) => `${item.reporter_name} ${item.target_name} ${item.reason}`.toLowerCase().includes(search.toLowerCase()));
+  const tabs = [["mensajes", `Mensajes (${messages.length})`], ["denuncias", `Denuncias (${reports.filter((r) => r.status === "OPEN").length})`], ["silenciados", `Restringidos (${mutes.length})`], ["historial", "Historial"]] as const;
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap gap-2">{tabs.map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} className={`border px-3 py-2 text-xs ${tab === id ? "border-cyan-300 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-white/60 hover:bg-white/5"}`}>{label}</button>)}
+        <button type="button" disabled={loading || busy} onClick={() => void load()} className="ml-auto border border-white/15 px-3 py-2 text-xs text-white/70 disabled:opacity-40">Actualizar</button>
+      </div>
+      <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar jugador o mensaje..." className="h-9 w-full border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-cyan-400/50" />
+      {error ? <p className="border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
+      {notice ? <p className="border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200">{notice}</p> : null}
+      {loading ? <p className="py-8 text-center text-sm text-white/50">Cargando...</p> : null}
+      {!loading && tab === "mensajes" ? <div className="space-y-2">{filteredMessages.map((item) => <article key={`${item.language}-${item.id}`} className="border border-white/10 bg-white/[0.02] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/50"><span className="font-bold text-cyan-200">{item.callsign}</span><span>{item.language.toUpperCase()} · {new Date(item.timestamp).toLocaleString()}</span></div>
+        <p className="mt-2 break-words text-sm text-white/85">{item.text}</p><p className="mt-1 text-[10px] text-white/35">{item.pilotId} · #{item.id}</p>
+        <button type="button" disabled={busy} onClick={() => { const reason = askReason("Motivo para eliminar este mensaje:"); if (reason) void act({ action: "delete-message", messageId: item.id, pilotId: item.pilotId, reason }); }} className="mt-2 border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300 disabled:opacity-40">Eliminar mensaje</button>
+      </article>)}{filteredMessages.length === 0 ? <p className="py-6 text-center text-sm text-white/40">No hay mensajes.</p> : null}</div> : null}
+      {!loading && tab === "denuncias" ? <div className="space-y-2">{filteredReports.map((item) => <article key={item.id} className="border border-white/10 bg-white/[0.02] p-3">
+        <div className="flex flex-wrap justify-between gap-2 text-xs"><b className="text-amber-200">{item.status === "OPEN" ? "PENDIENTE" : "REVISADA"}</b><span className="text-white/45">{new Date(item.created_at).toLocaleString()}</span></div>
+        <p className="mt-2 text-sm">{item.reporter_name} denunció a <b>{item.target_name}</b></p><p className="mt-1 text-sm text-white/70">{item.reason}</p><p className="mt-1 text-[10px] text-white/35">Mensaje #{item.message_id} · {item.language.toUpperCase()}</p>
+        {item.status === "OPEN" ? <button type="button" disabled={busy} onClick={() => { const reason = askReason("Nota de revisión de la denuncia:"); if (reason) void act({ action: "close-report", reportId: item.id, reason }); }} className="mt-2 border border-cyan-400/30 px-2 py-1 text-[10px] text-cyan-200 disabled:opacity-40">Marcar revisada</button> : <p className="mt-2 text-xs text-emerald-300">{item.resolution_note}</p>}
+      </article>)}{filteredReports.length === 0 ? <p className="py-6 text-center text-sm text-white/40">No hay denuncias.</p> : null}</div> : null}
+      {!loading && tab === "silenciados" ? <div className="space-y-2">{mutes.filter((item) => `${item.pilotId} ${item.reason}`.toLowerCase().includes(search.toLowerCase())).map((item) => <article key={item.pilotId} className="flex flex-wrap items-center justify-between gap-3 border border-white/10 p-3"><div><p className="text-xs text-cyan-200">{item.pilotId}</p><p className="mt-1 text-xs text-white/65">{item.reason}</p><p className="mt-1 text-[10px] text-white/40">{item.expiresAt ? `Hasta ${new Date(item.expiresAt).toLocaleString()}` : "Bloqueo indefinido"}</p></div><button type="button" disabled={busy} onClick={() => { const reason = askReason("Motivo para retirar la restricción:"); if (reason) void act({ action: "unmute", pilotId: item.pilotId, reason }); }} className="border border-emerald-400/30 px-2 py-1 text-[10px] text-emerald-200">Retirar restricción</button></article>)}{mutes.length === 0 ? <p className="py-6 text-center text-sm text-white/40">No hay jugadores restringidos.</p> : null}</div> : null}
+      {!loading && tab === "historial" ? <div className="space-y-2">{logs.map((item, index) => <article key={`${item.created_at}-${index}`} className="border border-white/10 p-3"><p className="text-xs font-bold text-cyan-200">{item.action}</p><p className="mt-1 text-xs text-white/70">{item.reason}</p><p className="mt-1 text-[10px] text-white/40">{item.target_pilot_id ?? (item.message_id ? `Mensaje #${item.message_id}` : "") } · {item.admin_email} · {new Date(item.created_at).toLocaleString()}</p></article>)}</div> : null}
+      {!loading && tab === "mensajes" && filteredMessages.length > 0 ? <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3"><span className="mr-2 self-center text-xs text-white/45">Moderación por jugador:</span><input id="chat-moderation-pilot" placeholder="ID plt_..." className="h-8 min-w-0 flex-1 border border-white/10 bg-black/30 px-2 text-xs" /><button type="button" disabled={busy} onClick={() => { const pilotId = (document.getElementById("chat-moderation-pilot") as HTMLInputElement | null)?.value.trim() ?? ""; const reason = askReason("Motivo para silenciar 24 horas:"); if (pilotId && reason) void act({ action: "mute", pilotId, reason }); }} className="border border-amber-400/30 px-2 text-[10px] text-amber-200">Silenciar 24 h</button><button type="button" disabled={busy} onClick={() => { const pilotId = (document.getElementById("chat-moderation-pilot") as HTMLInputElement | null)?.value.trim() ?? ""; const reason = askReason("Motivo para bloquear del chat:"); if (pilotId && reason) void act({ action: "ban", pilotId, reason }); }} className="border border-rose-400/30 px-2 text-[10px] text-rose-200">Bloquear chat</button></div> : null}
+    </section>
+  );
+}
 function MarketAdminSection() {
   type Stats = {
     active_ads: number;
