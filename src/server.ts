@@ -3775,7 +3775,7 @@ async function handleMarketRequest(
       let progress: Record<string, unknown> = {};
       try { progress = player.progress_json ? JSON.parse(player.progress_json) as Record<string, unknown> : {}; }
       catch { progress = {}; }
-      const [inventory, referralCount, history] = await Promise.all([
+      const [inventory, referralCount, history, adminActions] = await Promise.all([
         db.prepare(
           "SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source FROM pilot_inventory WHERE pilot_id = ? AND quantity > 0 ORDER BY item_type, item_name",
         ).bind(pilotId).all<{
@@ -3787,6 +3787,9 @@ async function handleMarketRequest(
         db.prepare(
           "SELECT amount, reason, created_at FROM admin_obsidian_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
         ).bind(pilotId).all<{ amount: number; reason: string; created_at: number }>(),
+        db.prepare(
+          "SELECT action, reason, created_at FROM admin_player_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
+        ).bind(pilotId).all<{ action: string; reason: string; created_at: number }>(),
       ]);
       return json({
         player: {
@@ -3806,6 +3809,7 @@ async function handleMarketRequest(
         },
         inventory: inventory.results ?? [],
         history: history.results ?? [],
+        adminActions: adminActions.results ?? [],
       });
     }
 
@@ -3823,6 +3827,9 @@ async function handleMarketRequest(
         .bind(pilotId)
         .first<{ google_sub: string }>();
       if (!target) return json({ error: "No se encontró el jugador." }, 404);
+      if (body.suspended && target.google_sub === account.google_sub) {
+        return json({ error: "No puedes suspender tu propia cuenta administradora." }, 400);
+      }
       const now = Date.now();
       const action = body.suspended ? "SUSPENDIDO" : "REACTIVADO";
       const statements = [
