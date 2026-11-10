@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SeasonAdminSection } from "./SeasonAdminSection";
 import { AlliancesAdminSection } from "./AlliancesAdminSection";
 import { VipAdminSection } from "./VipAdminSection";
@@ -340,7 +340,10 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex bg-[#05060f]/95 font-pixel text-white backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[80] flex bg-[#05060f]/95 text-white backdrop-blur-sm"
+      style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+    >
       {!unlocked ? (
         <AdminLogin onUnlock={unlock} onClose={closeAdmin} />
       ) : (
@@ -351,7 +354,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           >
             <div className="flex items-center gap-2 border-b border-amber-400/20 px-4 py-3">
               <Shield className="size-4 text-amber-300" />
-              <span className="font-arcade text-[11px] tracking-widest text-amber-300">
+              <span className="text-[11px] tracking-widest text-amber-300">
                 ADMINISTRACIÓN
               </span>
               <button
@@ -427,7 +430,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           <div className="w-full max-w-sm rounded-lg border border-amber-400/30 bg-[#0a0c1c] p-5 shadow-[0_0_40px_#fbbf2420]">
             <div className="mb-3 flex items-center gap-2 text-amber-300">
               <AlertTriangle className="size-4" />
-              <span className="font-arcade text-[11px] tracking-widest">CONFIRMAR OPERACIÓN</span>
+              <span className="text-[11px] tracking-widest">CONFIRMAR OPERACIÓN</span>
             </div>
             <p className="mb-5 text-sm text-white/80">
               ¿Seguro que quieres ejecutar <b className="text-white">“{confirm}”</b>?
@@ -476,7 +479,7 @@ function AdminLogin({
         <div className="mx-auto mb-4 grid size-14 place-items-center rounded-full border border-amber-400/40 bg-amber-400/10">
           <Lock className="size-6 text-amber-300" />
         </div>
-        <h2 className="font-arcade text-center text-xs tracking-[0.3em] text-amber-300">
+        <h2 className="text-center text-xs tracking-[0.3em] text-amber-300">
           ACCESO DE MANDO
         </h2>
         <p className="mt-2 text-center text-sm text-white/65">
@@ -542,7 +545,7 @@ function SectionView({
           <Icon className="size-4 text-cyan-300" />
         </div>
         <div>
-          <h1 className="font-arcade text-sm tracking-widest text-cyan-200">
+          <h1 className="text-sm tracking-widest text-cyan-200">
             {def.label.toUpperCase()}
           </h1>
           <p className="text-sm text-white/60">{def.desc}</p>
@@ -594,7 +597,7 @@ function SectionView({
               {def.stats.map((s) => (
                 <div key={s} className="rounded border border-white/10 bg-white/[0.03] p-3">
                   <div className="text-[11px] uppercase tracking-wider text-white/60">{s}</div>
-                  <div className="mt-1 font-arcade text-sm text-white/50">--</div>
+                  <div className="mt-1 text-sm text-white/50">--</div>
                 </div>
               ))}
             </div>
@@ -809,7 +812,7 @@ function AdminSummarySection() {
         {cards.map((card) => (
           <div key={card.label} className="rounded border border-white/10 bg-white/[0.03] p-3">
             <div className="text-[11px] uppercase tracking-wider text-white/60">{card.label}</div>
-            <div className="mt-2 font-arcade text-lg text-cyan-200">
+            <div className="mt-2 text-lg text-cyan-200">
               {loading && !data ? "…" : card.value.toLocaleString("es-CO")}
             </div>
           </div>
@@ -1241,9 +1244,7 @@ function AnnouncementsAdminSection() {
             <input
               type="color"
               value={form.color}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, color: event.target.value }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, color: event.target.value }))}
               className="h-10 w-14 cursor-pointer border border-white/10 bg-black/40 p-1"
             />
             <span className="font-mono text-xs text-white/70">{form.color.toUpperCase()}</span>
@@ -2063,7 +2064,7 @@ function MarketAdminSection() {
         ].map(([label, value]) => (
           <div key={label} className="rounded border border-white/10 bg-white/[0.03] p-3">
             <p className="text-[10px] uppercase text-white/50">{label}</p>
-            <p className="mt-2 font-arcade text-lg text-cyan-200">
+            <p className="mt-2 text-lg text-cyan-200">
               {Number(value).toLocaleString()}
             </p>
           </div>
@@ -2782,7 +2783,7 @@ function EconomySection() {
         ].map(([label, value]) => (
           <div key={label} className="rounded border border-white/10 bg-white/[0.03] p-3">
             <p className="text-[11px] uppercase tracking-wider text-white/55">{label}</p>
-            <p className="mt-2 font-arcade text-sm text-white">{loading ? "..." : value}</p>
+            <p className="mt-2 text-sm text-white">{loading ? "..." : value}</p>
           </div>
         ))}
       </div>
