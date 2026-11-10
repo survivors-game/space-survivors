@@ -121,10 +121,7 @@ export function GameChat() {
       currentSocket.addEventListener("message", (event) => {
         if (!active) return;
         try {
-          const payload = JSON.parse(event.data) as {
-            type?: string;
-            messageId?: number;
-          } & Partial<ChatMessage>;
+          const payload = JSON.parse(event.data) as Record<string, unknown>;
           if (payload["type"] === "deleted" && typeof payload["messageId"] === "number") {
             setMessages((current) => current.filter((item) => item.id !== payload["messageId"]));
             return;
