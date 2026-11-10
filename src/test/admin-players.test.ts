@@ -83,6 +83,30 @@ describe("administrative player management", () => {
     expect(response.status).toBe(403);
   });
 
+  it("blocks a suspended player from using the authenticated profile endpoint", async () => {
+    const response = await server.fetch(
+      request("/api/auth/profile"),
+      { DB: createDatabase("player@example.com", true) },
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("does not allow the administrator to suspend their own account", async () => {
+    const response = await server.fetch(
+      new Request("https://game.example/api/admin/players/plt_aaaaaaaaaaaaaaaaaaaaaaaa/status", {
+        method: "POST",
+        headers: {
+          cookie: "__Host-ss_session=player-session; __Host-ss_admin=admin-session",
+          origin: "https://game.example",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ suspended: true, reason: "Prueba de bloqueo" }),
+      }),
+      { DB: createDatabase(ADMIN_EMAIL) },
+    );
+    expect(response.status).toBe(400);
+  });
+
   it("returns real player profile data to the authenticated administrator", async () => {
     const response = await server.fetch(
       request("/api/admin/players?search=player", true),
