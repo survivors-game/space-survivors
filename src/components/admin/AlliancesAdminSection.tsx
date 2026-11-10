@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type Alliance = {
   alliance_id: string; name: string; tag: string; leader_pilot_id: string; leader_name: string;
-  level: number; war_wins: number; war_losses: number; member_count: number; in_war: number;
+  level: number; war_wins: number; war_losses: number; member_count: number; in_war: number; has_war_history: number;
 };
 type Member = { alliance_id: string; pilot_id: string; role: string; callsign: string; email: string|null; joined_at: number };
 type War = {
@@ -86,7 +86,8 @@ export function AlliancesAdminSection() {
         </div></td></tr>)}
       </tbody></table></div>
       <label className="block text-xs text-white/65">Motivo obligatorio para la siguiente operación<input value={reason} onChange={e=>setReason(e.target.value)} maxLength={240} placeholder="Explica por qué realizas el cambio" className={inputClass+" mt-1 w-full"}/></label>
-      <button type="button" disabled={busy||Boolean(alliance.in_war)} onClick={()=>void act({action:"dissolve",allianceId:alliance.alliance_id},"¿Disolver esta alianza? Esta acción no se puede deshacer.")} className="rounded border border-rose-400/30 px-3 py-2 text-xs text-rose-300 disabled:opacity-40">Disolver alianza</button>
+      <button type="button" disabled={busy||Boolean(alliance.in_war)||Boolean(alliance.has_war_history)} onClick={()=>void act({action:"dissolve",allianceId:alliance.alliance_id},"¿Disolver esta alianza? Esta acción no se puede deshacer.")} className="rounded border border-rose-400/30 px-3 py-2 text-xs text-rose-300 disabled:opacity-40">Disolver alianza</button>
+      {alliance.has_war_history?<p className="text-xs text-white/45">Esta alianza conserva un historial de guerras y no se puede eliminar.</p>:alliance.in_war?<p className="text-xs text-white/45">No se puede disolver mientras tenga una guerra pendiente o activa.</p>:null}
     </section>:null}
     <section className="space-y-3">
       <h3 className="text-xs uppercase tracking-wider text-cyan-200">Guerras e historial</h3>
