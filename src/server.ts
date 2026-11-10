@@ -60,6 +60,7 @@ type WorkerEnv = ChatWorkerEnv & {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
+  ADMIN_PANEL_PASSWORD?: string;
   TURNSTILE_SECRET_KEY?: string;
   TURNSTILE_SITE_KEY?: string;
 };
@@ -74,6 +75,10 @@ type ServerEntry = {
 const SESSION_COOKIE = "__Host-ss_session";
 const PILOT_COOKIE = "__Host-ss_pilot";
 const OAUTH_STATE_COOKIE = "__Host-ss_google_state";
+const ADMIN_SESSION_COOKIE = "__Host-ss_admin";
+const ADMIN_SESSION_TTL_MS = 30 * 60 * 1000;
+const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
 const BOSS_ATTEMPT_TTL_MS = 10 * 60 * 1000;
@@ -179,6 +184,31 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
         .prepare(
           `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
         ON auth_sessions(expires_at)`,
+        )
+        .run();      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS admin_sessions (
+        token_hash TEXT PRIMARY KEY,
+        google_sub TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE INDEX IF NOT EXISTS idx_admin_sessions_expiry
+        ON admin_sessions(expires_at)`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS admin_login_attempts (
+        ip_hash TEXT PRIMARY KEY,
+        attempts INTEGER NOT NULL,
+        window_started_at INTEGER NOT NULL,
+        blocked_until INTEGER NOT NULL DEFAULT 0
+      )`,
         )
         .run();
     })().catch((error) => {
@@ -501,8 +531,8 @@ async function handleSocialRequest(
     if (isAdminVipPath) {
       if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
       if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-      if (account.email !== ADMIN_EMAIL) {
-        return json({ error: "Acción administrativa no autorizada." }, 403);
+      if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request))) {
+        return json({ error: "Acceso administrativo requerido." }, 403);
       }
       const body = await readJson(request);
       const pilotId = body?.["pilot_id"];
@@ -1861,6 +1891,66 @@ async function getAuthenticatedAccount(
     .first<PlayerAccount>();
 }
 
+async function hasValidAdminSession(db: D1Database, request: Request): Promise<boolean> {
+  const token = readCookie(request, ADMIN_SESSION_COOKIE);
+  if (!token) return false;
+  const session = await db.prepare("SELECT token_hash FROM admin_sessions WHERE token_hash = ? AND expires_at > ?")
+    .bind(await sha256Hex(token), Date.now()).first<{ token_hash: string }>();
+  return Boolean(session);
+}
+
+function adminSessionCookie(token: string, maxAge: number): string {
+  return ADMIN_SESSION_COOKIE + "=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" + maxAge;
+}
+
+async function handleAdminAuthRequest(request: Request, env: WorkerEnv | undefined): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!["/api/admin/auth/login", "/api/admin/auth/status", "/api/admin/auth/logout"].includes(url.pathname)) return null;
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  const db = env.DB;
+  try { await ensureAuthSchema(db); }
+  catch (error) { console.error("No se pudo preparar la autenticación administrativa:", error); return json({ error: "No se pudo preparar el acceso administrativo." }, 503); }
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account || account.email.toLowerCase() !== ADMIN_EMAIL) return json({ error: "Acceso administrativo no autorizado." }, 403);
+  if (url.pathname === "/api/admin/auth/status") {
+    if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
+    return json({ authenticated: await hasValidAdminSession(db, request) });
+  }
+  if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
+  if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+  if (url.pathname === "/api/admin/auth/logout") {
+    const token = readCookie(request, ADMIN_SESSION_COOKIE);
+    if (token) await db.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(await sha256Hex(token)).run();
+    return json({ authenticated: false }, 200, { "set-cookie": ADMIN_SESSION_COOKIE + "=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
+  }
+  if (!env.ADMIN_PANEL_PASSWORD || env.ADMIN_PANEL_PASSWORD.length < 16) return json({ error: "El acceso administrativo aún no está configurado." }, 503);
+  const ipHash = await sha256Hex(request.headers.get("cf-connecting-ip") ?? "unknown");
+  const now = Date.now();
+  const attempts = await db.prepare("SELECT attempts, window_started_at, blocked_until FROM admin_login_attempts WHERE ip_hash = ?")
+    .bind(ipHash).first<{ attempts: number; window_started_at: number; blocked_until: number }>();
+  if (attempts?.blocked_until && attempts.blocked_until > now) return json({ error: "Demasiados intentos. Inténtalo más tarde." }, 429);
+  const body = await readJson(request, 2048);
+  const suppliedPassword = typeof body?.password === "string" ? body.password : "";
+  const expectedHash = await sha256Hex(env.ADMIN_PANEL_PASSWORD);
+  const suppliedHash = await sha256Hex(suppliedPassword);
+  let difference = 0;
+  for (let i = 0; i < expectedHash.length; i += 1) difference |= expectedHash.charCodeAt(i) ^ suppliedHash.charCodeAt(i);
+  if (!suppliedPassword || difference !== 0) {
+    const inWindow = Boolean(attempts && attempts.window_started_at > now - ADMIN_LOGIN_WINDOW_MS);
+    const nextAttempts = inWindow ? attempts!.attempts + 1 : 1;
+    const windowStartedAt = inWindow ? attempts!.window_started_at : now;
+    const blockedUntil = nextAttempts >= ADMIN_LOGIN_MAX_ATTEMPTS ? now + ADMIN_LOGIN_WINDOW_MS : 0;
+    await db.prepare("INSERT INTO admin_login_attempts (ip_hash, attempts, window_started_at, blocked_until) VALUES (?, ?, ?, ?) ON CONFLICT(ip_hash) DO UPDATE SET attempts=excluded.attempts, window_started_at=excluded.window_started_at, blocked_until=excluded.blocked_until")
+      .bind(ipHash, nextAttempts, windowStartedAt, blockedUntil).run();
+    return json({ error: blockedUntil ? "Demasiados intentos. Acceso bloqueado durante 15 minutos." : "Contraseña incorrecta." }, blockedUntil ? 429 : 401);
+  }
+  await db.prepare("DELETE FROM admin_login_attempts WHERE ip_hash = ?").bind(ipHash).run();
+  const token = randomHex(32);
+  const expiresAt = now + ADMIN_SESSION_TTL_MS;
+  await db.prepare("INSERT INTO admin_sessions (token_hash, google_sub, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .bind(await sha256Hex(token), account.google_sub, now, expiresAt).run();
+  return json({ authenticated: true, expiresAt }, 200, { "set-cookie": adminSessionCookie(token, Math.floor(ADMIN_SESSION_TTL_MS / 1000)) });
+}
 type MarketInventoryRow = {
   id: string;
   item_id: string;
@@ -3550,8 +3640,8 @@ async function handleMarketRequest(
   if (isAdminPath && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
     if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-    if (account.email !== ADMIN_EMAIL) {
-      return json({ error: "Acción administrativa no autorizada." }, 403);
+    if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request))) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
     }
     const body = await readJson(request);
     if (
@@ -4486,6 +4576,8 @@ export default {
       if (chatResponse) return chatResponse;
       const authResponse = await handleAuthRequest(request, workerEnv);
       if (authResponse) return authResponse;
+      const adminAuthResponse = await handleAdminAuthRequest(request, workerEnv);
+      if (adminAuthResponse) return adminAuthResponse;
       const socialResponse = await handleSocialRequest(request, workerEnv);
       if (socialResponse) return socialResponse;
       const leaderboardResponse = await handleLeaderboardRequest(request, workerEnv);
