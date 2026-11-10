@@ -566,6 +566,8 @@ function SectionView({
         <MarketAdminSection />
       ) : def.id === "chat" ? (
         <ChatAdminSection />
+      ) : def.id === "anuncios" ? (
+        <AnnouncementsAdminSection />
       ) : (
         <>
           {def.stats ? (
@@ -708,6 +710,248 @@ function SectionView({
         </>
       )}
     </div>
+  );
+}
+
+function AnnouncementsAdminSection() {
+  type Announcement = {
+    id: string;
+    title: string;
+    type: "NOTICIA" | "EVENTO" | "MANTENIMIENTO" | "TEMPORADA";
+    message: string;
+    status: "PUBLISHED" | "DRAFT";
+    created_at: number;
+    updated_at: number;
+  };
+  type Log = {
+    announcement_id: string;
+    action: string;
+    title: string;
+    admin_email: string;
+    created_at: number;
+  };
+  const emptyForm = {
+    title: "",
+    type: "NOTICIA" as Announcement["type"],
+    message: "",
+    status: "PUBLISHED" as Announcement["status"],
+  };
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/announcements", { credentials: "same-origin" });
+      const data = (await response.json()) as {
+        announcements?: Announcement[];
+        logs?: Log[];
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "No se pudieron cargar los anuncios.");
+      setAnnouncements(data.announcements ?? []);
+      setLogs(data.logs ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudieron cargar los anuncios.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/announcements", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: editingId ? "update" : "create",
+          ...(editingId ? { id: editingId } : {}),
+          ...form,
+        }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo guardar el anuncio.");
+      setForm(emptyForm);
+      setEditingId(null);
+      setNotice(editingId ? "Anuncio actualizado." : "Anuncio creado.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo guardar el anuncio.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (announcement: Announcement) => {
+    if (!window.confirm(`¿Eliminar el anuncio "${announcement.title}"?`)) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/announcements", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "delete", id: announcement.id }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo eliminar el anuncio.");
+      if (editingId === announcement.id) {
+        setEditingId(null);
+        setForm(emptyForm);
+      }
+      setNotice("Anuncio eliminado.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo eliminar el anuncio.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const edit = (announcement: Announcement) => {
+    setEditingId(announcement.id);
+    setForm({
+      title: announcement.title,
+      type: announcement.type,
+      message: announcement.message,
+      status: announcement.status,
+    });
+    setError("");
+    setNotice("");
+  };
+  const date = (value: number) => new Date(value).toLocaleString("es-CO");
+
+  return (
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+      <form onSubmit={(event) => void save(event)} className="h-fit space-y-3 border border-white/10 bg-white/[0.03] p-4">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-cyan-200">
+          {editingId ? "Editar anuncio" : "Crear anuncio"}
+        </h2>
+        <label className="block text-xs text-white/65">
+          Título
+          <input required minLength={3} maxLength={90} value={form.title}
+            onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+            className="mt-1 h-10 w-full border border-white/10 bg-black/40 px-3 text-sm text-white outline-none focus:border-cyan-400/50" />
+        </label>
+        <label className="block text-xs text-white/65">
+          Tipo
+          <select value={form.type}
+            onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as Announcement["type"] }))}
+            className="mt-1 h-10 w-full border border-white/10 bg-[#101321] px-3 text-sm text-white">
+            <option value="NOTICIA">Noticia</option>
+            <option value="EVENTO">Evento</option>
+            <option value="MANTENIMIENTO">Mantenimiento</option>
+            <option value="TEMPORADA">Temporada</option>
+          </select>
+        </label>
+        <label className="block text-xs text-white/65">
+          Mensaje
+          <textarea required minLength={5} maxLength={2000} rows={6} value={form.message}
+            onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))}
+            className="mt-1 w-full border border-white/10 bg-black/40 p-3 text-sm text-white outline-none focus:border-cyan-400/50" />
+        </label>
+        <label className="block text-xs text-white/65">
+          Estado
+          <select value={form.status}
+            onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as Announcement["status"] }))}
+            className="mt-1 h-10 w-full border border-white/10 bg-[#101321] px-3 text-sm text-white">
+            <option value="PUBLISHED">Publicado (visible para jugadores)</option>
+            <option value="DRAFT">Borrador (solo administración)</option>
+          </select>
+        </label>
+        <div className="flex gap-2">
+          <button type="submit" disabled={busy} className="flex-1 bg-cyan-400 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-black disabled:opacity-40">
+            {busy ? "Guardando..." : editingId ? "Guardar cambios" : "Publicar anuncio"}
+          </button>
+          {editingId ? <button type="button" disabled={busy} onClick={() => { setEditingId(null); setForm(emptyForm); }} className="border border-white/20 px-3 py-2.5 text-xs text-white/70">Cancelar</button> : null}
+        </div>
+      </form>
+
+      <div className="space-y-5">
+        {error ? <p role="alert" className="border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+        {notice ? <p role="status" className="border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-white/75">Anuncios ({announcements.length})</h2>
+            <button type="button" disabled={loading || busy} onClick={() => void load()} className="border border-white/15 px-3 py-2 text-xs text-white/70 disabled:opacity-40">Actualizar</button>
+          </div>
+          {loading ? <p className="text-sm text-white/50">Cargando anuncios...</p> : announcements.length === 0 ? <p className="border border-white/10 p-4 text-sm text-white/45">Todavía no hay anuncios.</p> : announcements.map((item) => (
+            <article key={item.id} className="border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wider text-cyan-200/70">
+                    <span>{item.type}</span><span>·</span><span>{item.status === "PUBLISHED" ? "Publicado" : "Borrador"}</span>
+                  </div>
+                  <h3 className="mt-1 text-sm font-bold text-white">{item.title}</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/65">{item.message}</p>
+                  <p className="mt-2 text-[10px] text-white/35">Actualizado: {date(item.updated_at)}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" disabled={busy} onClick={() => edit(item)} className="border border-cyan-300/30 px-3 py-2 text-xs text-cyan-100 disabled:opacity-40">Editar</button>
+                  <button type="button" disabled={busy} onClick={() => void remove(item)} className="border border-rose-300/30 px-3 py-2 text-xs text-rose-200 disabled:opacity-40">Eliminar</button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="border border-white/10">
+          <h2 className="border-b border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white/70">Historial de anuncios</h2>
+          {logs.length === 0 ? <p className="p-3 text-xs text-white/40">Sin movimientos.</p> : logs.map((log, index) => (
+            <div key={`${log.announcement_id}-${log.created_at}-${index}`} className="flex flex-wrap justify-between gap-2 border-b border-white/5 px-3 py-2 text-xs last:border-0">
+              <span className="text-white/70">{log.action === "create" ? "Creó" : log.action === "update" ? "Editó" : "Eliminó"}: {log.title}</span>
+              <span className="text-white/35">{date(log.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function AnnouncementsFeed() {
+  type Announcement = { id: string; title: string; type: string; message: string; created_at: number };
+  const [items, setItems] = useState<Announcement[]>([]);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/announcements", { credentials: "same-origin" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as { announcements?: Announcement[] };
+        if (active) setItems(data.announcements ?? []);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  if (items.length === 0) return null;
+  return (
+    <section aria-label="Anuncios del juego" className="mx-auto mt-5 w-full max-w-[1440px] space-y-2 px-5 sm:px-8 lg:px-12">
+      {items.map((item) => (
+        <article key={item.id} className="border border-cyan-400/25 bg-[#0b0d1c]/90 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center gap-2 text-[9px] uppercase tracking-[0.18em] text-cyan-200">
+            <span>{item.type}</span><span className="text-white/25">·</span>
+            <span className="text-white/40">{new Date(item.created_at).toLocaleDateString("es-CO")}</span>
+          </div>
+          <h2 className="mt-1 text-xs font-bold uppercase tracking-wider text-white">{item.title}</h2>
+          <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-white/65">{item.message}</p>
+        </article>
+      ))}
+    </section>
   );
 }
 
