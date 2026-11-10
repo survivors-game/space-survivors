@@ -55,7 +55,11 @@ function createDatabase() {
           if (query.includes("FROM auth_sessions"))
             return { wallet_address: "google:admin-sub", expires_at: Date.now() + 60_000 };
           if (query.includes("FROM player_accounts"))
-            return { google_sub: "admin-sub", email: ADMIN_EMAIL, pilot_id: "plt_aaaaaaaaaaaaaaaaaaaaaaaa" };
+            return {
+              google_sub: "admin-sub",
+              email: ADMIN_EMAIL,
+              pilot_id: "plt_aaaaaaaaaaaaaaaaaaaaaaaa",
+            };
           if (query.includes("FROM admin_sessions"))
             return { token_hash: "valid-admin-session", google_sub: "admin-sub" };
           if (query.includes("SELECT title FROM admin_announcements"))

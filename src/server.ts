@@ -3808,8 +3808,7 @@ async function handleAnnouncementsRequest(
   const isPublic = url.pathname === "/api/announcements";
   const isAdmin = url.pathname === "/api/admin/announcements";
   if (!isPublic && !isAdmin) return null;
-  if (isPublic && request.method !== "GET")
-    return json({ error: "Método no permitido." }, 405);
+  if (isPublic && request.method !== "GET") return json({ error: "Método no permitido." }, 405);
   if (isAdmin && request.method !== "GET" && request.method !== "POST")
     return json({ error: "Método no permitido." }, 405);
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
@@ -3819,27 +3818,37 @@ async function handleAnnouncementsRequest(
   const db = env.DB;
   try {
     await ensureAuthSchema(db);
-    await db.prepare(
-      "CREATE TABLE IF NOT EXISTS admin_announcements (id TEXT PRIMARY KEY, title TEXT NOT NULL, type TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PUBLISHED', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"
-    ).run();
-    await db.prepare(
-      "CREATE INDEX IF NOT EXISTS idx_admin_announcements_status_updated ON admin_announcements(status, updated_at DESC)"
-    ).run();
-    await db.prepare(
-      "CREATE TABLE IF NOT EXISTS admin_announcement_logs (id TEXT PRIMARY KEY, announcement_id TEXT NOT NULL, action TEXT NOT NULL, title TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)"
-    ).run();
-    await db.prepare(
-      "CREATE INDEX IF NOT EXISTS idx_admin_announcement_logs_created ON admin_announcement_logs(created_at DESC)"
-    ).run();
+    await db
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS admin_announcements (id TEXT PRIMARY KEY, title TEXT NOT NULL, type TEXT NOT NULL, message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PUBLISHED', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_announcements_status_updated ON admin_announcements(status, updated_at DESC)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS admin_announcement_logs (id TEXT PRIMARY KEY, announcement_id TEXT NOT NULL, action TEXT NOT NULL, title TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_announcement_logs_created ON admin_announcement_logs(created_at DESC)",
+      )
+      .run();
   } catch (error) {
     console.error("No se pudo preparar el sistema de anuncios:", error);
     return json({ error: "No se pudo preparar el sistema de anuncios." }, 503);
   }
 
   if (isPublic) {
-    const announcements = await db.prepare(
-      "SELECT id, title, type, message, created_at, updated_at FROM admin_announcements WHERE status = 'PUBLISHED' ORDER BY updated_at DESC LIMIT 10"
-    ).all();
+    const announcements = await db
+      .prepare(
+        "SELECT id, title, type, message, created_at, updated_at FROM admin_announcements WHERE status = 'PUBLISHED' ORDER BY updated_at DESC LIMIT 10",
+      )
+      .all();
     return json({ announcements: announcements.results ?? [] });
   }
 
@@ -3848,16 +3857,21 @@ async function handleAnnouncementsRequest(
   if (
     account.email.toLowerCase() !== ADMIN_EMAIL ||
     !(await hasValidAdminSession(db, request, account.google_sub))
-  ) return json({ error: "Acceso administrativo requerido." }, 403);
+  )
+    return json({ error: "Acceso administrativo requerido." }, 403);
 
   if (request.method === "GET") {
     const [announcements, logs] = await Promise.all([
-      db.prepare(
-        "SELECT id, title, type, message, status, created_at, updated_at FROM admin_announcements ORDER BY updated_at DESC LIMIT 100"
-      ).all(),
-      db.prepare(
-        "SELECT announcement_id, action, title, admin_email, created_at FROM admin_announcement_logs ORDER BY created_at DESC LIMIT 100"
-      ).all(),
+      db
+        .prepare(
+          "SELECT id, title, type, message, status, created_at, updated_at FROM admin_announcements ORDER BY updated_at DESC LIMIT 100",
+        )
+        .all(),
+      db
+        .prepare(
+          "SELECT announcement_id, action, title, admin_email, created_at FROM admin_announcement_logs ORDER BY created_at DESC LIMIT 100",
+        )
+        .all(),
     ]);
     return json({ announcements: announcements.results ?? [], logs: logs.results ?? [] });
   }
@@ -3888,29 +3902,42 @@ async function handleAnnouncementsRequest(
   let announcementId = id;
   if (action === "create") {
     announcementId = crypto.randomUUID();
-    await db.prepare(
-      "INSERT INTO admin_announcements (id, title, type, message, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).bind(announcementId, title, type, message, status, now, now).run();
+    await db
+      .prepare(
+        "INSERT INTO admin_announcements (id, title, type, message, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .bind(announcementId, title, type, message, status, now, now)
+      .run();
   } else if (action === "update") {
-    const result = await db.prepare(
-      "UPDATE admin_announcements SET title = ?, type = ?, message = ?, status = ?, updated_at = ? WHERE id = ?"
-    ).bind(title, type, message, status, now, id).run();
+    const result = await db
+      .prepare(
+        "UPDATE admin_announcements SET title = ?, type = ?, message = ?, status = ?, updated_at = ? WHERE id = ?",
+      )
+      .bind(title, type, message, status, now, id)
+      .run();
     if (!result.meta?.changes) return json({ error: "El anuncio no existe." }, 404);
   } else {
-    const existing = await db.prepare(
-      "SELECT title FROM admin_announcements WHERE id = ?"
-    ).bind(id).first<{ title: string }>();
+    const existing = await db
+      .prepare("SELECT title FROM admin_announcements WHERE id = ?")
+      .bind(id)
+      .first<{ title: string }>();
     if (!existing) return json({ error: "El anuncio no existe." }, 404);
     await db.prepare("DELETE FROM admin_announcements WHERE id = ?").bind(id).run();
-    await db.prepare(
-      "INSERT INTO admin_announcement_logs (id, announcement_id, action, title, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind(crypto.randomUUID(), id, "delete", existing.title, account.email, now).run();
+    await db
+      .prepare(
+        "INSERT INTO admin_announcement_logs (id, announcement_id, action, title, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .bind(crypto.randomUUID(), id, "delete", existing.title, account.email, now)
+      .run();
     return json({ success: true });
   }
 
-  await db.prepare(
-    "INSERT INTO admin_announcement_logs (id, announcement_id, action, title, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ).bind(crypto.randomUUID(), announcementId, action, title, account.email, now).run();
+  await db
+    .prepare(
+      "INSERT INTO admin_announcement_logs (id, announcement_id, action, title, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(crypto.randomUUID(), announcementId, action, title, account.email, now)
+    .run();
   return json({ success: true, id: announcementId });
 }
 

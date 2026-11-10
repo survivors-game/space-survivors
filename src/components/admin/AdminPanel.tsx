@@ -839,21 +839,36 @@ function AnnouncementsAdminSection() {
 
   return (
     <section className="grid gap-5 xl:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-      <form onSubmit={(event) => void save(event)} className="h-fit space-y-3 border border-white/10 bg-white/[0.03] p-4">
+      <form
+        onSubmit={(event) => void save(event)}
+        className="h-fit space-y-3 border border-white/10 bg-white/[0.03] p-4"
+      >
         <h2 className="text-xs font-bold uppercase tracking-widest text-cyan-200">
           {editingId ? "Editar anuncio" : "Crear anuncio"}
         </h2>
         <label className="block text-xs text-white/65">
           Título
-          <input required minLength={3} maxLength={90} value={form.title}
+          <input
+            required
+            minLength={3}
+            maxLength={90}
+            value={form.title}
             onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-            className="mt-1 h-10 w-full border border-white/10 bg-black/40 px-3 text-sm text-white outline-none focus:border-cyan-400/50" />
+            className="mt-1 h-10 w-full border border-white/10 bg-black/40 px-3 text-sm text-white outline-none focus:border-cyan-400/50"
+          />
         </label>
         <label className="block text-xs text-white/65">
           Tipo
-          <select value={form.type}
-            onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as Announcement["type"] }))}
-            className="mt-1 h-10 w-full border border-white/10 bg-[#101321] px-3 text-sm text-white">
+          <select
+            value={form.type}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                type: event.target.value as Announcement["type"],
+              }))
+            }
+            className="mt-1 h-10 w-full border border-white/10 bg-[#101321] px-3 text-sm text-white"
+          >
             <option value="NOTICIA">Noticia</option>
             <option value="EVENTO">Evento</option>
             <option value="MANTENIMIENTO">Mantenimiento</option>
@@ -862,62 +877,156 @@ function AnnouncementsAdminSection() {
         </label>
         <label className="block text-xs text-white/65">
           Mensaje
-          <textarea required minLength={5} maxLength={2000} rows={6} value={form.message}
-            onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))}
-            className="mt-1 w-full border border-white/10 bg-black/40 p-3 text-sm text-white outline-none focus:border-cyan-400/50" />
+          <textarea
+            required
+            minLength={5}
+            maxLength={2000}
+            rows={6}
+            value={form.message}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, message: event.target.value }))
+            }
+            className="mt-1 w-full border border-white/10 bg-black/40 p-3 text-sm text-white outline-none focus:border-cyan-400/50"
+          />
         </label>
         <label className="block text-xs text-white/65">
           Estado
-          <select value={form.status}
-            onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as Announcement["status"] }))}
-            className="mt-1 h-10 w-full border border-white/10 bg-[#101321] px-3 text-sm text-white">
+          <select
+            value={form.status}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                status: event.target.value as Announcement["status"],
+              }))
+            }
+            className="mt-1 h-10 w-full border border-white/10 bg-[#101321] px-3 text-sm text-white"
+          >
             <option value="PUBLISHED">Publicado (visible para jugadores)</option>
             <option value="DRAFT">Borrador (solo administración)</option>
           </select>
         </label>
         <div className="flex gap-2">
-          <button type="submit" disabled={busy} className="flex-1 bg-cyan-400 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-black disabled:opacity-40">
+          <button
+            type="submit"
+            disabled={busy}
+            className="flex-1 bg-cyan-400 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-black disabled:opacity-40"
+          >
             {busy ? "Guardando..." : editingId ? "Guardar cambios" : "Publicar anuncio"}
           </button>
-          {editingId ? <button type="button" disabled={busy} onClick={() => { setEditingId(null); setForm(emptyForm); }} className="border border-white/20 px-3 py-2.5 text-xs text-white/70">Cancelar</button> : null}
+          {editingId ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setEditingId(null);
+                setForm(emptyForm);
+              }}
+              className="border border-white/20 px-3 py-2.5 text-xs text-white/70"
+            >
+              Cancelar
+            </button>
+          ) : null}
         </div>
       </form>
 
       <div className="space-y-5">
-        {error ? <p role="alert" className="border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
-        {notice ? <p role="status" className="border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
+        {error ? (
+          <p
+            role="alert"
+            className="border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200"
+          >
+            {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p
+            role="status"
+            className="border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200"
+          >
+            {notice}
+          </p>
+        ) : null}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-white/75">Anuncios ({announcements.length})</h2>
-            <button type="button" disabled={loading || busy} onClick={() => void load()} className="border border-white/15 px-3 py-2 text-xs text-white/70 disabled:opacity-40">Actualizar</button>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-white/75">
+              Anuncios ({announcements.length})
+            </h2>
+            <button
+              type="button"
+              disabled={loading || busy}
+              onClick={() => void load()}
+              className="border border-white/15 px-3 py-2 text-xs text-white/70 disabled:opacity-40"
+            >
+              Actualizar
+            </button>
           </div>
-          {loading ? <p className="text-sm text-white/50">Cargando anuncios...</p> : announcements.length === 0 ? <p className="border border-white/10 p-4 text-sm text-white/45">Todavía no hay anuncios.</p> : announcements.map((item) => (
-            <article key={item.id} className="border border-white/10 bg-white/[0.03] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wider text-cyan-200/70">
-                    <span>{item.type}</span><span>·</span><span>{item.status === "PUBLISHED" ? "Publicado" : "Borrador"}</span>
+          {loading ? (
+            <p className="text-sm text-white/50">Cargando anuncios...</p>
+          ) : announcements.length === 0 ? (
+            <p className="border border-white/10 p-4 text-sm text-white/45">
+              Todavía no hay anuncios.
+            </p>
+          ) : (
+            announcements.map((item) => (
+              <article key={item.id} className="border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wider text-cyan-200/70">
+                      <span>{item.type}</span>
+                      <span>·</span>
+                      <span>{item.status === "PUBLISHED" ? "Publicado" : "Borrador"}</span>
+                    </div>
+                    <h3 className="mt-1 text-sm font-bold text-white">{item.title}</h3>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/65">
+                      {item.message}
+                    </p>
+                    <p className="mt-2 text-[10px] text-white/35">
+                      Actualizado: {date(item.updated_at)}
+                    </p>
                   </div>
-                  <h3 className="mt-1 text-sm font-bold text-white">{item.title}</h3>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/65">{item.message}</p>
-                  <p className="mt-2 text-[10px] text-white/35">Actualizado: {date(item.updated_at)}</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => edit(item)}
+                      className="border border-cyan-300/30 px-3 py-2 text-xs text-cyan-100 disabled:opacity-40"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void remove(item)}
+                      className="border border-rose-300/30 px-3 py-2 text-xs text-rose-200 disabled:opacity-40"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" disabled={busy} onClick={() => edit(item)} className="border border-cyan-300/30 px-3 py-2 text-xs text-cyan-100 disabled:opacity-40">Editar</button>
-                  <button type="button" disabled={busy} onClick={() => void remove(item)} className="border border-rose-300/30 px-3 py-2 text-xs text-rose-200 disabled:opacity-40">Eliminar</button>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            ))
+          )}
         </div>
         <div className="border border-white/10">
-          <h2 className="border-b border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white/70">Historial de anuncios</h2>
-          {logs.length === 0 ? <p className="p-3 text-xs text-white/40">Sin movimientos.</p> : logs.map((log, index) => (
-            <div key={`${log.announcement_id}-${log.created_at}-${index}`} className="flex flex-wrap justify-between gap-2 border-b border-white/5 px-3 py-2 text-xs last:border-0">
-              <span className="text-white/70">{log.action === "create" ? "Creó" : log.action === "update" ? "Editó" : "Eliminó"}: {log.title}</span>
-              <span className="text-white/35">{date(log.created_at)}</span>
-            </div>
-          ))}
+          <h2 className="border-b border-white/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white/70">
+            Historial de anuncios
+          </h2>
+          {logs.length === 0 ? (
+            <p className="p-3 text-xs text-white/40">Sin movimientos.</p>
+          ) : (
+            logs.map((log, index) => (
+              <div
+                key={`${log.announcement_id}-${log.created_at}-${index}`}
+                className="flex flex-wrap justify-between gap-2 border-b border-white/5 px-3 py-2 text-xs last:border-0"
+              >
+                <span className="text-white/70">
+                  {log.action === "create" ? "Creó" : log.action === "update" ? "Editó" : "Eliminó"}
+                  : {log.title}
+                </span>
+                <span className="text-white/35">{date(log.created_at)}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </section>
@@ -925,7 +1034,13 @@ function AnnouncementsAdminSection() {
 }
 
 export function AnnouncementsFeed() {
-  type Announcement = { id: string; title: string; type: string; message: string; created_at: number };
+  type Announcement = {
+    id: string;
+    title: string;
+    type: string;
+    message: string;
+    created_at: number;
+  };
   const [items, setItems] = useState<Announcement[]>([]);
   useEffect(() => {
     let active = true;
@@ -936,18 +1051,28 @@ export function AnnouncementsFeed() {
         if (active) setItems(data.announcements ?? []);
       })
       .catch(() => undefined);
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
   if (items.length === 0) return null;
   return (
-    <section aria-label="Anuncios del juego" className="mx-auto mt-5 w-full max-w-[1440px] space-y-2 px-5 sm:px-8 lg:px-12">
+    <section
+      aria-label="Anuncios del juego"
+      className="mx-auto mt-5 w-full max-w-[1440px] space-y-2 px-5 sm:px-8 lg:px-12"
+    >
       {items.map((item) => (
         <article key={item.id} className="border border-cyan-400/25 bg-[#0b0d1c]/90 p-3 sm:p-4">
           <div className="flex flex-wrap items-center gap-2 text-[9px] uppercase tracking-[0.18em] text-cyan-200">
-            <span>{item.type}</span><span className="text-white/25">·</span>
-            <span className="text-white/40">{new Date(item.created_at).toLocaleDateString("es-CO")}</span>
+            <span>{item.type}</span>
+            <span className="text-white/25">·</span>
+            <span className="text-white/40">
+              {new Date(item.created_at).toLocaleDateString("es-CO")}
+            </span>
           </div>
-          <h2 className="mt-1 text-xs font-bold uppercase tracking-wider text-white">{item.title}</h2>
+          <h2 className="mt-1 text-xs font-bold uppercase tracking-wider text-white">
+            {item.title}
+          </h2>
           <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-white/65">{item.message}</p>
         </article>
       ))}
