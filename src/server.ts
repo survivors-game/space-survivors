@@ -3978,7 +3978,8 @@ async function handleAdminAlliancesRequest(
       db.prepare(`SELECT a.alliance_id,a.name,a.tag,a.leader_pilot_id,a.level,a.war_wins,a.war_losses,a.created_at,
         COALESCE(NULLIF(profile.display_name,''),leader.callsign,'PILOTO') AS leader_name,
         (SELECT COUNT(*) FROM alliance_members m WHERE m.alliance_id=a.alliance_id) AS member_count,
-        EXISTS(SELECT 1 FROM alliance_war_locks lock WHERE lock.alliance_id=a.alliance_id) AS in_war
+        EXISTS(SELECT 1 FROM alliance_war_locks lock WHERE lock.alliance_id=a.alliance_id) AS in_war,
+        EXISTS(SELECT 1 FROM alliance_wars w WHERE w.attacker_alliance_id=a.alliance_id OR w.defender_alliance_id=a.alliance_id) AS has_war_history
         FROM alliances a JOIN pilots leader ON leader.pilot_id=a.leader_pilot_id
         LEFT JOIN player_profiles profile ON profile.pilot_id=leader.pilot_id
         ORDER BY a.level DESC,a.war_wins DESC,a.name LIMIT 200`).all(),
@@ -4020,6 +4021,8 @@ async function handleAdminAlliancesRequest(
       .bind(allianceId,pilotId).first<{role:string}>();
     if (!member) return json({error:"El piloto no pertenece a esa alianza."},404);
     if (member.role === "lider") return json({error:"Transfiere el liderazgo antes de modificar o retirar al líder."},409);
+    const activeWar = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
+    if (activeWar) return json({error:"No puedes modificar miembros o permisos mientras la alianza tiene una guerra pendiente o activa."},409);
     if (action === "set-role") {
       if (role !== "teniente" && role !== "miembro") return json({error:"El rol indicado no es válido."},400);
       await db.batch([
@@ -4027,8 +4030,6 @@ async function handleAdminAlliancesRequest(
         log(allianceId,null,"set-role:"+String(role),pilotId),
       ]);
     } else {
-      const activeWar = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
-      if (activeWar) return json({error:"No puedes retirar miembros mientras la alianza tiene una guerra pendiente o activa."},409);
       await db.batch([
         db.prepare("DELETE FROM alliance_members WHERE alliance_id=? AND pilot_id=?").bind(allianceId,pilotId),
         log(allianceId,null,"remove-member",pilotId),
@@ -4041,6 +4042,8 @@ async function handleAdminAlliancesRequest(
     const newLeaderId = pilotId;
     if (!allianceId || !newLeaderId) return json({error:"Alianza o nuevo líder no válido."},400);
     const alliance = await db.prepare("SELECT leader_pilot_id FROM alliances WHERE alliance_id=?").bind(allianceId).first<{leader_pilot_id:string}>();
+    const activeWar = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
+    if (activeWar) return json({error:"No puedes transferir el liderazgo durante una guerra pendiente o activa."},409);
     const target = await db.prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?").bind(allianceId,newLeaderId).first();
     if (!alliance || !target) return json({error:"El nuevo líder debe pertenecer a la alianza."},404);
     if (alliance.leader_pilot_id === newLeaderId) return json({error:"Ese piloto ya es el líder."},409);
