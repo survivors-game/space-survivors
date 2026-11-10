@@ -3949,8 +3949,13 @@ async function handleMarketRequest(
         db.prepare("SELECT COUNT(*) AS total FROM referrals WHERE referrer_pilot_id = ?")
           .bind(pilotId).first<{ total: number }>(),
         db.prepare(
-          "SELECT amount, reason, created_at FROM admin_obsidian_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
-        ).bind(pilotId).all<{ amount: number; reason: string; created_at: number }>(),
+          `SELECT amount, reason, created_at FROM (
+             SELECT amount, reason, created_at FROM admin_obsidian_logs WHERE pilot_id = ?
+             UNION ALL
+             SELECT delta AS amount, reason, created_at FROM admin_economy_logs
+             WHERE pilot_id = ? AND currency = 'OBS'
+           ) ORDER BY created_at DESC LIMIT 30`,
+        ).bind(pilotId, pilotId).all<{ amount: number; reason: string; created_at: number }>(),
         db.prepare(
           "SELECT action, reason, created_at FROM admin_player_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
         ).bind(pilotId).all<{ action: string; reason: string; created_at: number }>(),
