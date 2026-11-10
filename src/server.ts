@@ -523,7 +523,11 @@ async function handleSocialRequest(
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api/alliance/") || url.pathname === "/api/admin/set-vip" || url.pathname === "/api/admin/vip") {
+  if (
+    url.pathname.startsWith("/api/alliance/") ||
+    url.pathname === "/api/admin/set-vip" ||
+    url.pathname === "/api/admin/vip"
+  ) {
     return handleAllianceRequest(request, env);
   }
   if (url.pathname === "/api/vip/buy") return handleVipBuy(request, env);
@@ -583,34 +587,88 @@ async function handleSocialRequest(
       ) {
         return json({ error: "Indica un pilot_id válido y un número de días positivo." }, 400);
       }
-      await db.prepare("CREATE TABLE IF NOT EXISTS admin_vip_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, action TEXT NOT NULL, days INTEGER NOT NULL, before_until INTEGER, after_until INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)").run();
-      const before = await db.prepare("SELECT vip_until FROM pilots WHERE pilot_id=?").bind(pilotId).first<{vip_until:number|null}>();
+      await db
+        .prepare(
+          "CREATE TABLE IF NOT EXISTS admin_vip_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, action TEXT NOT NULL, days INTEGER NOT NULL, before_until INTEGER, after_until INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)",
+        )
+        .run();
+      const before = await db
+        .prepare("SELECT vip_until FROM pilots WHERE pilot_id=?")
+        .bind(pilotId)
+        .first<{ vip_until: number | null }>();
       if (!before) return json({ error: "No se encontró el piloto." }, 404);
       const timestamp = Date.now();
       const vipUntil = timestamp + days * 24 * 60 * 60 * 1000;
       await db.batch([
-        db.prepare("UPDATE pilots SET vip_until = ?, updated_at = ? WHERE pilot_id = ?").bind(vipUntil,timestamp,pilotId),
-        db.prepare("INSERT INTO admin_vip_logs (id,operation_id,pilot_id,action,days,before_until,after_until,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(randomHex(16),randomHex(16),pilotId,"grant",days,before.vip_until,vipUntil,"Asignación VIP desde la ruta administrativa anterior",account.email,timestamp),
+        db
+          .prepare("UPDATE pilots SET vip_until = ?, updated_at = ? WHERE pilot_id = ?")
+          .bind(vipUntil, timestamp, pilotId),
+        db
+          .prepare(
+            "INSERT INTO admin_vip_logs (id,operation_id,pilot_id,action,days,before_until,after_until,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          )
+          .bind(
+            randomHex(16),
+            randomHex(16),
+            pilotId,
+            "grant",
+            days,
+            before.vip_until,
+            vipUntil,
+            "Asignación VIP desde la ruta administrativa anterior",
+            account.email,
+            timestamp,
+          ),
       ]);
       return json({ success: true, pilot_id: pilotId, vip_until: vipUntil });
     }
 
     if (isAdminVipManagementPath) {
       if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-      if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) {
+      if (
+        account.email.toLowerCase() !== ADMIN_EMAIL ||
+        !(await hasValidAdminSession(db, request, account.google_sub))
+      ) {
         return json({ error: "Acceso administrativo requerido." }, 403);
       }
-      await db.prepare("CREATE TABLE IF NOT EXISTS admin_vip_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, action TEXT NOT NULL, days INTEGER NOT NULL, before_until INTEGER, after_until INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)").run();
-      await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_vip_logs_date ON admin_vip_logs(created_at DESC)").run();
+      await db
+        .prepare(
+          "CREATE TABLE IF NOT EXISTS admin_vip_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, action TEXT NOT NULL, days INTEGER NOT NULL, before_until INTEGER, after_until INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)",
+        )
+        .run();
+      await db
+        .prepare(
+          "CREATE INDEX IF NOT EXISTS idx_admin_vip_logs_date ON admin_vip_logs(created_at DESC)",
+        )
+        .run();
 
       if (request.method === "GET") {
         const search = (url.searchParams.get("search") ?? "").trim().slice(0, 120);
         const pattern = "%" + search.toLowerCase() + "%";
-        const players = await db.prepare("SELECT p.pilot_id,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email,p.vip_until FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE ?='' OR lower(p.pilot_id) LIKE ? OR lower(p.callsign) LIKE ? OR lower(COALESCE(profile.display_name,'')) LIKE ? OR lower(COALESCE(pa.email,'')) LIKE ? ORDER BY CASE WHEN p.vip_until > ? THEN 0 ELSE 1 END,p.vip_until DESC LIMIT 200").bind(search,pattern,pattern,pattern,pattern,Date.now()).all();
-        const logs = await db.prepare("SELECT l.id,l.pilot_id,l.action,l.days,l.before_until,l.after_until,l.reason,l.admin_email,l.created_at,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email FROM admin_vip_logs l JOIN pilots p ON p.pilot_id=l.pilot_id LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE ?='' OR lower(l.pilot_id) LIKE ? OR lower(p.callsign) LIKE ? OR lower(COALESCE(profile.display_name,'')) LIKE ? OR lower(COALESCE(pa.email,'')) LIKE ? ORDER BY l.created_at DESC LIMIT 100").bind(search,pattern,pattern,pattern,pattern).all();
+        const players = await db
+          .prepare(
+            "SELECT p.pilot_id,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email,p.vip_until FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE ?='' OR lower(p.pilot_id) LIKE ? OR lower(p.callsign) LIKE ? OR lower(COALESCE(profile.display_name,'')) LIKE ? OR lower(COALESCE(pa.email,'')) LIKE ? ORDER BY CASE WHEN p.vip_until > ? THEN 0 ELSE 1 END,p.vip_until DESC LIMIT 200",
+          )
+          .bind(search, pattern, pattern, pattern, pattern, Date.now())
+          .all();
+        const logs = await db
+          .prepare(
+            "SELECT l.id,l.pilot_id,l.action,l.days,l.before_until,l.after_until,l.reason,l.admin_email,l.created_at,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email FROM admin_vip_logs l JOIN pilots p ON p.pilot_id=l.pilot_id LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE ?='' OR lower(l.pilot_id) LIKE ? OR lower(p.callsign) LIKE ? OR lower(COALESCE(profile.display_name,'')) LIKE ? OR lower(COALESCE(pa.email,'')) LIKE ? ORDER BY l.created_at DESC LIMIT 100",
+          )
+          .bind(search, pattern, pattern, pattern, pattern)
+          .all();
         const now = Date.now();
-        const stats = await db.prepare("SELECT SUM(CASE WHEN vip_until > ? THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN vip_until > ? AND vip_until <= ? THEN 1 ELSE 0 END) AS expiring_soon FROM pilots").bind(now,now,now+7*86400000).first<{active:number|null;expiring_soon:number|null}>();
-        return json({players:players.results??[],logs:logs.results??[],stats:{active:stats?.active??0,expiring_soon:stats?.expiring_soon??0}});
+        const stats = await db
+          .prepare(
+            "SELECT SUM(CASE WHEN vip_until > ? THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN vip_until > ? AND vip_until <= ? THEN 1 ELSE 0 END) AS expiring_soon FROM pilots",
+          )
+          .bind(now, now, now + 7 * 86400000)
+          .first<{ active: number | null; expiring_soon: number | null }>();
+        return json({
+          players: players.results ?? [],
+          logs: logs.results ?? [],
+          stats: { active: stats?.active ?? 0, expiring_soon: stats?.expiring_soon ?? 0 },
+        });
       }
 
       const body = await readJson(request);
@@ -619,29 +677,79 @@ async function handleSocialRequest(
       const recipient = body?.["recipient"];
       const days = body?.["days"];
       const reason = body?.["reason"];
-      if (!["grant","renew","revoke"].includes(String(action)) || typeof operationId !== "string" || !/^[a-zA-Z0-9-]{16,80}$/.test(operationId) || typeof reason !== "string" || reason.trim().length < 5 || reason.trim().length > 240) {
-        return json({error:"Indica una operación, un motivo de 5 a 240 caracteres y un identificador válido."},400);
+      if (
+        !["grant", "renew", "revoke"].includes(String(action)) ||
+        typeof operationId !== "string" ||
+        !/^[a-zA-Z0-9-]{16,80}$/.test(operationId) ||
+        typeof reason !== "string" ||
+        reason.trim().length < 5 ||
+        reason.trim().length > 240
+      ) {
+        return json(
+          {
+            error:
+              "Indica una operación, un motivo de 5 a 240 caracteres y un identificador válido.",
+          },
+          400,
+        );
       }
-      if (action !== "revoke" && (typeof days !== "number" || !Number.isSafeInteger(days) || days < 1 || days > 3650)) {
-        return json({error:"La duración debe estar entre 1 y 3650 días."},400);
+      if (
+        action !== "revoke" &&
+        (typeof days !== "number" || !Number.isSafeInteger(days) || days < 1 || days > 3650)
+      ) {
+        return json({ error: "La duración debe estar entre 1 y 3650 días." }, 400);
       }
-      const lookup = typeof recipient === "string" ? recipient.trim().slice(0,120) : "";
-      if (!lookup) return json({error:"Indica el ID, correo o nombre del jugador."},400);
+      const lookup = typeof recipient === "string" ? recipient.trim().slice(0, 120) : "";
+      if (!lookup) return json({ error: "Indica el ID, correo o nombre del jugador." }, 400);
       const isId = validPilotId(lookup);
-      const matches = await db.prepare("SELECT p.pilot_id,p.vip_until FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE (?=1 AND p.pilot_id=?) OR (?=0 AND (lower(COALESCE(pa.email,''))=lower(?) OR lower(COALESCE(profile.display_name,''))=lower(?) OR lower(p.callsign)=lower(?))) LIMIT 2").bind(isId?1:0,lookup,isId?1:0,lookup,lookup,lookup).all<{pilot_id:string;vip_until:number|null}>();
+      const matches = await db
+        .prepare(
+          "SELECT p.pilot_id,p.vip_until FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE (?=1 AND p.pilot_id=?) OR (?=0 AND (lower(COALESCE(pa.email,''))=lower(?) OR lower(COALESCE(profile.display_name,''))=lower(?) OR lower(p.callsign)=lower(?))) LIMIT 2",
+        )
+        .bind(isId ? 1 : 0, lookup, isId ? 1 : 0, lookup, lookup, lookup)
+        .all<{ pilot_id: string; vip_until: number | null }>();
       const found = matches.results ?? [];
-      if (!found.length) return json({error:"No se encontró el jugador."},404);
-      if (found.length > 1) return json({error:"Hay varios jugadores con ese nombre. Usa el ID o correo."},409);
+      if (!found.length) return json({ error: "No se encontró el jugador." }, 404);
+      if (found.length > 1)
+        return json({ error: "Hay varios jugadores con ese nombre. Usa el ID o correo." }, 409);
       const target = found[0]!;
       const now = Date.now();
       const beforeUntil = target.vip_until;
-      const afterUntil = action === "revoke" ? null : action === "grant" ? now + Number(days)*86400000 : Math.max(now,beforeUntil??0)+Number(days)*86400000;
+      const afterUntil =
+        action === "revoke"
+          ? null
+          : action === "grant"
+            ? now + Number(days) * 86400000
+            : Math.max(now, beforeUntil ?? 0) + Number(days) * 86400000;
       const timestamp = Date.now();
       await db.batch([
-        db.prepare("UPDATE pilots SET vip_until=?,updated_at=? WHERE pilot_id=?").bind(afterUntil,timestamp,target.pilot_id),
-        db.prepare("INSERT INTO admin_vip_logs (id,operation_id,pilot_id,action,days,before_until,after_until,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(randomHex(16),operationId,target.pilot_id,String(action),Number(days??0),beforeUntil,afterUntil,reason.trim(),account.email,timestamp),
+        db
+          .prepare("UPDATE pilots SET vip_until=?,updated_at=? WHERE pilot_id=?")
+          .bind(afterUntil, timestamp, target.pilot_id),
+        db
+          .prepare(
+            "INSERT INTO admin_vip_logs (id,operation_id,pilot_id,action,days,before_until,after_until,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          )
+          .bind(
+            randomHex(16),
+            operationId,
+            target.pilot_id,
+            String(action),
+            Number(days ?? 0),
+            beforeUntil,
+            afterUntil,
+            reason.trim(),
+            account.email,
+            timestamp,
+          ),
       ]);
-      return json({success:true,pilot_id:target.pilot_id,action,days:Number(days??0),vip_until:afterUntil});
+      return json({
+        success: true,
+        pilot_id: target.pilot_id,
+        action,
+        days: Number(days ?? 0),
+        vip_until: afterUntil,
+      });
     }
 
     if (!account) return json({ error: "Inicia sesión con Google para usar las alianzas." }, 401);
@@ -1702,7 +1810,7 @@ async function handleAuthRequest(
       .bind(identity.sub)
       .first<PlayerAccount>();
     if (!account) {
-      if ((await readGameSetting(db,"registration_enabled","true")) !== "true") {
+      if ((await readGameSetting(db, "registration_enabled", "true")) !== "true") {
         return googleRedirect(`${url.origin}/?google_error=registration_closed`);
       }
       const existingEmail = await db
@@ -2037,14 +2145,22 @@ async function handleAdminAuthRequest(
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account || account.email.toLowerCase() !== ADMIN_EMAIL)
     return json({ error: "Acceso administrativo no autorizado." }, 403);
-  await db.prepare(`CREATE TABLE IF NOT EXISTS admin_access_logs (
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS admin_access_logs (
     id TEXT PRIMARY KEY, event TEXT NOT NULL, result TEXT NOT NULL,
     ip_hash TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
-  )`).run();
+  )`,
+    )
+    .run();
   const accessIpHash = await sha256Hex(request.headers.get("cf-connecting-ip") ?? "unknown");
   const recordAccess = async (event: string, result: string) => {
-    await db.prepare("INSERT INTO admin_access_logs (id,event,result,ip_hash,admin_email,created_at) VALUES (?,?,?,?,?,?)")
-      .bind(randomHex(16),event,result,accessIpHash,account.email,Date.now()).run();
+    await db
+      .prepare(
+        "INSERT INTO admin_access_logs (id,event,result,ip_hash,admin_email,created_at) VALUES (?,?,?,?,?,?)",
+      )
+      .bind(randomHex(16), event, result, accessIpHash, account.email, Date.now())
+      .run();
   };
   if (url.pathname === "/api/admin/auth/status") {
     if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
@@ -2059,7 +2175,7 @@ async function handleAdminAuthRequest(
         .prepare("DELETE FROM admin_sessions WHERE token_hash = ?")
         .bind(await sha256Hex(token))
         .run();
-    await recordAccess("logout","success");
+    await recordAccess("logout", "success");
     return json({ authenticated: false }, 200, {
       "set-cookie":
         ADMIN_SESSION_COOKIE + "=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0",
@@ -2076,7 +2192,7 @@ async function handleAdminAuthRequest(
     .bind(ipHash)
     .first<{ attempts: number; window_started_at: number; blocked_until: number }>();
   if (attempts?.blocked_until && attempts.blocked_until > now) {
-    await recordAccess("login","blocked");
+    await recordAccess("login", "blocked");
     return json({ error: "Demasiados intentos. Inténtalo más tarde." }, 429);
   }
   const body = await readJson(request, 2048);
@@ -2097,7 +2213,7 @@ async function handleAdminAuthRequest(
       )
       .bind(ipHash, nextAttempts, windowStartedAt, blockedUntil)
       .run();
-    await recordAccess("login",blockedUntil ? "blocked" : "failed");
+    await recordAccess("login", blockedUntil ? "blocked" : "failed");
     return json(
       {
         error: blockedUntil
@@ -2108,7 +2224,7 @@ async function handleAdminAuthRequest(
     );
   }
   await db.prepare("DELETE FROM admin_login_attempts WHERE ip_hash = ?").bind(ipHash).run();
-  await recordAccess("login","success");
+  await recordAccess("login", "success");
   const token = randomHex(32);
   const expiresAt = now + ADMIN_SESSION_TTL_MS;
   await db
@@ -4012,107 +4128,182 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
-
-
-
 async function handleAdminConfigRequest(
   request: Request,
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname !== "/api/admin/config") return null;
-  if (request.method !== "GET" && request.method !== "POST") return json({ error: "Método no permitido." }, 405);
-  if (request.method === "POST" && !isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+  if (request.method !== "GET" && request.method !== "POST")
+    return json({ error: "Método no permitido." }, 405);
+  if (request.method === "POST" && !isSameOriginPost(request, url))
+    return json({ error: "Solicitud no autorizada." }, 403);
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
   const db = env.DB;
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-  if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub)))
+  if (
+    account.email.toLowerCase() !== ADMIN_EMAIL ||
+    !(await hasValidAdminSession(db, request, account.google_sub))
+  )
     return json({ error: "Acceso administrativo requerido." }, 403);
   try {
     await ensureAuthSchema(db);
-    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_game_settings (
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_game_settings (
       setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL, updated_at INTEGER NOT NULL
-    )`).run();
-    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_game_settings_logs (
+    )`,
+      )
+      .run();
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_game_settings_logs (
       id TEXT PRIMARY KEY, setting_key TEXT NOT NULL, old_value TEXT NOT NULL,
       new_value TEXT NOT NULL, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
-    )`).run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_game_settings_logs_created ON admin_game_settings_logs(created_at DESC)").run();
-    const defaults: Record<string,string> = {
-      maintenance_mode: "false", registration_enabled: "true",
+    )`,
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_game_settings_logs_created ON admin_game_settings_logs(created_at DESC)",
+      )
+      .run();
+    const defaults: Record<string, string> = {
+      maintenance_mode: "false",
+      registration_enabled: "true",
       maintenance_message: "Estamos realizando tareas de mantenimiento. Vuelve pronto.",
-      events_enabled: "true", rewards_enabled: "true",
+      events_enabled: "true",
+      rewards_enabled: "true",
     };
-    for (const [key,value] of Object.entries(defaults)) {
-      await db.prepare("INSERT OR IGNORE INTO admin_game_settings (setting_key,setting_value,updated_at) VALUES (?,?,?)").bind(key,value,Date.now()).run();
+    for (const [key, value] of Object.entries(defaults)) {
+      await db
+        .prepare(
+          "INSERT OR IGNORE INTO admin_game_settings (setting_key,setting_value,updated_at) VALUES (?,?,?)",
+        )
+        .bind(key, value, Date.now())
+        .run();
     }
   } catch (error) {
     console.error("No se pudo preparar la configuración administrativa:", error);
     return json({ error: "No se pudo preparar la configuración administrativa." }, 503);
   }
   if (request.method === "GET") {
-    const [settings,logs] = await Promise.all([
+    const [settings, logs] = await Promise.all([
       db.prepare("SELECT setting_key,setting_value,updated_at FROM admin_game_settings").all(),
-      db.prepare("SELECT setting_key,old_value,new_value,reason,admin_email,created_at FROM admin_game_settings_logs ORDER BY created_at DESC LIMIT 100").all(),
+      db
+        .prepare(
+          "SELECT setting_key,old_value,new_value,reason,admin_email,created_at FROM admin_game_settings_logs ORDER BY created_at DESC LIMIT 100",
+        )
+        .all(),
     ]);
-    const values: Record<string,string> = {};
-    for (const row of settings.results ?? []) values[String(row.setting_key)] = String(row.setting_value);
-    return json({ settings: {
-      maintenanceMode: values.maintenance_mode === "true",
-      registrationEnabled: values.registration_enabled !== "false",
-      maintenanceMessage: values.maintenance_message ?? "",
-      eventsEnabled: values.events_enabled !== "false",
-      rewardsEnabled: values.rewards_enabled !== "false",
-    }, logs: logs.results ?? [] });
+    const values: Record<string, string> = {};
+    for (const row of settings.results ?? [])
+      values[String(row.setting_key)] = String(row.setting_value);
+    return json({
+      settings: {
+        maintenanceMode: values.maintenance_mode === "true",
+        registrationEnabled: values.registration_enabled !== "false",
+        maintenanceMessage: values.maintenance_message ?? "",
+        eventsEnabled: values.events_enabled !== "false",
+        rewardsEnabled: values.rewards_enabled !== "false",
+      },
+      logs: logs.results ?? [],
+    });
   }
   const body = await readJson(request, 4096);
   const settings = body?.["settings"];
-  const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0,240) : "";
-  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return json({ error: "No se recibieron ajustes válidos." }, 400);
+  const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
+  if (!settings || typeof settings !== "object" || Array.isArray(settings))
+    return json({ error: "No se recibieron ajustes válidos." }, 400);
   if (reason.length < 5) return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);
-  const input = settings as Record<string,unknown>;
-  const allowed: Record<string,unknown> = {
-    maintenance_mode: input["maintenanceMode"], registration_enabled: input["registrationEnabled"],
-    maintenance_message: input["maintenanceMessage"], events_enabled: input["eventsEnabled"],
+  const input = settings as Record<string, unknown>;
+  const allowed: Record<string, unknown> = {
+    maintenance_mode: input["maintenanceMode"],
+    registration_enabled: input["registrationEnabled"],
+    maintenance_message: input["maintenanceMessage"],
+    events_enabled: input["eventsEnabled"],
     rewards_enabled: input["rewardsEnabled"],
   };
-  const updates: Array<{key:string;value:string;oldValue:string}> = [];
-  for (const [key,value] of Object.entries(allowed)) {
+  const updates: Array<{ key: string; value: string; oldValue: string }> = [];
+  for (const [key, value] of Object.entries(allowed)) {
     if (value === undefined) continue;
     if (key === "maintenance_message") {
-      if (typeof value !== "string" || value.trim().length < 5 || value.length > 500) return json({ error: "El mensaje de mantenimiento debe tener entre 5 y 500 caracteres." },400);
-    } else if (typeof value !== "boolean") return json({ error: "Uno de los interruptores contiene un valor no válido." },400);
-    const old = await db.prepare("SELECT setting_value FROM admin_game_settings WHERE setting_key=?").bind(key).first<{setting_value:string}>();
+      if (typeof value !== "string" || value.trim().length < 5 || value.length > 500)
+        return json(
+          { error: "El mensaje de mantenimiento debe tener entre 5 y 500 caracteres." },
+          400,
+        );
+    } else if (typeof value !== "boolean")
+      return json({ error: "Uno de los interruptores contiene un valor no válido." }, 400);
+    const old = await db
+      .prepare("SELECT setting_value FROM admin_game_settings WHERE setting_key=?")
+      .bind(key)
+      .first<{ setting_value: string }>();
     const nextValue = typeof value === "boolean" ? String(value) : value.trim();
-    if ((old?.setting_value ?? "") !== nextValue) updates.push({key,value:nextValue,oldValue:old?.setting_value ?? ""});
+    if ((old?.setting_value ?? "") !== nextValue)
+      updates.push({ key, value: nextValue, oldValue: old?.setting_value ?? "" });
   }
-  if (!updates.length) return json({ success:true, changed:0 });
+  if (!updates.length) return json({ success: true, changed: 0 });
   const now = Date.now();
-  await db.batch(updates.flatMap(item => [
-    db.prepare("INSERT INTO admin_game_settings (setting_key,setting_value,updated_at) VALUES (?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(item.key,item.value,now),
-    db.prepare("INSERT INTO admin_game_settings_logs (id,setting_key,old_value,new_value,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?)").bind(crypto.randomUUID(),item.key,item.oldValue,item.value,reason,account.email,now),
-  ]));
-  return json({ success:true, changed:updates.length });
+  await db.batch(
+    updates.flatMap((item) => [
+      db
+        .prepare(
+          "INSERT INTO admin_game_settings (setting_key,setting_value,updated_at) VALUES (?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at",
+        )
+        .bind(item.key, item.value, now),
+      db
+        .prepare(
+          "INSERT INTO admin_game_settings_logs (id,setting_key,old_value,new_value,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?)",
+        )
+        .bind(crypto.randomUUID(), item.key, item.oldValue, item.value, reason, account.email, now),
+    ]),
+  );
+  return json({ success: true, changed: updates.length });
 }
 
 async function readGameSetting(db: D1Database, key: string, fallback: string): Promise<string> {
   try {
-    const row = await db.prepare("SELECT setting_value FROM admin_game_settings WHERE setting_key=?").bind(key).first<{setting_value:string}>();
+    const row = await db
+      .prepare("SELECT setting_value FROM admin_game_settings WHERE setting_key=?")
+      .bind(key)
+      .first<{ setting_value: string }>();
     return row?.setting_value ?? fallback;
-  } catch { return fallback; }
+  } catch {
+    return fallback;
+  }
 }
 
-async function handleMaintenanceGate(request: Request, env: WorkerEnv | undefined): Promise<Response | null> {
-  if (!env?.DB || (await readGameSetting(env.DB,"maintenance_mode","false")) !== "true") return null;
+async function handleMaintenanceGate(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  if (!env?.DB || (await readGameSetting(env.DB, "maintenance_mode", "false")) !== "true")
+    return null;
   const pathname = new URL(request.url).pathname;
   if (pathname.startsWith("/api/admin/") || pathname.startsWith("/api/auth/")) return null;
-  const account = await getAuthenticatedAccount(env.DB,await requestSessionHash(request));
+  const account = await getAuthenticatedAccount(env.DB, await requestSessionHash(request));
   if (account?.email.toLowerCase() === ADMIN_EMAIL) return null;
-  const message = await readGameSetting(env.DB,"maintenance_message","Estamos realizando tareas de mantenimiento. Vuelve pronto.");
-  if (pathname.startsWith("/api/")) return json({error:message,maintenance:true},503);
-  const safe = message.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-  return new Response(`<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mantenimiento</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#070b18;color:#e8eefc;font:16px system-ui;text-align:center"><main style="max-width:560px;padding:32px"><h1>SPACE SURVIVORS</h1><p>${safe}</p></main></body></html>`,{status:503,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+  const message = await readGameSetting(
+    env.DB,
+    "maintenance_message",
+    "Estamos realizando tareas de mantenimiento. Vuelve pronto.",
+  );
+  if (pathname.startsWith("/api/")) return json({ error: message, maintenance: true }, 503);
+  const safe = message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  return new Response(
+    `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mantenimiento</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#070b18;color:#e8eefc;font:16px system-ui;text-align:center"><main style="max-width:560px;padding:32px"><h1>SPACE SURVIVORS</h1><p>${safe}</p></main></body></html>`,
+    {
+      status: 503,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    },
+  );
 }
 
 async function handleAdminSecurityRequest(
@@ -4129,20 +4320,37 @@ async function handleAdminSecurityRequest(
   if (
     account.email.toLowerCase() !== ADMIN_EMAIL ||
     !(await hasValidAdminSession(db, request, account.google_sub))
-  ) return json({ error: "Acceso administrativo requerido." }, 403);
+  )
+    return json({ error: "Acceso administrativo requerido." }, 403);
 
   try {
     await ensureAuthSchema(db);
-    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_access_logs (
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_access_logs (
       id TEXT PRIMARY KEY, event TEXT NOT NULL, result TEXT NOT NULL,
       ip_hash TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
-    )`).run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_access_logs_created ON admin_access_logs(created_at DESC)").run();
-    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_server_errors (
+    )`,
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_access_logs_created ON admin_access_logs(created_at DESC)",
+      )
+      .run();
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_server_errors (
       id TEXT PRIMARY KEY, route TEXT NOT NULL, error_message TEXT NOT NULL,
       created_at INTEGER NOT NULL
-    )`).run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_server_errors_created ON admin_server_errors(created_at DESC)").run();
+    )`,
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_server_errors_created ON admin_server_errors(created_at DESC)",
+      )
+      .run();
   } catch (error) {
     console.error("No se pudo preparar seguridad y auditoría:", error);
     return json({ error: "No se pudo preparar seguridad y auditoría." }, 503);
@@ -4157,33 +4365,94 @@ async function handleAdminSecurityRequest(
     }
   };
   const [
-    access, attempts, errors, economy, player, market, chat, announcements,
-    support, rewards, seasons, alliances, vip, payments,
+    access,
+    attempts,
+    errors,
+    economy,
+    player,
+    market,
+    chat,
+    announcements,
+    support,
+    rewards,
+    seasons,
+    alliances,
+    vip,
+    payments,
   ] = await Promise.all([
-    query("SELECT id,event,result,ip_hash,admin_email,created_at FROM admin_access_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT ip_hash,attempts,window_started_at,blocked_until FROM admin_login_attempts WHERE attempts > 0 ORDER BY blocked_until DESC,window_started_at DESC LIMIT 100"),
-    query("SELECT id,route,error_message,created_at FROM admin_server_errors ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,pilot_id,'economy' AS category,currency AS action,reason,admin_email,created_at FROM admin_economy_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,pilot_id,'players' AS category,action,reason,'Registro anterior' AS admin_email,created_at FROM admin_player_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,COALESCE(order_id,ad_id,'') AS pilot_id,'market' AS category,action,resolution_note AS reason,admin_email,created_at FROM admin_market_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,COALESCE(target_pilot_id,'') AS pilot_id,'chat' AS category,action,reason,admin_email,created_at FROM admin_chat_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,announcement_id AS pilot_id,'announcements' AS category,action,title AS reason,admin_email,created_at FROM admin_announcement_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,ticket_id AS pilot_id,'support' AS category,action,note AS reason,admin_email,created_at FROM admin_support_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,pilot_id,'rewards' AS category,reward_type || ': ' || reward_name AS action,reason,admin_email,created_at FROM admin_reward_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,event_id AS pilot_id,'seasons' AS category,action,event_name AS reason,admin_email,created_at FROM admin_season_event_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,COALESCE(target_pilot_id,alliance_id,war_id,'') AS pilot_id,'alliances' AS category,action,reason,admin_email,created_at FROM admin_alliance_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,pilot_id,'vip' AS category,action,reason,admin_email,created_at FROM admin_vip_logs ORDER BY created_at DESC LIMIT 100"),
-    query("SELECT id,pilot_id,'payments' AS category,status AS action,COALESCE(rejection_reason,'Revisión de pago') AS reason,COALESCE(reviewed_by,'') AS admin_email,reviewed_at AS created_at FROM obsidian_payment_requests WHERE reviewed_at IS NOT NULL ORDER BY reviewed_at DESC LIMIT 100"),
+    query(
+      "SELECT id,event,result,ip_hash,admin_email,created_at FROM admin_access_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT ip_hash,attempts,window_started_at,blocked_until FROM admin_login_attempts WHERE attempts > 0 ORDER BY blocked_until DESC,window_started_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,route,error_message,created_at FROM admin_server_errors ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,pilot_id,'economy' AS category,currency AS action,reason,admin_email,created_at FROM admin_economy_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,pilot_id,'players' AS category,action,reason,'Registro anterior' AS admin_email,created_at FROM admin_player_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,COALESCE(order_id,ad_id,'') AS pilot_id,'market' AS category,action,resolution_note AS reason,admin_email,created_at FROM admin_market_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,COALESCE(target_pilot_id,'') AS pilot_id,'chat' AS category,action,reason,admin_email,created_at FROM admin_chat_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,announcement_id AS pilot_id,'announcements' AS category,action,title AS reason,admin_email,created_at FROM admin_announcement_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,ticket_id AS pilot_id,'support' AS category,action,note AS reason,admin_email,created_at FROM admin_support_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,pilot_id,'rewards' AS category,reward_type || ': ' || reward_name AS action,reason,admin_email,created_at FROM admin_reward_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,event_id AS pilot_id,'seasons' AS category,action,event_name AS reason,admin_email,created_at FROM admin_season_event_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,COALESCE(target_pilot_id,alliance_id,war_id,'') AS pilot_id,'alliances' AS category,action,reason,admin_email,created_at FROM admin_alliance_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,pilot_id,'vip' AS category,action,reason,admin_email,created_at FROM admin_vip_logs ORDER BY created_at DESC LIMIT 100",
+    ),
+    query(
+      "SELECT id,pilot_id,'payments' AS category,status AS action,COALESCE(rejection_reason,'Revisión de pago') AS reason,COALESCE(reviewed_by,'') AS admin_email,reviewed_at AS created_at FROM obsidian_payment_requests WHERE reviewed_at IS NOT NULL ORDER BY reviewed_at DESC LIMIT 100",
+    ),
   ]);
   const operations = [
-    ...economy,...player,...market,...chat,...announcements,...support,
-    ...rewards,...seasons,...alliances,...vip,...payments,
-  ].sort((a,b)=>Number((b as {created_at?:number}).created_at??0)-Number((a as {created_at?:number}).created_at??0)).slice(0,200);
+    ...economy,
+    ...player,
+    ...market,
+    ...chat,
+    ...announcements,
+    ...support,
+    ...rewards,
+    ...seasons,
+    ...alliances,
+    ...vip,
+    ...payments,
+  ]
+    .sort(
+      (a, b) =>
+        Number((b as { created_at?: number }).created_at ?? 0) -
+        Number((a as { created_at?: number }).created_at ?? 0),
+    )
+    .slice(0, 200);
   const now = Date.now();
   const summary = {
-    failedLogins: access.filter(row=>["failed","blocked"].includes(String((row as {result?:string}).result))).length,
-    blockedIps: attempts.filter(row=>Number((row as {blocked_until?:number}).blocked_until??0)>now).length,
-    errors24h: errors.filter(row=>Number((row as {created_at?:number}).created_at??0)>now-86400000).length,
+    failedLogins: access.filter((row) =>
+      ["failed", "blocked"].includes(String((row as { result?: string }).result)),
+    ).length,
+    blockedIps: attempts.filter(
+      (row) => Number((row as { blocked_until?: number }).blocked_until ?? 0) > now,
+    ).length,
+    errors24h: errors.filter(
+      (row) => Number((row as { created_at?: number }).created_at ?? 0) > now - 86400000,
+    ).length,
     operations: operations.length,
   };
   return json({ summary, access, attempts, errors, operations });
@@ -4203,16 +4472,26 @@ async function handleAdminAlliancesRequest(
   const db = env.DB;
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-  if (account.email.toLowerCase() !== ADMIN_EMAIL ||
-      !(await hasValidAdminSession(db, request, account.google_sub)))
+  if (
+    account.email.toLowerCase() !== ADMIN_EMAIL ||
+    !(await hasValidAdminSession(db, request, account.google_sub))
+  )
     return json({ error: "Acceso administrativo requerido." }, 403);
   try {
     await ensureAuthSchema(db);
-    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_alliance_logs (
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_alliance_logs (
       id TEXT PRIMARY KEY, alliance_id TEXT, war_id TEXT, action TEXT NOT NULL,
       target_pilot_id TEXT, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
-    )`).run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_alliance_logs_created ON admin_alliance_logs(created_at DESC)").run();
+    )`,
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_alliance_logs_created ON admin_alliance_logs(created_at DESC)",
+      )
+      .run();
   } catch (error) {
     console.error("No se pudo preparar la auditoría de alianzas:", error);
     return json({ error: "No se pudo preparar la gestión de alianzas." }, 503);
@@ -4221,30 +4500,54 @@ async function handleAdminAlliancesRequest(
   if (request.method === "GET") {
     const allianceId = url.searchParams.get("alliance_id") ?? "";
     const [alliances, wars, logs, members] = await Promise.all([
-      db.prepare(`SELECT a.alliance_id,a.name,a.tag,a.leader_pilot_id,a.level,a.war_wins,a.war_losses,a.created_at,
+      db
+        .prepare(
+          `SELECT a.alliance_id,a.name,a.tag,a.leader_pilot_id,a.level,a.war_wins,a.war_losses,a.created_at,
         COALESCE(NULLIF(profile.display_name,''),leader.callsign,'PILOTO') AS leader_name,
         (SELECT COUNT(*) FROM alliance_members m WHERE m.alliance_id=a.alliance_id) AS member_count,
         EXISTS(SELECT 1 FROM alliance_war_locks lock WHERE lock.alliance_id=a.alliance_id) AS in_war,
         EXISTS(SELECT 1 FROM alliance_wars w WHERE w.attacker_alliance_id=a.alliance_id OR w.defender_alliance_id=a.alliance_id) AS has_war_history
         FROM alliances a JOIN pilots leader ON leader.pilot_id=a.leader_pilot_id
         LEFT JOIN player_profiles profile ON profile.pilot_id=leader.pilot_id
-        ORDER BY a.level DESC,a.war_wins DESC,a.name LIMIT 200`).all(),
-      db.prepare(`SELECT w.war_id,w.attacker_alliance_id,w.defender_alliance_id,w.status,w.winner_alliance_id,
+        ORDER BY a.level DESC,a.war_wins DESC,a.name LIMIT 200`,
+        )
+        .all(),
+      db
+        .prepare(
+          `SELECT w.war_id,w.attacker_alliance_id,w.defender_alliance_id,w.status,w.winner_alliance_id,
         w.created_at,w.started_at,w.ended_at,w.attacker_hordes_survived,w.defender_hordes_survived,
         aa.name AS attacker_name,aa.tag AS attacker_tag,da.name AS defender_name,da.tag AS defender_tag,
         (SELECT COUNT(*) FROM alliance_war_members m WHERE m.war_id=w.war_id) AS member_count
         FROM alliance_wars w JOIN alliances aa ON aa.alliance_id=w.attacker_alliance_id
         JOIN alliances da ON da.alliance_id=w.defender_alliance_id
-        ORDER BY w.created_at DESC LIMIT 100`).all(),
-      db.prepare("SELECT id,alliance_id,war_id,action,target_pilot_id,reason,admin_email,created_at FROM admin_alliance_logs ORDER BY created_at DESC LIMIT 100").all(),
-      allianceId ? db.prepare(`SELECT m.alliance_id,m.pilot_id,m.role,m.joined_at,
+        ORDER BY w.created_at DESC LIMIT 100`,
+        )
+        .all(),
+      db
+        .prepare(
+          "SELECT id,alliance_id,war_id,action,target_pilot_id,reason,admin_email,created_at FROM admin_alliance_logs ORDER BY created_at DESC LIMIT 100",
+        )
+        .all(),
+      allianceId
+        ? db
+            .prepare(
+              `SELECT m.alliance_id,m.pilot_id,m.role,m.joined_at,
         COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
         FROM alliance_members m JOIN pilots p ON p.pilot_id=m.pilot_id
         LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
         LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
-        WHERE m.alliance_id=? ORDER BY CASE m.role WHEN 'lider' THEN 0 WHEN 'teniente' THEN 1 ELSE 2 END,m.joined_at`).bind(allianceId).all() : Promise.resolve({results:[]}),
+        WHERE m.alliance_id=? ORDER BY CASE m.role WHEN 'lider' THEN 0 WHEN 'teniente' THEN 1 ELSE 2 END,m.joined_at`,
+            )
+            .bind(allianceId)
+            .all()
+        : Promise.resolve({ results: [] }),
     ]);
-    return json({alliances:alliances.results??[],wars:wars.results??[],members:members.results??[],logs:logs.results??[]});
+    return json({
+      alliances: alliances.results ?? [],
+      wars: wars.results ?? [],
+      members: members.results ?? [],
+      logs: logs.results ?? [],
+    });
   }
 
   const body = await readJson(request, 4096);
@@ -4255,87 +4558,163 @@ async function handleAdminAlliancesRequest(
   const role = body?.["role"];
   const reason = typeof body?.["reason"] === "string" ? body["reason"].trim() : "";
   if (reason.length < 5 || reason.length > 240)
-    return json({error:"Indica un motivo de entre 5 y 240 caracteres."},400);
+    return json({ error: "Indica un motivo de entre 5 y 240 caracteres." }, 400);
   const now = Date.now();
-  const log = (aId: string|null,wId: string|null,act: string,target: string|null) =>
-    db.prepare("INSERT INTO admin_alliance_logs (id,alliance_id,war_id,action,target_pilot_id,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?)")
-      .bind(crypto.randomUUID(),aId,wId,act,target,reason,account.email,now);
+  const log = (aId: string | null, wId: string | null, act: string, target: string | null) =>
+    db
+      .prepare(
+        "INSERT INTO admin_alliance_logs (id,alliance_id,war_id,action,target_pilot_id,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?)",
+      )
+      .bind(crypto.randomUUID(), aId, wId, act, target, reason, account.email, now);
 
   if (action === "set-role" || action === "remove-member") {
-    if (!allianceId || !pilotId) return json({error:"Alianza o piloto no válido."},400);
-    const member = await db.prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?")
-      .bind(allianceId,pilotId).first<{role:string}>();
-    if (!member) return json({error:"El piloto no pertenece a esa alianza."},404);
-    if (member.role === "lider") return json({error:"Transfiere el liderazgo antes de modificar o retirar al líder."},409);
-    const activeWar = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
-    if (activeWar) return json({error:"No puedes modificar miembros o permisos mientras la alianza tiene una guerra pendiente o activa."},409);
+    if (!allianceId || !pilotId) return json({ error: "Alianza o piloto no válido." }, 400);
+    const member = await db
+      .prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?")
+      .bind(allianceId, pilotId)
+      .first<{ role: string }>();
+    if (!member) return json({ error: "El piloto no pertenece a esa alianza." }, 404);
+    if (member.role === "lider")
+      return json({ error: "Transfiere el liderazgo antes de modificar o retirar al líder." }, 409);
+    const activeWar = await db
+      .prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?")
+      .bind(allianceId)
+      .first();
+    if (activeWar)
+      return json(
+        {
+          error:
+            "No puedes modificar miembros o permisos mientras la alianza tiene una guerra pendiente o activa.",
+        },
+        409,
+      );
     if (action === "set-role") {
-      if (role !== "teniente" && role !== "miembro") return json({error:"El rol indicado no es válido."},400);
+      if (role !== "teniente" && role !== "miembro")
+        return json({ error: "El rol indicado no es válido." }, 400);
       await db.batch([
-        db.prepare("UPDATE alliance_members SET role=? WHERE alliance_id=? AND pilot_id=?").bind(role,allianceId,pilotId),
-        log(allianceId,null,"set-role:"+String(role),pilotId),
+        db
+          .prepare("UPDATE alliance_members SET role=? WHERE alliance_id=? AND pilot_id=?")
+          .bind(role, allianceId, pilotId),
+        log(allianceId, null, "set-role:" + String(role), pilotId),
       ]);
     } else {
       await db.batch([
-        db.prepare("DELETE FROM alliance_members WHERE alliance_id=? AND pilot_id=?").bind(allianceId,pilotId),
-        log(allianceId,null,"remove-member",pilotId),
+        db
+          .prepare("DELETE FROM alliance_members WHERE alliance_id=? AND pilot_id=?")
+          .bind(allianceId, pilotId),
+        log(allianceId, null, "remove-member", pilotId),
       ]);
     }
-    return json({success:true});
+    return json({ success: true });
   }
 
   if (action === "transfer-leader") {
     const newLeaderId = pilotId;
-    if (!allianceId || !newLeaderId) return json({error:"Alianza o nuevo líder no válido."},400);
-    const alliance = await db.prepare("SELECT leader_pilot_id FROM alliances WHERE alliance_id=?").bind(allianceId).first<{leader_pilot_id:string}>();
-    const activeWar = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
-    if (activeWar) return json({error:"No puedes transferir el liderazgo durante una guerra pendiente o activa."},409);
-    const target = await db.prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?").bind(allianceId,newLeaderId).first();
-    if (!alliance || !target) return json({error:"El nuevo líder debe pertenecer a la alianza."},404);
-    if (alliance.leader_pilot_id === newLeaderId) return json({error:"Ese piloto ya es el líder."},409);
+    if (!allianceId || !newLeaderId)
+      return json({ error: "Alianza o nuevo líder no válido." }, 400);
+    const alliance = await db
+      .prepare("SELECT leader_pilot_id FROM alliances WHERE alliance_id=?")
+      .bind(allianceId)
+      .first<{ leader_pilot_id: string }>();
+    const activeWar = await db
+      .prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?")
+      .bind(allianceId)
+      .first();
+    if (activeWar)
+      return json(
+        { error: "No puedes transferir el liderazgo durante una guerra pendiente o activa." },
+        409,
+      );
+    const target = await db
+      .prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?")
+      .bind(allianceId, newLeaderId)
+      .first();
+    if (!alliance || !target)
+      return json({ error: "El nuevo líder debe pertenecer a la alianza." }, 404);
+    if (alliance.leader_pilot_id === newLeaderId)
+      return json({ error: "Ese piloto ya es el líder." }, 409);
     await db.batch([
-      db.prepare("UPDATE alliance_members SET role='teniente' WHERE alliance_id=? AND pilot_id=?").bind(allianceId,alliance.leader_pilot_id),
-      db.prepare("UPDATE alliance_members SET role='lider' WHERE alliance_id=? AND pilot_id=?").bind(allianceId,newLeaderId),
-      db.prepare("UPDATE alliances SET leader_pilot_id=? WHERE alliance_id=?").bind(newLeaderId,allianceId),
-      log(allianceId,null,"transfer-leader",newLeaderId),
+      db
+        .prepare("UPDATE alliance_members SET role='teniente' WHERE alliance_id=? AND pilot_id=?")
+        .bind(allianceId, alliance.leader_pilot_id),
+      db
+        .prepare("UPDATE alliance_members SET role='lider' WHERE alliance_id=? AND pilot_id=?")
+        .bind(allianceId, newLeaderId),
+      db
+        .prepare("UPDATE alliances SET leader_pilot_id=? WHERE alliance_id=?")
+        .bind(newLeaderId, allianceId),
+      log(allianceId, null, "transfer-leader", newLeaderId),
     ]);
-    return json({success:true});
+    return json({ success: true });
   }
 
   if (action === "dissolve") {
-    if (!allianceId) return json({error:"Alianza no válida."},400);
-    const alliance = await db.prepare("SELECT name FROM alliances WHERE alliance_id=?").bind(allianceId).first<{name:string}>();
-    if (!alliance) return json({error:"No se encontró la alianza."},404);
-    const locked = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
-    if (locked) return json({error:"No puedes disolver una alianza con una guerra pendiente o activa."},409);
-    const history = await db.prepare("SELECT war_id FROM alliance_wars WHERE attacker_alliance_id=? OR defender_alliance_id=? LIMIT 1").bind(allianceId,allianceId).first();
-    if (history) return json({error:"Esta alianza tiene historial de guerras y no se puede eliminar sin borrar ese historial."},409);
+    if (!allianceId) return json({ error: "Alianza no válida." }, 400);
+    const alliance = await db
+      .prepare("SELECT name FROM alliances WHERE alliance_id=?")
+      .bind(allianceId)
+      .first<{ name: string }>();
+    if (!alliance) return json({ error: "No se encontró la alianza." }, 404);
+    const locked = await db
+      .prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?")
+      .bind(allianceId)
+      .first();
+    if (locked)
+      return json(
+        { error: "No puedes disolver una alianza con una guerra pendiente o activa." },
+        409,
+      );
+    const history = await db
+      .prepare(
+        "SELECT war_id FROM alliance_wars WHERE attacker_alliance_id=? OR defender_alliance_id=? LIMIT 1",
+      )
+      .bind(allianceId, allianceId)
+      .first();
+    if (history)
+      return json(
+        {
+          error:
+            "Esta alianza tiene historial de guerras y no se puede eliminar sin borrar ese historial.",
+        },
+        409,
+      );
     await db.batch([
       db.prepare("DELETE FROM alliances WHERE alliance_id=?").bind(allianceId),
-      log(allianceId,null,"dissolve:"+alliance.name,null),
+      log(allianceId, null, "dissolve:" + alliance.name, null),
     ]);
-    return json({success:true});
+    return json({ success: true });
   }
 
   if (action === "reject-war" || action === "cancel-war") {
-    if (!warId) return json({error:"Guerra no válida."},400);
-    const war = await db.prepare("SELECT attacker_alliance_id,defender_alliance_id,status FROM alliance_wars WHERE war_id=?")
-      .bind(warId).first<{attacker_alliance_id:string;defender_alliance_id:string;status:string}>();
-    if (!war) return json({error:"No se encontró la guerra."},404);
+    if (!warId) return json({ error: "Guerra no válida." }, 400);
+    const war = await db
+      .prepare(
+        "SELECT attacker_alliance_id,defender_alliance_id,status FROM alliance_wars WHERE war_id=?",
+      )
+      .bind(warId)
+      .first<{ attacker_alliance_id: string; defender_alliance_id: string; status: string }>();
+    if (!war) return json({ error: "No se encontró la guerra." }, 404);
     if (action === "reject-war" && war.status !== "DECLARED")
-      return json({error:"Solo puedes rechazar declaraciones pendientes."},409);
+      return json({ error: "Solo puedes rechazar declaraciones pendientes." }, 409);
     if (action === "cancel-war" && war.status !== "DECLARED" && war.status !== "PREPARING")
-      return json({error:"Solo puedes cancelar guerras declaradas o en preparación. Los combates iniciados no se alteran."},409);
+      return json(
+        {
+          error:
+            "Solo puedes cancelar guerras declaradas o en preparación. Los combates iniciados no se alteran.",
+        },
+        409,
+      );
     const status = action === "reject-war" ? "REJECTED" : "CANCELLED";
     await db.batch([
-      db.prepare("UPDATE alliance_wars SET status=?,ended_at=? WHERE war_id=? AND status=?")
-        .bind(status,now,warId,war.status),
+      db
+        .prepare("UPDATE alliance_wars SET status=?,ended_at=? WHERE war_id=? AND status=?")
+        .bind(status, now, warId, war.status),
       db.prepare("DELETE FROM alliance_war_locks WHERE war_id=?").bind(warId),
-      log(war.attacker_alliance_id,warId,status.toLowerCase(),null),
+      log(war.attacker_alliance_id, warId, status.toLowerCase(), null),
     ]);
-    return json({success:true,status});
+    return json({ success: true, status });
   }
-  return json({error:"Acción administrativa no válida."},400);
+  return json({ error: "Acción administrativa no válida." }, 400);
 }
 
 async function handleAdminSeasonsRequest(
@@ -4440,7 +4819,8 @@ async function handleAdminSeasonsRequest(
     });
   }
 
-  if ((await readGameSetting(db,"events_enabled","true")) !== "true") return json({ error: "La gestión de eventos está desactivada desde Configuración." },403);
+  if ((await readGameSetting(db, "events_enabled", "true")) !== "true")
+    return json({ error: "La gestión de eventos está desactivada desde Configuración." }, 403);
   const body = await readJson(request, 4096);
   const action = body?.["action"];
   const id = typeof body?.["id"] === "string" ? body["id"].trim() : "";
@@ -4620,7 +5000,11 @@ async function handleAdminRewardsRequest(
     return json({ rewards: rows.results ?? [] });
   }
 
-  if ((await readGameSetting(db,"rewards_enabled","true")) !== "true") return json({ error: "La entrega administrativa de recompensas está desactivada desde Configuración." },403);
+  if ((await readGameSetting(db, "rewards_enabled", "true")) !== "true")
+    return json(
+      { error: "La entrega administrativa de recompensas está desactivada desde Configuración." },
+      403,
+    );
   const body = await readJson(request, 4096);
   const operationId = body?.["operationId"];
   const recipient =
@@ -7241,15 +7625,21 @@ export default {
         try {
           const errorEnv = getWorkerEnv(request, env);
           if (errorEnv?.DB) {
-            await errorEnv.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_server_errors (
+            await errorEnv.DB.prepare(
+              `CREATE TABLE IF NOT EXISTS admin_server_errors (
               id TEXT PRIMARY KEY, route TEXT NOT NULL, error_message TEXT NOT NULL,
               created_at INTEGER NOT NULL
-            )`).run();
-            const message = error instanceof Error
-              ? (error.name + ": " + error.message).slice(0, 500)
-              : String(error).slice(0, 500);
-            await errorEnv.DB.prepare("INSERT INTO admin_server_errors (id,route,error_message,created_at) VALUES (?,?,?,?)")
-              .bind(randomHex(16),pathname.slice(0,160),message,Date.now()).run();
+            )`,
+            ).run();
+            const message =
+              error instanceof Error
+                ? (error.name + ": " + error.message).slice(0, 500)
+                : String(error).slice(0, 500);
+            await errorEnv.DB.prepare(
+              "INSERT INTO admin_server_errors (id,route,error_message,created_at) VALUES (?,?,?,?)",
+            )
+              .bind(randomHex(16), pathname.slice(0, 160), message, Date.now())
+              .run();
           }
         } catch (loggingError) {
           console.error("No se pudo guardar el error del servidor:", loggingError);
