@@ -121,7 +121,12 @@ export function GameChat() {
       currentSocket.addEventListener("message", (event) => {
         if (!active) return;
         try {
-          const message = JSON.parse(event.data) as ChatMessage;
+          const payload = JSON.parse(event.data) as { type?: string; messageId?: number } & Partial<ChatMessage>;
+          if (payload.type === "deleted" && typeof payload.messageId === "number") {
+            setMessages((current) => current.filter((item) => item.id !== payload.messageId));
+            return;
+          }
+          const message = payload as ChatMessage;
           if (
             typeof message.id !== "number" ||
             typeof message.pilotId !== "string" ||
@@ -374,6 +379,38 @@ export function GameChat() {
                       >
                         Etiquetar (@usuario)
                       </button>
+                      {message.type === "chat" && message.pilotId !== myPilotId ? (
+                        <button
+                          className="px-2 py-1 text-left text-[10px] text-rose-300 hover:bg-slate-700"
+                          onClick={async () => {
+                            const reason = window.prompt("¿Por qué quieres denunciar este mensaje?");
+                            if (!reason?.trim()) return;
+                            try {
+                              const response = await fetch("/api/chat/report", {
+                                method: "POST",
+                                credentials: "same-origin",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({
+                                  messageId: message.id,
+                                  pilotId: message.pilotId,
+                                  language: message.language,
+                                  reason: reason.trim(),
+                                }),
+                              });
+                              const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+                              if (!response.ok) throw new Error(payload?.error ?? "No se pudo enviar la denuncia.");
+                              setChatNotice("DENUNCIA ENVIADA A MODERACIÓN");
+                            } catch (error) {
+                              setChatNotice(error instanceof Error ? error.message : "No se pudo enviar la denuncia.");
+                            } finally {
+                              setSelectedPlayer(null);
+                            }
+                          }}
+                          type="button"
+                        >
+                          Denunciar mensaje
+                        </button>
+                      ) : null}
                     </span>
                   ) : null}
                 </span>
