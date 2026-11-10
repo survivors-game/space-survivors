@@ -65,6 +65,13 @@ export class ChatRoom extends DurableObject {
       )`,
     );
     ctx.storage.sql.exec(
+      `CREATE TABLE IF NOT EXISTS chat_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        enabled INTEGER NOT NULL DEFAULT 1
+      )`,
+    );
+    ctx.storage.sql.exec("INSERT OR IGNORE INTO chat_settings (id, enabled) VALUES (1, 1)");
+    ctx.storage.sql.exec(
       `CREATE TABLE IF NOT EXISTS chat_mutes (
         pilot_id TEXT PRIMARY KEY,
         expires_at INTEGER,
@@ -105,6 +112,11 @@ export class ChatRoom extends DurableObject {
       if (!pilotId || !callsign || !isChatLanguage(language)) {
         return new Response("Missing chat identity or language.", { status: 400 });
       }
+
+      const chatEnabled = this.ctx.storage.sql
+        .exec<{ enabled: number }>("SELECT enabled FROM chat_settings WHERE id = 1")
+        .toArray()[0]?.enabled !== 0;
+      if (!chatEnabled) return new Response("El chat está temporalmente suspendido.", { status: 503 });
 
       const mute = this.ctx.storage.sql
         .exec<{ expires_at: number | null }>(
@@ -162,13 +174,30 @@ export class ChatRoom extends DurableObject {
           reason: String(mute.reason),
           createdAt: Number(mute.created_at),
         }));
-      return Response.json({ messages, mutes });
+      const chatEnabled = this.ctx.storage.sql
+        .exec<{ enabled: number }>("SELECT enabled FROM chat_settings WHERE id = 1")
+        .toArray()[0]?.enabled !== 0;
+      return Response.json({ messages, mutes, chatEnabled });
     }
 
     if (url.pathname === "/admin" && request.method === "POST") {
       const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
       const action = payload?.["action"];
       const now = Date.now();
+      if (action === "set-chat-enabled") {
+        if (typeof payload?.["enabled"] !== "boolean") {
+          return Response.json({ error: "El estado del chat no es válido." }, { status: 400 });
+        }
+        this.ctx.storage.sql.exec(
+          "UPDATE chat_settings SET enabled = ? WHERE id = 1",
+          payload["enabled"] ? 1 : 0,
+        );
+        if (!payload["enabled"]) {
+          for (const socket of this.ctx.getWebSockets()) socket.close(1012, "Chat temporarily suspended");
+        }
+        return Response.json({ success: true, enabled: payload["enabled"] });
+      }
+
       if (action === "delete-message") {
         const messageId = Number(payload?.["messageId"]);
         if (!Number.isSafeInteger(messageId) || messageId <= 0) {
@@ -228,6 +257,10 @@ export class ChatRoom extends DurableObject {
     }
 
     if (url.pathname === "/event" && request.method === "POST") {
+      const chatEnabled = this.ctx.storage.sql
+        .exec<{ enabled: number }>("SELECT enabled FROM chat_settings WHERE id = 1")
+        .toArray()[0]?.enabled !== 0;
+      if (!chatEnabled) return new Response("El chat está temporalmente suspendido.", { status: 503 });
       const payload = (await request.json().catch(() => null)) as IncomingEvent | null;
       if (
         !payload ||
@@ -263,6 +296,13 @@ export class ChatRoom extends DurableObject {
     }
     const client = socket as HibernatingWebSocket;
     const attachment = client.deserializeAttachment();
+    const chatEnabled = this.ctx.storage.sql
+      .exec<{ enabled: number }>("SELECT enabled FROM chat_settings WHERE id = 1")
+      .toArray()[0]?.enabled !== 0;
+    if (!chatEnabled) {
+      socket.close(1012, "Chat temporarily suspended");
+      return;
+    }
     const mute = this.ctx.storage.sql
       .exec<{ expires_at: number | null }>(
         "SELECT expires_at FROM chat_mutes WHERE pilot_id = ?",
