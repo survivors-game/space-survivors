@@ -631,3 +631,175 @@ function SectionView({
     </div>
   );
 }
+
+type RewardType = "nave" | "vip" | "objeto" | "obs" | "cr";
+const REWARD_TYPES: { id: RewardType; label: string }[] = [
+  { id: "nave", label: "Nave" },
+  { id: "vip", label: "VIP" },
+  { id: "objeto", label: "Objeto" },
+  { id: "obs", label: "OBS" },
+  { id: "cr", label: "CR" },
+];
+// Catálogo sin alias duplicados (p. ej. "magnet" e "iman").
+const REWARD_ITEMS = INVENTORY_CATALOG.filter(
+  (item, i, all) => all.findIndex((o) => o.label === item.label) === i,
+);
+
+const inputCls =
+  "mt-1 h-10 w-full rounded border border-white/10 bg-black/40 px-2 text-sm text-white outline-none focus:border-cyan-400/40";
+
+function RewardForm({ onAction }: { onAction: (l: string) => void }) {
+  const [recipient, setRecipient] = useState("");
+  const [type, setType] = useState<RewardType>("nave");
+  const [shipId, setShipId] = useState(SHIPS[0]?.id ?? "");
+  const [vipDays, setVipDays] = useState("30");
+  const [itemId, setItemId] = useState(REWARD_ITEMS[0]?.itemId ?? "");
+  const [qty, setQty] = useState("1");
+  const [amount, setAmount] = useState("");
+
+  const summary = (() => {
+    if (type === "nave") return `nave ${SHIPS.find((s) => s.id === shipId)?.name ?? ""}`;
+    if (type === "vip") return `${vipDays} días de VIP`;
+    if (type === "objeto")
+      return `${qty} × ${REWARD_ITEMS.find((i) => i.itemId === itemId)?.label ?? ""}`;
+    return `${amount || 0} ${type.toUpperCase()}`;
+  })();
+
+  const valid =
+    recipient.trim().length > 0 &&
+    (type === "vip" ? Number(vipDays) > 0 : true) &&
+    (type === "objeto" ? Number(qty) > 0 : true) &&
+    (type === "obs" || type === "cr" ? Number(amount) > 0 : true);
+
+  return (
+    <form
+      className="space-y-4 rounded border border-white/10 bg-white/[0.03] p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) onAction(`Entregar ${summary} a ${recipient.trim()}`);
+      }}
+    >
+      <div className="text-xs uppercase tracking-wider text-cyan-200">Entregar premio</div>
+
+      <label className="block text-xs text-white/70">
+        Jugador (ID, correo o nombre de usuario)
+        <input
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          placeholder="plt_xxxx · correo@ejemplo.com · Piloto"
+          className={`${inputCls} placeholder:text-white/40`}
+        />
+      </label>
+
+      <div>
+        <div className="text-xs text-white/70">Tipo de premio</div>
+        <div className="mt-1 grid grid-cols-5 gap-1">
+          {REWARD_TYPES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setType(t.id)}
+              className={`rounded border py-2 text-xs ${type === t.id ? "border-cyan-400/50 bg-cyan-400/20 text-cyan-100" : "border-white/10 text-white/70 hover:bg-white/5"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {type === "nave" ? (
+        <label className="block text-xs text-white/70">
+          Nave
+          <select value={shipId} onChange={(e) => setShipId(e.target.value)} className={inputCls}>
+            {SHIPS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} · {s.role}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {type === "vip" ? (
+        <label className="block text-xs text-white/70">
+          Días de VIP a regalar
+          <input
+            type="number"
+            min={1}
+            value={vipDays}
+            onChange={(e) => setVipDays(e.target.value)}
+            className={inputCls}
+          />
+          <div className="mt-2 flex flex-wrap gap-1">
+            {[1, 7, 15, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setVipDays(String(d))}
+                className={`rounded px-2.5 py-1 text-xs ${vipDays === String(d) ? "bg-amber-400/20 text-amber-200" : "text-white/70 hover:bg-white/5"}`}
+              >
+                {d} días
+              </button>
+            ))}
+          </div>
+        </label>
+      ) : null}
+
+      {type === "objeto" ? (
+        <div className="grid grid-cols-[1fr_90px] gap-2">
+          <label className="block text-xs text-white/70">
+            Objeto
+            <select value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls}>
+              {REWARD_ITEMS.map((i) => (
+                <option key={i.itemId} value={i.itemId}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-white/70">
+            Cantidad
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {type === "obs" || type === "cr" ? (
+        <label className="block text-xs text-white/70">
+          Cantidad de {type.toUpperCase()}
+          <input
+            type="number"
+            min={1}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0"
+            className={`${inputCls} placeholder:text-white/40`}
+          />
+        </label>
+      ) : null}
+
+      <div className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/75">
+        Resumen: <span className="text-white">{summary}</span>
+        {recipient.trim() ? (
+          <>
+            {" "}→ <span className="text-cyan-200">{recipient.trim()}</span>
+          </>
+        ) : null}
+      </div>
+
+      <button
+        type="submit"
+        disabled={!valid}
+        className="w-full rounded bg-amber-400/90 py-2.5 text-sm font-bold uppercase tracking-wider text-black hover:bg-amber-300 disabled:opacity-40"
+      >
+        Entregar premio
+      </button>
+    </form>
+  );
+}
