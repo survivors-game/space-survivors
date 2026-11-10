@@ -2103,6 +2103,21 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           reason TEXT NOT NULL,
           created_at INTEGER NOT NULL
         )`,
+        `CREATE TABLE IF NOT EXISTS admin_economy_logs (
+          id TEXT PRIMARY KEY,
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          currency TEXT NOT NULL CHECK (currency IN ('CR', 'OBS')),
+          delta INTEGER NOT NULL CHECK (delta != 0),
+          balance_before INTEGER NOT NULL,
+          balance_after INTEGER NOT NULL CHECK (balance_after >= 0),
+          reason TEXT NOT NULL,
+          admin_email TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_admin_economy_logs_created
+          ON admin_economy_logs(created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS idx_admin_economy_logs_pilot
+          ON admin_economy_logs(pilot_id, created_at DESC)`,
         `CREATE TABLE IF NOT EXISTS boss_cooldowns (
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           boss_id TEXT NOT NULL,
@@ -3666,7 +3681,8 @@ async function handleMarketRequest(
     url.pathname.startsWith("/api/market/") || url.pathname.startsWith("/api/inventory/");
   const isAdminPlayersPath =
     url.pathname === "/api/admin/players" || /^\/api\/admin\/players\/[^/]+(?:\/status)?$/.test(url.pathname);
-  const isAdminPath = url.pathname === "/api/admin/credit-obsidian" || isAdminPlayersPath;
+  const isAdminEconomyPath = url.pathname === "/api/admin/economy";
+  const isAdminPath = url.pathname === "/api/admin/credit-obsidian" || isAdminPlayersPath || isAdminEconomyPath;
   if (!isMarketPath && !isAdminPath) return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
@@ -3680,6 +3696,143 @@ async function handleMarketRequest(
   }
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
+  if (isAdminEconomyPath) {
+    if (request.method !== "GET" && request.method !== "POST") {
+      return json({ error: "Método no permitido." }, 405);
+    }
+    if (request.method === "POST" && !isSameOriginPost(request, url)) {
+      return json({ error: "Solicitud no autorizada." }, 403);
+    }
+    if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+    if (
+      account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub))
+    ) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
+    }
+
+    if (request.method === "GET") {
+      const currency = url.searchParams.get("currency") ?? "Todos";
+      const direction = url.searchParams.get("direction") ?? "Todos";
+      const search = (url.searchParams.get("search") ?? "").trim().slice(0, 100);
+      if (!["Todos", "CR", "OBS"].includes(currency) || !["Todos", "Entradas", "Salidas"].includes(direction)) {
+        return json({ error: "Filtro de economía no válido." }, 400);
+      }
+      const pattern = "%" + search.replace(/[\\%_]/g, (character) => "\\" + character) + "%";
+      const [totals, movements] = await Promise.all([
+        db.prepare(
+          `SELECT
+            COALESCE(SUM(CAST(COALESCE(json_extract(pr.progress_json, '$.credits'), 0) AS INTEGER)), 0) AS cr_total,
+            COALESCE((SELECT SUM(obsidian) FROM pilots), 0) AS obs_total
+           FROM player_progress pr`,
+        ).first<{ cr_total: number; obs_total: number }>(),
+        db.prepare(
+          `SELECT l.id, l.pilot_id, l.currency, l.delta, l.balance_before, l.balance_after,
+            l.reason, l.admin_email, l.created_at, p.callsign, pa.email
+           FROM admin_economy_logs l
+           JOIN pilots p ON p.pilot_id = l.pilot_id
+           LEFT JOIN player_accounts pa ON pa.pilot_id = l.pilot_id
+           WHERE (? = 'Todos' OR l.currency = ?)
+             AND (? = 'Todos' OR (? = 'Entradas' AND l.delta > 0) OR (? = 'Salidas' AND l.delta < 0))
+             AND (? = '' OR l.pilot_id LIKE ? ESCAPE '\\' OR p.callsign LIKE ? ESCAPE '\\' OR pa.email LIKE ? ESCAPE '\\')
+           ORDER BY l.created_at DESC LIMIT 100`,
+        ).bind(currency, currency, direction, direction, direction, search, pattern, pattern, pattern)
+          .all<{
+            id: string; pilot_id: string; currency: string; delta: number; balance_before: number;
+            balance_after: number; reason: string; admin_email: string; created_at: number;
+            callsign: string; email: string | null;
+          }>(),
+      ]);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayCount = await db.prepare(
+        "SELECT COUNT(*) AS total FROM admin_economy_logs WHERE created_at >= ?",
+      ).bind(todayStart.getTime()).first<{ total: number }>();
+      return json({
+        totals: { cr: totals?.cr_total ?? 0, obs: totals?.obs_total ?? 0, movementsToday: todayCount?.total ?? 0 },
+        movements: movements.results ?? [],
+      });
+    }
+
+    const body = await readJson(request, 4096);
+    const pilotId = typeof body?.pilotId === "string" ? body.pilotId.trim() : "";
+    const currency = body?.currency;
+    const operation = body?.operation;
+    const amount = body?.amount;
+    const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+    if (
+      !validPilotId(pilotId) ||
+      (currency !== "CR" && currency !== "OBS") ||
+      (operation !== "credit" && operation !== "debit") ||
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount < 1 ||
+      amount > 1_000_000_000 ||
+      reason.length < 5
+    ) {
+      return json({ error: "Datos no válidos. Revisa jugador, moneda, cantidad y motivo." }, 400);
+    }
+    const pilot = await db.prepare(
+      "SELECT pilot_id, obsidian FROM pilots WHERE pilot_id = ?",
+    ).bind(pilotId).first<{ pilot_id: string; obsidian: number }>();
+    if (!pilot) return json({ error: "No se encontró el jugador." }, 404);
+
+    let balanceBefore = 0;
+    if (currency === "CR") {
+      const current = await db.prepare(
+        "SELECT progress_json FROM player_progress WHERE pilot_id = ?",
+      ).bind(pilotId).first<{ progress_json: string }>();
+      try {
+        const progress = current?.progress_json ? JSON.parse(current.progress_json) as { credits?: unknown } : {};
+        balanceBefore = Number.isSafeInteger(Number(progress.credits)) ? Math.max(0, Number(progress.credits)) : 0;
+      } catch {
+        return json({ error: "El saldo CR del jugador no se puede leer." }, 409);
+      }
+    } else {
+      balanceBefore = pilot.obsidian;
+    }
+    const delta = operation === "credit" ? amount : -amount;
+    const balanceAfter = balanceBefore + delta;
+    if (!Number.isSafeInteger(balanceAfter) || balanceAfter < 0) {
+      return json({ error: "El jugador no tiene saldo suficiente para ese descuento." }, 409);
+    }
+    const now = Date.now();
+    const logId = "econ_" + randomHex(10);
+    const update = currency === "OBS"
+      ? db.prepare(
+          "UPDATE pilots SET obsidian = ?, updated_at = ? WHERE pilot_id = ? AND obsidian = ?",
+        ).bind(balanceAfter, now, pilotId, balanceBefore)
+      : db.prepare(
+          `INSERT INTO player_progress (pilot_id, progress_json, updated_at)
+           VALUES (?, json_object('v', 1, 'credits', ?), ?)
+           ON CONFLICT(pilot_id) DO UPDATE SET
+             progress_json = json_set(player_progress.progress_json, '$.credits', ?),
+             updated_at = excluded.updated_at
+           WHERE CAST(COALESCE(json_extract(player_progress.progress_json, '$.credits'), 0) AS INTEGER) = ?`,
+        ).bind(pilotId, balanceAfter, now, balanceAfter, balanceBefore);
+    const log = currency === "OBS"
+      ? db.prepare(
+          `INSERT INTO admin_economy_logs
+           (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+           WHERE EXISTS (SELECT 1 FROM pilots WHERE pilot_id = ? AND obsidian = ?)`,
+        ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter)
+      : db.prepare(
+          `INSERT INTO admin_economy_logs
+           (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+           WHERE EXISTS (
+             SELECT 1 FROM player_progress
+             WHERE pilot_id = ? AND CAST(COALESCE(json_extract(progress_json, '$.credits'), 0) AS INTEGER) = ?
+           )`,
+        ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter);
+    const results = await db.batch([update, log]);
+    if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
+      return json({ error: "El saldo cambió durante la operación. Actualiza la pantalla e inténtalo de nuevo." }, 409);
+    }
+    return json({ success: true, currency, balanceBefore, balanceAfter, delta });
+  }
 
   if (isAdminPlayersPath) {
     if (request.method !== "GET" && request.method !== "POST") {
