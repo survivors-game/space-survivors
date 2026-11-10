@@ -4190,7 +4190,7 @@ async function handleAdminSummaryRequest(
   const now = Date.now();
   const [players, activeSessions, pendingPayments, openDisputes, openSupport, openReports, recentErrors] =
     await Promise.all([
-      count("SELECT COUNT(*) AS count FROM pilots"),
+      count("SELECT COUNT(*) AS count FROM pilots p JOIN player_accounts pa ON pa.pilot_id = p.pilot_id"),
       count("SELECT COUNT(*) AS count FROM auth_sessions WHERE wallet_address LIKE 'google:%' AND expires_at > ?", [now]),
       count("SELECT COUNT(*) AS count FROM obsidian_payment_requests WHERE status = 'PENDING'"),
       count("SELECT COUNT(*) AS count FROM p2p_disputes WHERE status = 'OPEN'"),
