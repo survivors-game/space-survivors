@@ -3996,6 +3996,81 @@ async function handleAnnouncementsRequest(
 }
 
 
+
+async function handleAdminSecurityRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/admin/security") return null;
+  if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  const db = env.DB;
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+  if (
+    account.email.toLowerCase() !== ADMIN_EMAIL ||
+    !(await hasValidAdminSession(db, request, account.google_sub))
+  ) return json({ error: "Acceso administrativo requerido." }, 403);
+
+  try {
+    await ensureAuthSchema(db);
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_access_logs (
+      id TEXT PRIMARY KEY, event TEXT NOT NULL, result TEXT NOT NULL,
+      ip_hash TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
+    )`).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_access_logs_created ON admin_access_logs(created_at DESC)").run();
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_server_errors (
+      id TEXT PRIMARY KEY, route TEXT NOT NULL, error_message TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_server_errors_created ON admin_server_errors(created_at DESC)").run();
+  } catch (error) {
+    console.error("No se pudo preparar seguridad y auditoría:", error);
+    return json({ error: "No se pudo preparar seguridad y auditoría." }, 503);
+  }
+
+  const query = async (sql: string) => {
+    try {
+      const result = await db.prepare(sql).all();
+      return result.results ?? [];
+    } catch {
+      return [];
+    }
+  };
+  const [
+    access, attempts, errors, economy, player, market, chat, announcements,
+    support, rewards, seasons, alliances, vip, payments,
+  ] = await Promise.all([
+    query("SELECT id,event,result,ip_hash,admin_email,created_at FROM admin_access_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT ip_hash,attempts,window_started_at,blocked_until FROM admin_login_attempts WHERE attempts > 0 ORDER BY blocked_until DESC,window_started_at DESC LIMIT 100"),
+    query("SELECT id,route,error_message,created_at FROM admin_server_errors ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,pilot_id,'economy' AS category,currency AS action,reason,admin_email,created_at FROM admin_economy_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,pilot_id,'players' AS category,action,reason,'Registro anterior' AS admin_email,created_at FROM admin_player_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,COALESCE(order_id,ad_id,'') AS pilot_id,'market' AS category,action,resolution_note AS reason,admin_email,created_at FROM admin_market_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,COALESCE(target_pilot_id,'') AS pilot_id,'chat' AS category,action,reason,admin_email,created_at FROM admin_chat_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,announcement_id AS pilot_id,'announcements' AS category,action,title AS reason,admin_email,created_at FROM admin_announcement_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,ticket_id AS pilot_id,'support' AS category,action,note AS reason,admin_email,created_at FROM admin_support_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,pilot_id,'rewards' AS category,reward_type || ': ' || reward_name AS action,reason,admin_email,created_at FROM admin_reward_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,event_id AS pilot_id,'seasons' AS category,action,event_name AS reason,admin_email,created_at FROM admin_season_event_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,COALESCE(target_pilot_id,alliance_id,war_id,'') AS pilot_id,'alliances' AS category,action,reason,admin_email,created_at FROM admin_alliance_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,pilot_id,'vip' AS category,action,reason,admin_email,created_at FROM admin_vip_logs ORDER BY created_at DESC LIMIT 100"),
+    query("SELECT id,pilot_id,'payments' AS category,status AS action,COALESCE(rejection_reason,'Revisión de pago') AS reason,COALESCE(reviewed_by,'') AS admin_email,reviewed_at AS created_at FROM obsidian_payment_requests WHERE reviewed_at IS NOT NULL ORDER BY reviewed_at DESC LIMIT 100"),
+  ]);
+  const operations = [
+    ...economy,...player,...market,...chat,...announcements,...support,
+    ...rewards,...seasons,...alliances,...vip,...payments,
+  ].sort((a,b)=>Number((b as {created_at?:number}).created_at??0)-Number((a as {created_at?:number}).created_at??0)).slice(0,200);
+  const now = Date.now();
+  const summary = {
+    failedLogins: attempts.reduce((sum,row)=>sum+Number((row as {attempts?:number}).attempts??0),0),
+    blockedIps: attempts.filter(row=>Number((row as {blocked_until?:number}).blocked_until??0)>now).length,
+    errors24h: errors.filter(row=>Number((row as {created_at?:number}).created_at??0)>now-86400000).length,
+    operations: operations.length,
+  };
+  return json({ summary, access, attempts, errors, operations });
+}
+
 async function handleAdminAlliancesRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -7004,6 +7079,8 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
+      const securityAdminResponse = await handleAdminSecurityRequest(request, workerEnv);
+      if (securityAdminResponse) return securityAdminResponse;
       const alliancesAdminResponse = await handleAdminAlliancesRequest(request, workerEnv);
       if (alliancesAdminResponse) return alliancesAdminResponse;
       const seasonsResponse = await handleAdminSeasonsRequest(request, workerEnv);
