@@ -106,8 +106,6 @@ export function MarketSection({ actions }: { actions: MarketActions }) {
           onLoadListings={actions.onLoadListings}
           onBuy={actions.onBuy}
           onReportPayment={actions.onReportPayment}
-          onReleaseOrder={actions.onReleaseOrder}
-          onOpenDispute={actions.onOpenDispute}
           onCancel={actions.onCancelOrder}
         />
       ) : null}
