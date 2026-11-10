@@ -25,7 +25,7 @@ interface MarketBuyProps {
     sort: ListingSort,
   ) => Promise<void>;
   onBuy: (listingId: string, method: P2PPayMethod, network?: string) => Promise<P2PPurchaseOrder>;
-  onConfirm: (orderId: string) => Promise<void>;
+  onReportPayment: (orderId: string) => Promise<void>;
   onCancel: (orderId: string) => Promise<void>;
 }
 
@@ -36,7 +36,7 @@ export function MarketBuy({
   isLoading,
   onLoadListings,
   onBuy,
-  onConfirm,
+  onReportPayment,
   onCancel,
 }: MarketBuyProps) {
   const [itemType, setItemType] = useState<P2PItemType | "">("");
@@ -182,7 +182,7 @@ export function MarketBuy({
             ORDEN PENDIENTE · {order.order_id}
           </h3>
           <p className="text-[9px] uppercase text-white/65">
-            Transfiere el pago al vendedor y confirma solo cuando lo hayas realizado.
+            Transfiere el pago directamente al vendedor. Después pulsa «YA REALICÉ EL PAGO».
           </p>
           <p className="text-[9px] uppercase text-cyan-100">
             MÉTODO · {order.payment_method.label}
@@ -196,10 +196,10 @@ export function MarketBuy({
             <Button
               type="button"
               disabled={busyOrder}
-              onClick={() => void finishOrder(onConfirm)}
+              onClick={() => void finishOrder(onReportPayment)}
               className="rounded-none bg-cyan-300 text-[8px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
             >
-              CONFIRMAR COMPRA
+              YA REALICÉ EL PAGO
             </Button>
             <Button
               type="button"
