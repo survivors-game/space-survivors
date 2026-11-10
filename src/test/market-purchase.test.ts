@@ -380,9 +380,15 @@ describe("P2P purchase flow", () => {
       { DB: database },
     );
     expect(resolved.status).toBe(200);
-    expect((await resolved.json() as { orderStatus: string }).orderStatus).toBe("CANCELADA");
-    expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe("ACTIVO");
-    expect(db.prepare("SELECT pilot_id, is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()).toMatchObject({
+    expect(((await resolved.json()) as { orderStatus: string }).orderStatus).toBe("CANCELADA");
+    expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe(
+      "ACTIVO",
+    );
+    expect(
+      db
+        .prepare("SELECT pilot_id, is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'")
+        .get(),
+    ).toMatchObject({
       pilot_id: SELLER_ID,
       is_locked: 0,
     });
@@ -407,8 +413,14 @@ describe("P2P purchase flow", () => {
       { DB: database },
     );
     expect(response.status).toBe(200);
-    expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe("CANCELADO");
-    expect(db.prepare("SELECT is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()?.["is_locked"]).toBe(0);
+    expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe(
+      "CANCELADO",
+    );
+    expect(
+      db.prepare("SELECT is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()?.[
+        "is_locked"
+      ],
+    ).toBe(0);
   });
 
   it("cancels a pending order without refunding the commission", async () => {
