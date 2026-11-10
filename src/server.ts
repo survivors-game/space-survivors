@@ -5567,6 +5567,7 @@ async function handleAdminChatRequest(
     return json({
       messages: roomData.messages ?? [],
       mutes: roomData.mutes ?? [],
+      chatEnabled: (roomData as { chatEnabled?: boolean }).chatEnabled !== false,
       reports: reports.results ?? [],
       logs: logs.results ?? [],
     });
@@ -5580,7 +5581,7 @@ async function handleAdminChatRequest(
   const enabled = body?.["enabled"];
   if (
     typeof action !== "string" ||
-    !["delete-message", "mute", "ban", "unmute", "close-report", "set-chat-enabled"].includes(
+    !["delete-message", "delete-last-12-hours", "delete-last-24-hours", "delete-all-messages", "mute", "ban", "unmute", "close-report", "set-chat-enabled"].includes(
       action,
     )
   )
