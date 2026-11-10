@@ -36,7 +36,7 @@ function createDatabase() {
           return null;
         },
         async all() {
-          if (query.includes("LEFT JOIN player_profiles"))
+          if (query.includes("FROM pilots p LEFT JOIN player_accounts pa"))
             return {
               results: [{ pilot_id: PILOT_ID, callsign: "TEST-PILOT", email: "pilot@example.com" }],
             };
