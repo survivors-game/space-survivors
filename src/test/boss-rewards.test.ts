@@ -449,7 +449,7 @@ describe("server-validated boss combat", () => {
         expect(attempt.boss?.hp).toBe(180_000);
         expect(attempt.boss?.damage).toBe(54);
         expect(attempt.boss?.max_hit_damage).toBe(50_000);
-        expect(attempt.expires_at! - attempt.issued_at!).toBe(30 * 60 * 1000);
+        expect(attempt.expires_at! - attempt.issued_at!).toBe(20 * 60 * 1000);
       }
 
       const durationMs = attempt.boss!.min_combat_ms + 1_000;
@@ -503,7 +503,7 @@ describe("server-validated boss combat", () => {
   it("rejects expired, reused, too-short, and insufficient-damage claims and consumes failed proofs", async () => {
     const { db, attempts, getBossObsidian } = createDatabase();
     const expired = await startBoss(db, "leviathan");
-    vi.advanceTimersByTime(30 * 60 * 1000 + 1);
+    vi.advanceTimersByTime(20 * 60 * 1000 + 1);
     const expiredEvidence = createEvidence(
       expired.body.issued_at!,
       10 * 60 * 1000,
