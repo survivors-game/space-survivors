@@ -7705,7 +7705,8 @@ export default {
       const maintenanceResponse = await handleMaintenanceGate(request, workerEnv);
       if (maintenanceResponse) return maintenanceResponse;
       const summaryAdminResponse = await handleAdminSummaryRequest(request, workerEnv);
-      if (summaryAdminResponse) return summaryAdminResponse;\n      const configAdminResponse = await handleAdminConfigRequest(request, workerEnv);
+      if (summaryAdminResponse) return summaryAdminResponse;
+      const configAdminResponse = await handleAdminConfigRequest(request, workerEnv);
       if (configAdminResponse) return configAdminResponse;
       const securityAdminResponse = await handleAdminSecurityRequest(request, workerEnv);
       if (securityAdminResponse) return securityAdminResponse;
