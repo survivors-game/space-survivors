@@ -1,4 +1,4 @@
-import "./lib/error-capture";
+ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -50,6 +50,10 @@ type KVNamespace = {
 type WorkerEnv = ChatWorkerEnv & {
   DB?: D1Database;
   LEADERBOARD?: KVNamespace;
+  PILOT_NOTIFY?: {
+    idFromName(name: string): unknown;
+    get(id: unknown): { fetch(request: Request): Promise<Response> };
+  };
   WAR_ROOM?: {
     idFromName(name: string): unknown;
     get(id: unknown): { fetch(request: Request): Promise<Response> };
@@ -3744,12 +3748,7 @@ async function handleBossRequest(
           account.pilot_id,
           reward.bossId,
           reward.obsidian,
-          JSON.stringify(
-            drops.map((drop) => ({
-              type: drop.itemType === "nave" ? "nave" : "objeto",
-              name: drop.itemName,
-            })),
-          ),
+          JSON.stringify(drops.map((drop) => ({ type: drop.itemType === "nave" ? "nave" : "objeto", name: drop.itemName }))),
           now,
           account.pilot_id,
           reward.bossId,
@@ -3859,6 +3858,7 @@ async function handleBossRequest(
     ) {
       throw new Error("La recompensa del boss no se pudo aplicar completamente.");
     }
+    await notifyPilotRewards(env, account.pilot_id);
     if (helpSession) {
       await notifyBossHelpEnded(env, db, helpSession.session_id, account.pilot_id, "completed");
     }
@@ -5322,6 +5322,7 @@ async function handleAdminRewardsRequest(
     const results = await db.batch(statements);
     if (results[0]?.meta?.changes !== 1)
       return json({ error: "No se pudo entregar el premio al jugador." }, 409);
+    await notifyPilotRewards(env, player.pilot_id);
   } catch (error) {
     console.error("No se pudo registrar la recompensa:", error);
     return json(
@@ -5341,6 +5342,23 @@ async function handleAdminRewardsRequest(
     quantity,
     event_name: eventName,
   });
+}
+
+/** Avisa en tiempo real al jugador que tiene un premio nuevo. Nunca bloquea la entrega. */
+async function notifyPilotRewards(env: WorkerEnv | undefined, pilotId: string) {
+  if (!env?.PILOT_NOTIFY) return;
+  try {
+    const stub = env.PILOT_NOTIFY.get(env.PILOT_NOTIFY.idFromName(pilotId));
+    await stub.fetch(
+      new Request("https://pilot-notify.internal/notify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "rewards" }),
+      }),
+    );
+  } catch (error) {
+    console.error("No se pudo enviar la notificación de premio:", error);
+  }
 }
 
 let pilotRewardLogsReady = false;
@@ -5370,7 +5388,7 @@ async function handlePilotRewardsRequest(
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/api/pilot/rewards") return null;
+  if (url.pathname !== "/api/pilot/rewards" && url.pathname !== "/api/pilot/rewards/ws") return null;
   if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
 
@@ -5385,6 +5403,22 @@ async function handlePilotRewardsRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión para ver tus premios." }, 401);
+
+  if (url.pathname === "/api/pilot/rewards/ws") {
+    if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+      return json({ error: "Se requiere una conexión WebSocket." }, 426);
+    }
+    if (request.headers.get("origin") !== url.origin) {
+      return json({ error: "Origen de conexión no autorizado." }, 403);
+    }
+    if (!env?.PILOT_NOTIFY) {
+      return json({ error: "Las notificaciones en tiempo real no están disponibles." }, 503);
+    }
+    const stub = env.PILOT_NOTIFY.get(env.PILOT_NOTIFY.idFromName(account.pilot_id));
+    const socketUrl = new URL(request.url);
+    socketUrl.pathname = "/websocket";
+    return stub.fetch(new Request(socketUrl, request));
+  }
 
   type RewardEntry = {
     id: string;
@@ -7999,5 +8033,6 @@ export default {
 
 export { ChatRoom } from "./chat/chat-room";
 export { BossHelpRoom } from "./game/boss-help-room";
+export { PilotNotifyRoom } from "./game/pilot-notify-room";
 
 export { WarRoom } from "./game/war-room";

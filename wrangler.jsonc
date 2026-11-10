@@ -1,4 +1,4 @@
-{
+ {
   "name": "space-survivors",
   "main": ".output/server/index.mjs",
   "compatibility_date": "2026-11-07",
@@ -7,32 +7,34 @@
     {
       "binding": "DB",
       "database_name": "space-survivors-db",
-      "database_id": "8864837b-152c-46d0-87d1-c705940be3fe",
-    },
+      "database_id": "8864837b-152c-46d0-87d1-c705940be3fe"
+    }
   ],
   "kv_namespaces": [
     {
       "binding": "LEADERBOARD",
-      "id": "dabc63ce0ea14f6a80accf286f5d41aa",
-    },
+      "id": "dabc63ce0ea14f6a80accf286f5d41aa"
+    }
   ],
   "vars": {
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAF3_cGCrnDqEPxfr",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF3_cGCrnDqEPxfr"
   },
   "durable_objects": {
     "bindings": [
       { "name": "CHAT_ROOM", "class_name": "ChatRoom" },
       { "name": "BOSS_HELP", "class_name": "BossHelpRoom" },
       { "name": "WAR_ROOM", "class_name": "WarRoom" },
-    ],
+      { "name": "PILOT_NOTIFY", "class_name": "PilotNotifyRoom" }
+    ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ChatRoom"] },
     { "tag": "v2", "new_sqlite_classes": ["BossHelpRoom"] },
     { "tag": "v3", "new_sqlite_classes": ["WarRoom"] },
+    { "tag": "v4", "new_sqlite_classes": ["PilotNotifyRoom"] }
   ],
   "assets": {
     "binding": "ASSETS",
-    "directory": ".output/public",
-  },
+    "directory": ".output/public"
+  }
 }

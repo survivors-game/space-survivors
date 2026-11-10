@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
@@ -234,10 +234,7 @@ export function PilotHub({
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
   const rank = rankFor(runs);
-  const plateId = `PLT-${pilotId
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 8)
-    .toUpperCase()}`;
+  const plateId = `PLT-${pilotId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
   const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
 
   return (
@@ -354,7 +351,8 @@ export function PilotHub({
                   className="absolute bottom-7 h-16 w-5"
                   style={{
                     [side]: "15%",
-                    background: "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
+                    background:
+                      "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
                     border: "1px solid rgba(253,224,71,0.6)",
                     boxShadow: "0 0 4px rgba(253,224,71,0.15)",
                   }}
@@ -395,9 +393,7 @@ export function PilotHub({
                     key={row.label}
                     className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
                   >
-                    <dt className="text-[10px] uppercase tracking-wide text-white/55">
-                      {row.label}
-                    </dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-white/55">{row.label}</dt>
                     <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
                   </div>
                 ))}
@@ -579,14 +575,21 @@ const REWARD_STYLE: Record<string, { Icon: LucideIcon; color: string; tag: strin
   VIP: { Icon: Crown, color: GOLD, tag: "VIP" },
 };
 
-/** Premios recibidos de la administración y de jefes. Se actualiza cada 5 segundos. */
+/** Premios recibidos de la administración y de jefes. Se actualiza en tiempo real por WebSocket. */
 function RewardsFeed() {
   const [rewards, setRewards] = useState<RewardEntry[]>([]);
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     let active = true;
+    let retryDelay = 2000;
+    const link: { socket: WebSocket | null; timer: number | undefined } = {
+      socket: null,
+      timer: undefined,
+    };
+
     const load = async () => {
       try {
         const response = await fetch("/api/pilot/rewards", { credentials: "same-origin" });
@@ -601,14 +604,35 @@ function RewardsFeed() {
         if (active) setLoaded(true);
       }
     };
+
+    // Conexión persistente: el servidor avisa cuando hay un premio nuevo.
+    // Si la conexión se corta, reintenta con espera creciente.
+    const connect = () => {
+      if (!active) return;
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const socket = new WebSocket(`${protocol}//${window.location.host}/api/pilot/rewards/ws`);
+      link.socket = socket;
+      socket.onopen = () => {
+        retryDelay = 2000;
+        setConnected(true);
+        void load();
+      };
+      socket.onmessage = () => void load();
+      socket.onclose = () => {
+        link.socket = null;
+        setConnected(false);
+        if (!active) return;
+        link.timer = window.setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30_000);
+      };
+    };
+
     void load();
-    const timer = window.setInterval(() => void load(), 5000);
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
+    connect();
     return () => {
       active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
+      window.clearTimeout(link.timer);
+      link.socket?.close();
     };
   }, []);
 
@@ -619,9 +643,13 @@ function RewardsFeed() {
           <Trophy className="size-3.5" />
           Premios recibidos
         </span>
-        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-emerald-300">
-          <span className="size-1.5 rounded-full bg-emerald-400" />
-          En vivo
+        <span
+          className={`flex items-center gap-1 text-[10px] uppercase tracking-wider ${
+            connected ? "text-emerald-300" : "text-white/45"
+          }`}
+        >
+          <span className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/30"}`} />
+          {connected ? "En vivo" : "Reconectando..."}
         </span>
       </div>
       <div className="max-h-[260px] overflow-y-auto">
