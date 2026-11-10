@@ -535,7 +535,7 @@ async function handleSocialRequest(
     if (isAdminVipPath) {
       if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
       if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-      if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request))) {
+      if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) {
         return json({ error: "Acceso administrativo requerido." }, 403);
       }
       const body = await readJson(request);
@@ -1895,11 +1895,16 @@ async function getAuthenticatedAccount(
     .first<PlayerAccount>();
 }
 
-async function hasValidAdminSession(db: D1Database, request: Request): Promise<boolean> {
+async function hasValidAdminSession(
+  db: D1Database,
+  request: Request,
+  googleSub: string,
+): Promise<boolean> {
   const token = readCookie(request, ADMIN_SESSION_COOKIE);
   if (!token) return false;
-  const session = await db.prepare("SELECT token_hash FROM admin_sessions WHERE token_hash = ? AND expires_at > ?")
-    .bind(await sha256Hex(token), Date.now()).first<{ token_hash: string }>();
+  const session = await db.prepare(
+    "SELECT token_hash FROM admin_sessions WHERE token_hash = ? AND google_sub = ? AND expires_at > ?",
+  ).bind(await sha256Hex(token), googleSub, Date.now()).first<{ token_hash: string }>();
   return Boolean(session);
 }
 
@@ -1918,7 +1923,7 @@ async function handleAdminAuthRequest(request: Request, env: WorkerEnv | undefin
   if (!account || account.email.toLowerCase() !== ADMIN_EMAIL) return json({ error: "Acceso administrativo no autorizado." }, 403);
   if (url.pathname === "/api/admin/auth/status") {
     if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
-    return json({ authenticated: await hasValidAdminSession(db, request) });
+    return json({ authenticated: await hasValidAdminSession(db, request, account.google_sub) });
   }
   if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
   if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
@@ -4604,8 +4609,7 @@ export default {
         pathname.startsWith("/api/leaderboard") ||
         pathname.startsWith("/api/bosses/") ||
         pathname.startsWith("/api/market/") ||
-        pathname === "/api/admin/credit-obsidian" ||
-        pathname === "/api/admin/set-vip"
+        pathname.startsWith("/api/admin/")
       ) {
         const detail = error instanceof Error ? error.message : String(error);
         console.error("Fallo en endpoint de API:", detail);
