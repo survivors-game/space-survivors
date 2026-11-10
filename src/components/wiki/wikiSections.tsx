@@ -279,9 +279,10 @@ const partida: WikiSection = {
       </P>
       <H>Objetos</H>
       <P>
-        Al eliminar enemigos, a veces aparecen objetos (aproximadamente un{" "}
-        {pct(WORLD1_PICKUP_CHANCE)} de probabilidad por enemigo) que mejoran tu nave durante la
-        misión.
+        Al eliminar enemigos, pueden aparecer objetos. La probabilidad comienza en{" "}
+        {pct(WORLD1_PICKUP_CHANCE)} por enemigo y aumenta {pct(0.0005)} con cada horda superada,
+        para recompensar el avance a las hordas más difíciles. VIP multiplica estas probabilidades
+        por 10.
       </P>
       <H>Resultado</H>
       <P>
