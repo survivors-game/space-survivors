@@ -4112,7 +4112,7 @@ async function handleMaintenanceGate(request: Request, env: WorkerEnv | undefine
   const message = await readGameSetting(env.DB,"maintenance_message","Estamos realizando tareas de mantenimiento. Vuelve pronto.");
   if (pathname.startsWith("/api/")) return json({error:message,maintenance:true},503);
   const safe = message.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-  return new Response("<!doctype html><html lang=\\"es\\"><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><title>Mantenimiento</title><body style=\\"margin:0;min-height:100vh;display:grid;place-items:center;background:#070b18;color:#e8eefc;font:16px system-ui;text-align:center\\"><main style=\\"max-width:560px;padding:32px\\"><h1>SPACE SURVIVORS</h1><p>"+safe+"</p></main></body></html>",{status:503,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+  return new Response(`<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mantenimiento</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#070b18;color:#e8eefc;font:16px system-ui;text-align:center"><main style="max-width:560px;padding:32px"><h1>SPACE SURVIVORS</h1><p>${safe}</p></main></body></html>`,{status:503,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
 
 async function handleAdminSecurityRequest(
