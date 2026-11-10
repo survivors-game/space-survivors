@@ -3941,6 +3941,140 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
+
+async function handleSupportRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  const isPlayer = url.pathname === "/api/support/tickets";
+  const isAdmin = url.pathname === "/api/admin/support";
+  if (!isPlayer && !isAdmin) return null;
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  if (request.method !== "GET" && request.method !== "POST")
+    return json({ error: "Método no permitido." }, 405);
+  if (request.method === "POST" && !isSameOriginPost(request, url))
+    return json({ error: "Solicitud no autorizada." }, 403);
+
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS support_tickets (
+        id TEXT PRIMARY KEY, pilot_id TEXT NOT NULL, subject TEXT NOT NULL,
+        category TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN',
+        priority TEXT NOT NULL DEFAULT 'NORMAL', created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, closed_at INTEGER
+      )`,
+    ).run();
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS support_messages (
+        id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, sender_role TEXT NOT NULL,
+        sender_name TEXT NOT NULL, message TEXT NOT NULL, created_at INTEGER NOT NULL
+      )`,
+    ).run();
+    await db.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_support_tickets_status_updated ON support_tickets(status, updated_at DESC)",
+    ).run();
+    await db.prepare(
+      "CREATE INDEX IF NOT EXISTS idx_support_messages_ticket ON support_messages(ticket_id, created_at)",
+    ).run();
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS admin_support_logs (
+        id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, action TEXT NOT NULL,
+        note TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
+      )`,
+    ).run();
+  } catch (error) {
+    console.error("No se pudo preparar el sistema de soporte:", error);
+    return json({ error: "No se pudo preparar el sistema de soporte." }, 503);
+  }
+
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con Google para usar soporte." }, 401);
+
+  if (isPlayer) {
+    if (request.method === "GET") {
+      const tickets = await db.prepare(
+        "SELECT id, subject, category, status, priority, created_at, updated_at, closed_at FROM support_tickets WHERE pilot_id = ? ORDER BY updated_at DESC LIMIT 50",
+      ).bind(account.pilot_id).all();
+      return json({ tickets: tickets.results ?? [] });
+    }
+    const body = await readJson(request, 4096);
+    const subject = typeof body?.["subject"] === "string" ? body["subject"].trim() : "";
+    const category = body?.["category"];
+    const description = typeof body?.["description"] === "string" ? body["description"].trim() : "";
+    if (subject.length < 4 || subject.length > 100 || description.length < 10 || description.length > 2000 ||
+      !["TECNICO", "CUENTA", "PAGOS", "MERCADO", "OTRO"].includes(String(category))) {
+      return json({ error: "Completa un asunto, categoría y descripción válidos." }, 400);
+    }
+    const now = Date.now();
+    const id = crypto.randomUUID();
+    await db.batch([
+      db.prepare("INSERT INTO support_tickets (id, pilot_id, subject, category, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'OPEN', 'NORMAL', ?, ?)").bind(id, account.pilot_id, subject, category, description, now, now),
+      db.prepare("INSERT INTO support_messages (id, ticket_id, sender_role, sender_name, message, created_at) VALUES (?, ?, 'PLAYER', ?, ?, ?)").bind(crypto.randomUUID(), id, account.email, description, now),
+    ]);
+    return json({ success: true, id });
+  }
+
+  if (account.email.toLowerCase() !== ADMIN_EMAIL ||
+    !(await hasValidAdminSession(db, request, account.google_sub))) {
+    return json({ error: "Acceso administrativo requerido." }, 403);
+  }
+
+  if (request.method === "GET") {
+    const [tickets, logs] = await Promise.all([
+      db.prepare(
+        `SELECT t.id, t.pilot_id, t.subject, t.category, t.description, t.status, t.priority,
+          t.created_at, t.updated_at, t.closed_at,
+          COALESCE(NULLIF(profile.display_name, ''), pilot.callsign, 'PILOTO') AS callsign,
+          account.email
+         FROM support_tickets t
+         LEFT JOIN pilots pilot ON pilot.pilot_id = t.pilot_id
+         LEFT JOIN player_profiles profile ON profile.pilot_id = t.pilot_id
+         LEFT JOIN player_accounts account ON account.pilot_id = t.pilot_id
+         ORDER BY CASE WHEN t.status = 'OPEN' THEN 0 WHEN t.status = 'IN_PROGRESS' THEN 1 ELSE 2 END,
+          t.updated_at DESC LIMIT 200`,
+      ).all(),
+      db.prepare("SELECT ticket_id, action, note, admin_email, created_at FROM admin_support_logs ORDER BY created_at DESC LIMIT 100").all(),
+    ]);
+    const messages = await db.prepare(
+      "SELECT id, ticket_id, sender_role, sender_name, message, created_at FROM support_messages ORDER BY created_at ASC LIMIT 1000",
+    ).all();
+    return json({ tickets: tickets.results ?? [], messages: messages.results ?? [], logs: logs.results ?? [] });
+  }
+
+  const body = await readJson(request, 4096);
+  const action = body?.["action"];
+  const ticketId = typeof body?.["ticketId"] === "string" ? body["ticketId"].trim() : "";
+  const note = typeof body?.["note"] === "string" ? body["note"].trim() : "";
+  if (!/^[a-f0-9-]{36}$/i.test(ticketId)) return json({ error: "Ticket no válido." }, 400);
+  const ticket = await db.prepare("SELECT id, status FROM support_tickets WHERE id = ?").bind(ticketId).first<{id:string;status:string}>();
+  if (!ticket) return json({ error: "El ticket no existe." }, 404);
+  const now = Date.now();
+  if (action === "reply") {
+    if (note.length < 2 || note.length > 2000) return json({ error: "La respuesta debe tener entre 2 y 2000 caracteres." }, 400);
+    await db.batch([
+      db.prepare("INSERT INTO support_messages (id, ticket_id, sender_role, sender_name, message, created_at) VALUES (?, ?, 'ADMIN', ?, ?, ?)").bind(crypto.randomUUID(), ticketId, account.email, note, now),
+      db.prepare("UPDATE support_tickets SET status = CASE WHEN status = 'CLOSED' THEN 'IN_PROGRESS' ELSE 'IN_PROGRESS' END, updated_at = ?, closed_at = NULL WHERE id = ?").bind(now, ticketId),
+      db.prepare("INSERT INTO admin_support_logs (id, ticket_id, action, note, admin_email, created_at) VALUES (?, ?, 'reply', ?, ?, ?)").bind(crypto.randomUUID(), ticketId, note.slice(0, 240), account.email, now),
+    ]);
+    return json({ success: true });
+  }
+  if (action === "set-status") {
+    const status = body?.["status"];
+    if (status !== "OPEN" && status !== "IN_PROGRESS" && status !== "CLOSED")
+      return json({ error: "Estado de ticket no válido." }, 400);
+    if (note.length < 3 || note.length > 240) return json({ error: "Indica un motivo para el cambio de estado." }, 400);
+    await db.batch([
+      db.prepare("UPDATE support_tickets SET status = ?, updated_at = ?, closed_at = ? WHERE id = ?").bind(status, now, status === "CLOSED" ? now : null, ticketId),
+      db.prepare("INSERT INTO admin_support_logs (id, ticket_id, action, note, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), ticketId, "status:" + status, note, account.email, now),
+    ]);
+    return json({ success: true });
+  }
+  return json({ error: "Acción de soporte no válida." }, 400);
+}
+
 async function handleAdminChatRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -6156,7 +6290,7 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
-      const announcementsResponse = await handleAnnouncementsRequest(request, workerEnv);
+      const supportResponse = await handleSupportRequest(request, workerEnv);\n      if (supportResponse) return supportResponse;\n      const announcementsResponse = await handleAnnouncementsRequest(request, workerEnv);
       if (announcementsResponse) return announcementsResponse;
       const adminChatResponse = await handleAdminChatRequest(request, workerEnv);
       if (adminChatResponse) return adminChatResponse;
