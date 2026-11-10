@@ -24,7 +24,6 @@ import { WEAPONS } from "@/game/data/weapons";
 import { PASSIVES } from "@/game/data/passives";
 import { ENEMIES } from "@/game/data/enemies";
 import { BOSSES } from "@/game/data/bosses";
-import { BOSS_REWARDS } from "@/game/data/boss-rewards";
 import { STAGES } from "@/game/data/stages";
 import { CONFIG } from "@/game/config";
 import { WORLD1_PICKUP_CHANCE, xpForLevel } from "@/game/timeline";
@@ -72,7 +71,6 @@ const MISSION_SPRITE: Record<MissionIcon, string> = {
 };
 
 const fmt = (n: number) => n.toLocaleString();
-const pct = (n: number) => `${Math.round(n * 100)}%`;
 const shipName = (id: string) => SHIPS.find((s) => s.id === id)?.name ?? id;
 const stageName = (id: string) => STAGES.find((s) => s.id === id)?.name ?? id;
 const weaponName = (id: string) => WEAPONS.find((w) => w.id === id)?.name ?? id;
@@ -362,26 +360,17 @@ const jefes: WikiSection = {
     <>
       <H>Jefes</H>
       <P>
-        Los jefes son los enemigos más peligrosos del juego. Derrotarlos da obsidiana, créditos y
-        una posibilidad de conseguir naves u objetos.
+        Los jefes son los enemigos más peligrosos del juego. Derrotarlos concede recompensas
+        aleatorias que se acreditan directamente en tu cuenta. El contenido y las cantidades se
+        mantienen ocultos hasta que aparecen en tu inventario.
       </P>
       <Grid>
-        {BOSSES.map((b) => {
-          const reward = BOSS_REWARDS.find((r) => r.bossId === b.id);
-          return (
-            <Card key={b.id} sprite={b.sprite} color={b.color} title={b.name} subtitle={b.title}>
-              <P>{b.desc}</P>
-              {reward ? (
-                <>
-                  <Stat label="Obsidiana" value={`${reward.obsidian} OBS`} />
-                  <Stat label="Probabilidad de nave" value={pct(reward.shipChance)} />
-                  <Stat label="Probabilidad de objeto" value={pct(reward.itemChance)} />
-                </>
-              ) : null}
-              <Stat label="Créditos" value={`${fmt(b.credits)} CR`} />
-            </Card>
-          );
-        })}
+        {BOSSES.map((b) => (
+          <Card key={b.id} sprite={b.sprite} color={b.color} title={b.name} subtitle={b.title}>
+            <P>{b.desc}</P>
+            <Stat label="Créditos de combate" value={`${fmt(b.credits)} CR`} />
+          </Card>
+        ))}
       </Grid>
       <H>Enfriamiento</H>
       <P>
