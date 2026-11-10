@@ -4059,6 +4059,8 @@ async function handleAdminAlliancesRequest(
     if (!alliance) return json({error:"No se encontró la alianza."},404);
     const locked = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
     if (locked) return json({error:"No puedes disolver una alianza con una guerra pendiente o activa."},409);
+    const history = await db.prepare("SELECT war_id FROM alliance_wars WHERE attacker_alliance_id=? OR defender_alliance_id=? LIMIT 1").bind(allianceId,allianceId).first();
+    if (history) return json({error:"Esta alianza tiene historial de guerras y no se puede eliminar sin borrar ese historial."},409);
     await db.batch([
       db.prepare("DELETE FROM alliances WHERE alliance_id=?").bind(allianceId),
       log(allianceId,null,"dissolve:"+alliance.name,null),
