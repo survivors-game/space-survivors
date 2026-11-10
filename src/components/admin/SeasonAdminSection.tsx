@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  DAILY_MISSION_TEMPLATES,
+  SEASON_CHALLENGES,
+  WEEKLY_MISSION_TEMPLATES,
+  getActiveDailyMissions,
+  getActiveWeeklyMissions,
+  getUtcWeekStr,
+} from "@/game/meta/missions";
 
 type SeasonEvent = {
   id: string;
@@ -289,6 +297,32 @@ export function SeasonAdminSection() {
           {!loading && !data?.events.length ? <p className="p-4 text-center text-xs text-white/45">Todavía no hay temporadas o eventos registrados.</p> : null}
           {loading ? <p className="p-4 text-center text-xs text-white/45">Cargando...</p> : null}
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-xs uppercase tracking-wider text-cyan-200">Misiones configuradas en el juego</h3>
+        <p className="text-xs text-white/45">Catálogo actual de misiones diarias, semanales y desafíos de temporada. Las reglas y recompensas base se definen en el sistema del juego.</p>
+        <div className="grid gap-3 lg:grid-cols-3">
+          {[
+            { title: "Diarias activas", items: getActiveDailyMissions(new Date().toISOString().slice(0, 10)) },
+            { title: "Semanales activas", items: getActiveWeeklyMissions(getUtcWeekStr()) },
+            { title: "Desafíos de temporada", items: SEASON_CHALLENGES },
+          ].map((group) => (
+            <div key={group.title} className="overflow-hidden rounded border border-white/10">
+              <h4 className="border-b border-white/10 px-3 py-2 text-xs text-cyan-100">{group.title}</h4>
+              <div className="max-h-80 space-y-2 overflow-y-auto p-3">
+                {group.items.map((mission) => (
+                  <div key={mission.id} className="border-b border-white/5 pb-2 last:border-0">
+                    <p className="text-xs font-bold text-white/80">{mission.title}</p>
+                    <p className="mt-1 text-[11px] text-white/45">{mission.desc}</p>
+                    <p className="mt-1 text-[11px] text-cyan-200">Meta: {mission.goal.toLocaleString("es-CO")} · Premio: {mission.reward} CR · {mission.pt} PT</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-white/45">Plantillas disponibles: {DAILY_MISSION_TEMPLATES.length} diarias y {WEEKLY_MISSION_TEMPLATES.length} semanales. Las entregas adicionales o correcciones se realizan en «Premios y recompensas».</p>
       </section>
 
       <section className="space-y-2">
