@@ -160,9 +160,10 @@ async function getChatPlayer(request: Request, db: ChatDatabase): Promise<Player
        FROM player_accounts a
        LEFT JOIN player_profiles p ON p.pilot_id = a.pilot_id
        LEFT JOIN pilots pilot ON pilot.pilot_id = a.pilot_id
+       LEFT JOIN admin_player_status admin_status ON admin_status.pilot_id = a.pilot_id
        LEFT JOIN alliance_members member ON member.pilot_id = a.pilot_id
        LEFT JOIN alliances alliance ON alliance.alliance_id = member.alliance_id
-       WHERE a.google_sub = ?`,
+       WHERE a.google_sub = ? AND admin_status.suspended_at IS NULL`,
     )
     .bind(session.wallet_address.slice("google:".length))
     .first<{
