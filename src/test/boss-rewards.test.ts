@@ -457,15 +457,11 @@ describe("server-validated boss combat", () => {
         evidence,
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as {
-        obsidian: number;
-        rewards: { itemName: string; itemType: string }[];
-      };
-      expect(body.obsidian).toBe(reward.obsidian);
-      expect(body.rewards.length).toBeLessThanOrEqual(2);
-      expect(body.rewards.every((drop) => drop.itemName.includes(`Rango ${reward.rank}`))).toBe(
-        true,
-      );
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body.success).toBe(true);
+      expect(body).not.toHaveProperty("obsidian");
+      expect(body).not.toHaveProperty("rewards");
+      expect(body).not.toHaveProperty("helperReward");
 
       const replay = await claimBoss(
         db,
