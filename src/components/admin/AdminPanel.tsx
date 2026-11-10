@@ -785,7 +785,7 @@ function ChatAdminSection() {
     void load();
   }, []);
   const act = async (payload: Record<string, string | number | boolean>) => {
-    const reason = typeof payload.reason === "string" ? payload.reason : "";
+    const reason = typeof payload["reason"] === "string" ? payload["reason"] : "";
     if (reason.trim().length < 5) {
       setError("Escribe un motivo de al menos 5 caracteres.");
       return;
