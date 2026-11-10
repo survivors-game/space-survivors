@@ -1,4 +1,4 @@
- import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SeasonAdminSection } from "./SeasonAdminSection";
 import { AlliancesAdminSection } from "./AlliancesAdminSection";
 import { VipAdminSection } from "./VipAdminSection";
@@ -354,9 +354,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           >
             <div className="flex items-center gap-2 border-b border-amber-400/20 px-4 py-3">
               <Shield className="size-4 text-amber-300" />
-              <span className="text-[11px] tracking-widest text-amber-300">
-                ADMINISTRACIÓN
-              </span>
+              <span className="text-[11px] tracking-widest text-amber-300">ADMINISTRACIÓN</span>
               <button
                 className="ml-auto md:hidden"
                 onClick={() => setNavOpen(false)}
@@ -479,9 +477,7 @@ function AdminLogin({
         <div className="mx-auto mb-4 grid size-14 place-items-center rounded-full border border-amber-400/40 bg-amber-400/10">
           <Lock className="size-6 text-amber-300" />
         </div>
-        <h2 className="text-center text-xs tracking-[0.3em] text-amber-300">
-          ACCESO DE MANDO
-        </h2>
+        <h2 className="text-center text-xs tracking-[0.3em] text-amber-300">ACCESO DE MANDO</h2>
         <p className="mt-2 text-center text-sm text-white/65">
           Introduce la contraseña administrativa
         </p>
@@ -545,9 +541,7 @@ function SectionView({
           <Icon className="size-4 text-cyan-300" />
         </div>
         <div>
-          <h1 className="text-sm tracking-widest text-cyan-200">
-            {def.label.toUpperCase()}
-          </h1>
+          <h1 className="text-sm tracking-widest text-cyan-200">{def.label.toUpperCase()}</h1>
           <p className="text-sm text-white/60">{def.desc}</p>
         </div>
       </div>
@@ -1244,7 +1238,9 @@ function AnnouncementsAdminSection() {
             <input
               type="color"
               value={form.color}
-              onChange={(event) => setForm((current) => ({ ...current, color: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, color: event.target.value }))
+              }
               className="h-10 w-14 cursor-pointer border border-white/10 bg-black/40 p-1"
             />
             <span className="font-mono text-xs text-white/70">{form.color.toUpperCase()}</span>
@@ -2064,9 +2060,7 @@ function MarketAdminSection() {
         ].map(([label, value]) => (
           <div key={label} className="rounded border border-white/10 bg-white/[0.03] p-3">
             <p className="text-[10px] uppercase text-white/50">{label}</p>
-            <p className="mt-2 text-lg text-cyan-200">
-              {Number(value).toLocaleString()}
-            </p>
+            <p className="mt-2 text-lg text-cyan-200">{Number(value).toLocaleString()}</p>
           </div>
         ))}
       </div>
