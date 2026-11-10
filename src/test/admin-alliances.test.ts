@@ -11,6 +11,7 @@ function createDatabase(){
   return {
     prepare(query:string){
       return {
+        query,
         bind(..._values:unknown[]){return this;},
         async run(){return {meta:{changes:1}};},
         async first(){
@@ -18,6 +19,8 @@ function createDatabase(){
           if(query.includes("FROM player_accounts")&&query.includes("google_sub"))return {google_sub:"admin-sub",email:ADMIN_EMAIL,pilot_id:"plt_admin"};
           if(query.includes("FROM admin_sessions"))return {token_hash:"valid-admin-session",google_sub:"admin-sub"};
           if(query.includes("FROM alliance_members WHERE alliance_id=? AND pilot_id=?"))return {role:memberRole};
+          if(query.includes("FROM alliances WHERE alliance_id=?"))return {name:"Alianza"};
+          if(query.includes("FROM alliance_wars WHERE war_id=?"))return {attacker_alliance_id:"alliance-1",defender_alliance_id:"alliance-2",status:"ACTIVE"};
           if(query.includes("FROM alliance_war_locks WHERE alliance_id=?"))return allianceLocked?{war_id:"war-1"}:null;
           if(query.includes("FROM alliance_wars WHERE attacker_alliance_id=?"))return hasWarHistory?{war_id:"war-old"}:null;
           return null;
@@ -82,7 +85,7 @@ describe("administrative alliance and war management",()=>{
   });
   it("does not allow admins to cancel a battle already in progress",async()=>{
     const response=await server.fetch(request({action:"cancel-war",warId:"war-1",reason:"Solicitud administrativa"}),{DB:createDatabase()} as never);
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(409);
     expect(batches).toHaveLength(0);
   });
 });
