@@ -5581,9 +5581,17 @@ async function handleAdminChatRequest(
   const enabled = body?.["enabled"];
   if (
     typeof action !== "string" ||
-    !["delete-message", "delete-last-12-hours", "delete-last-24-hours", "delete-all-messages", "mute", "ban", "unmute", "close-report", "set-chat-enabled"].includes(
-      action,
-    )
+    ![
+      "delete-message",
+      "delete-last-12-hours",
+      "delete-last-24-hours",
+      "delete-all-messages",
+      "mute",
+      "ban",
+      "unmute",
+      "close-report",
+      "set-chat-enabled",
+    ].includes(action)
   )
     return json({ error: "Acción de chat no válida." }, 400);
   if (reason.length < 5) return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);

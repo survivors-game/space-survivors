@@ -680,37 +680,39 @@ function SectionView({
             ) : null}
 
             <div className="min-w-0 space-y-5">
-              {def.id !== "premios" ? def.tables?.map((t) => (
-                <div key={t.title} className="overflow-hidden rounded border border-white/10">
-                  <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
-                    <FileClock className="size-3" />
-                    {t.title}
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[520px] text-left text-sm">
-                      <thead>
-                        <tr className="text-white/55">
-                          {t.cols.map((col) => (
-                            <th key={col.key} className="px-3 py-2 font-normal">
-                              {col.label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td
-                            colSpan={t.cols.length}
-                            className="px-3 py-8 text-center text-white/50"
-                          >
-                            Sin datos · {PENDING.toLowerCase()}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )) : null}
+              {def.id !== "premios"
+                ? def.tables?.map((t) => (
+                    <div key={t.title} className="overflow-hidden rounded border border-white/10">
+                      <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
+                        <FileClock className="size-3" />
+                        {t.title}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[520px] text-left text-sm">
+                          <thead>
+                            <tr className="text-white/55">
+                              {t.cols.map((col) => (
+                                <th key={col.key} className="px-3 py-2 font-normal">
+                                  {col.label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td
+                                colSpan={t.cols.length}
+                                className="px-3 py-8 text-center text-white/50"
+                              >
+                                Sin datos · {PENDING.toLowerCase()}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))
+                : null}
               {def.actions ? (
                 <div className="flex flex-wrap gap-2">
                   {def.actions.map((a) => (
@@ -1607,22 +1609,30 @@ function ChatAdminSection() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2 border border-white/10 bg-white/[0.02] p-3">
             <span className="mr-auto text-xs text-white/60">Limpieza masiva del historial</span>
-            {([
-              ["delete-last-12-hours", "Borrar últimas 12 h"],
-              ["delete-last-24-hours", "Borrar últimas 24 h"],
-              ["delete-all-messages", "Borrar todos"],
-            ] as const).map(([action, label]) => (
+            {(
+              [
+                ["delete-last-12-hours", "Borrar últimas 12 h"],
+                ["delete-last-24-hours", "Borrar últimas 24 h"],
+                ["delete-all-messages", "Borrar todos"],
+              ] as const
+            ).map(([action, label]) => (
               <button
                 key={action}
                 type="button"
                 disabled={busy || loading}
                 onClick={() => {
-                  const description = action === "delete-last-12-hours"
-                    ? "los mensajes de las últimas 12 horas"
-                    : action === "delete-last-24-hours"
-                      ? "los mensajes de las últimas 24 horas"
-                      : "TODOS los mensajes almacenados";
-                  if (!window.confirm("¿Confirmas borrar " + description + "? Esta acción no se puede deshacer.")) return;
+                  const description =
+                    action === "delete-last-12-hours"
+                      ? "los mensajes de las últimas 12 horas"
+                      : action === "delete-last-24-hours"
+                        ? "los mensajes de las últimas 24 horas"
+                        : "TODOS los mensajes almacenados";
+                  if (
+                    !window.confirm(
+                      "¿Confirmas borrar " + description + "? Esta acción no se puede deshacer.",
+                    )
+                  )
+                    return;
                   const reason = askReason("Motivo obligatorio para la limpieza masiva:");
                   if (reason) void act({ action, reason });
                 }}
@@ -1633,43 +1643,43 @@ function ChatAdminSection() {
             ))}
           </div>
           <div className="space-y-2">
-          {filteredMessages.map((item) => (
-            <article
-              key={`${item.language}-${item.id}`}
-              className="border border-white/10 bg-white/[0.02] p-3"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/50">
-                <span className="font-bold text-cyan-200">{item.callsign}</span>
-                <span>
-                  {item.language.toUpperCase()} · {new Date(item.timestamp).toLocaleString()}
-                </span>
-              </div>
-              <p className="mt-2 break-words text-sm text-white/85">{item.text}</p>
-              <p className="mt-1 text-[10px] text-white/35">
-                {item.pilotId} · #{item.id}
-              </p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  const reason = askReason("Motivo para eliminar este mensaje:");
-                  if (reason)
-                    void act({
-                      action: "delete-message",
-                      messageId: item.id,
-                      pilotId: item.pilotId,
-                      reason,
-                    });
-                }}
-                className="mt-2 border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300 disabled:opacity-40"
+            {filteredMessages.map((item) => (
+              <article
+                key={`${item.language}-${item.id}`}
+                className="border border-white/10 bg-white/[0.02] p-3"
               >
-                Eliminar mensaje
-              </button>
-            </article>
-          ))}
-          {filteredMessages.length === 0 ? (
-            <p className="py-6 text-center text-sm text-white/40">No hay mensajes.</p>
-          ) : null}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/50">
+                  <span className="font-bold text-cyan-200">{item.callsign}</span>
+                  <span>
+                    {item.language.toUpperCase()} · {new Date(item.timestamp).toLocaleString()}
+                  </span>
+                </div>
+                <p className="mt-2 break-words text-sm text-white/85">{item.text}</p>
+                <p className="mt-1 text-[10px] text-white/35">
+                  {item.pilotId} · #{item.id}
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const reason = askReason("Motivo para eliminar este mensaje:");
+                    if (reason)
+                      void act({
+                        action: "delete-message",
+                        messageId: item.id,
+                        pilotId: item.pilotId,
+                        reason,
+                      });
+                  }}
+                  className="mt-2 border border-rose-400/30 px-2 py-1 text-[10px] text-rose-300 disabled:opacity-40"
+                >
+                  Eliminar mensaje
+                </button>
+              </article>
+            ))}
+            {filteredMessages.length === 0 ? (
+              <p className="py-6 text-center text-sm text-white/40">No hay mensajes.</p>
+            ) : null}
           </div>
         </div>
       ) : null}
