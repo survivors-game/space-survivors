@@ -2034,6 +2034,15 @@ async function handleAdminAuthRequest(
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account || account.email.toLowerCase() !== ADMIN_EMAIL)
     return json({ error: "Acceso administrativo no autorizado." }, 403);
+  await db.prepare(`CREATE TABLE IF NOT EXISTS admin_access_logs (
+    id TEXT PRIMARY KEY, event TEXT NOT NULL, result TEXT NOT NULL,
+    ip_hash TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
+  )`).run();
+  const accessIpHash = await sha256Hex(request.headers.get("cf-connecting-ip") ?? "unknown");
+  const recordAccess = async (event: string, result: string) => {
+    await db.prepare("INSERT INTO admin_access_logs (id,event,result,ip_hash,admin_email,created_at) VALUES (?,?,?,?,?,?)")
+      .bind(randomHex(16),event,result,accessIpHash,account.email,Date.now()).run();
+  };
   if (url.pathname === "/api/admin/auth/status") {
     if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
     return json({ authenticated: await hasValidAdminSession(db, request, account.google_sub) });
@@ -2047,6 +2056,7 @@ async function handleAdminAuthRequest(
         .prepare("DELETE FROM admin_sessions WHERE token_hash = ?")
         .bind(await sha256Hex(token))
         .run();
+    await recordAccess("logout","success");
     return json({ authenticated: false }, 200, {
       "set-cookie":
         ADMIN_SESSION_COOKIE + "=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0",
@@ -2062,8 +2072,10 @@ async function handleAdminAuthRequest(
     )
     .bind(ipHash)
     .first<{ attempts: number; window_started_at: number; blocked_until: number }>();
-  if (attempts?.blocked_until && attempts.blocked_until > now)
+  if (attempts?.blocked_until && attempts.blocked_until > now) {
+    await recordAccess("login","blocked");
     return json({ error: "Demasiados intentos. Inténtalo más tarde." }, 429);
+  }
   const body = await readJson(request, 2048);
   const suppliedPassword = typeof body?.["password"] === "string" ? body["password"] : "";
   const expectedHash = await sha256Hex(env.ADMIN_PANEL_PASSWORD);
@@ -2082,6 +2094,7 @@ async function handleAdminAuthRequest(
       )
       .bind(ipHash, nextAttempts, windowStartedAt, blockedUntil)
       .run();
+    await recordAccess("login",blockedUntil ? "blocked" : "failed");
     return json(
       {
         error: blockedUntil
@@ -2092,6 +2105,7 @@ async function handleAdminAuthRequest(
     );
   }
   await db.prepare("DELETE FROM admin_login_attempts WHERE ip_hash = ?").bind(ipHash).run();
+  await recordAccess("login","success");
   const token = randomHex(32);
   const expiresAt = now + ADMIN_SESSION_TTL_MS;
   await db
