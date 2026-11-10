@@ -3669,7 +3669,7 @@ async function handleBossRequest(
       .first<{ vip_until: number | null }>();
     const vipActive = vipStatus?.vip_until !== null && (vipStatus?.vip_until ?? 0) > now;
     const shipDropChance = vipActive ? 0.15 : reward.shipChance;
-    const itemDropChance = vipActive ? 0.20 : reward.itemChance;
+    const itemDropChance = vipActive ? 0.2 : reward.itemChance;
     const rewardId = claimId;
     const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
     if (rollChance(shipDropChance)) {
