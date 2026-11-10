@@ -114,12 +114,12 @@ describe("administrative seasons and missions dashboard", () => {
       { DB: createDatabase() } as never,
     );
     expect(response.status).toBe(200);
-    expect(batchStatements[0]).toHaveLength(2);
-    expect(batchStatements[0].some((sql) => sql.includes("INSERT INTO admin_season_events"))).toBe(
+    expect(batchStatements[0]!).toHaveLength(2);
+    expect(batchStatements[0]!.some((sql) => sql.includes("INSERT INTO admin_season_events"))).toBe(
       true,
     );
     expect(
-      batchStatements[0].some((sql) => sql.includes("INSERT INTO admin_season_event_logs")),
+      batchStatements[0]!.some((sql) => sql.includes("INSERT INTO admin_season_event_logs")),
     ).toBe(true);
   });
 
