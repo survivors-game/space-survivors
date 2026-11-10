@@ -2254,8 +2254,9 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
         )`,
         `CREATE INDEX IF NOT EXISTS idx_p2p_dispute_messages_dispute
           ON p2p_dispute_messages(dispute_id, created_at)`,
+        `DROP INDEX IF EXISTS idx_p2p_orders_one_active_per_ad`,
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad
-          ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'DISPUTA')`,
+          ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')`,
         `CREATE TABLE IF NOT EXISTS admin_market_logs (
           id TEXT PRIMARY KEY,
           order_id TEXT,
