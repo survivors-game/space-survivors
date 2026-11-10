@@ -225,6 +225,10 @@ describe("P2P purchase flow", () => {
     });
     expect(reported.response.status).toBe(200);
     expect(reported.payload.status).toBe("PAGO_REPORTADO");
+    const legacyConfirm = await requestJson("/api/market/confirm", "POST", {
+      order_id: bought.payload.order_id,
+    });
+    expect(legacyConfirm.response.status).toBe(403);
     const buyerCannotRelease = await requestJson("/api/market/release", "POST", {
       order_id: bought.payload.order_id,
     });
@@ -250,6 +254,27 @@ describe("P2P purchase flow", () => {
       order_id: bought.payload.order_id,
     }, SELLER_TOKEN);
     expect(repeated.response.status).toBe(409);
+  });
+
+  it("keeps the listing reserved after the buyer reports payment", async () => {
+    const listingId = await createListing();
+    const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
+    expect(bought.response.status).toBe(200);
+    const reported = await requestJson("/api/market/report-payment", "POST", {
+      order_id: bought.payload.order_id,
+    });
+    expect(reported.response.status).toBe(200);
+
+    const second = await requestJson("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
+    expect(second.response.status).toBe(409);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM p2p_orders").get()?.["count"]).toBe(1);
+    expect(db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"]).toBe(4);
   });
 
   it("opens a dispute, stores the conversation and lets the administrator resolve it", async () => {
