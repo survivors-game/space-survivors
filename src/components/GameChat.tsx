@@ -125,11 +125,11 @@ export function GameChat() {
             type?: string;
             messageId?: number;
           } & Partial<ChatMessage>;
-          if (payload.type === "deleted" && typeof payload.messageId === "number") {
-            setMessages((current) => current.filter((item) => item.id !== payload.messageId));
+          if (payload["type"] === "deleted" && typeof payload["messageId"] === "number") {
+            setMessages((current) => current.filter((item) => item.id !== payload["messageId"]));
             return;
           }
-          const message = payload as ChatMessage;
+          const message = payload as unknown as ChatMessage;
           if (
             typeof message.id !== "number" ||
             typeof message.pilotId !== "string" ||
