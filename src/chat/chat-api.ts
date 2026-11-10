@@ -50,6 +50,33 @@ async function ensureAdminPlayerStatusSchema(db: ChatDatabase): Promise<void> {
       )`,
       )
       .run()
+      .then(() =>
+        db
+          .prepare(
+            `CREATE TABLE IF NOT EXISTS chat_reports (
+              id TEXT PRIMARY KEY,
+              message_id INTEGER NOT NULL,
+              language TEXT NOT NULL,
+              reporter_pilot_id TEXT NOT NULL,
+              target_pilot_id TEXT NOT NULL,
+              reason TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'OPEN',
+              created_at INTEGER NOT NULL,
+              reviewed_at INTEGER,
+              reviewed_by TEXT,
+              resolution_note TEXT
+            )`,
+          )
+          .run(),
+      )
+      .then(() =>
+        db
+          .prepare(
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_reports_unique
+             ON chat_reports(message_id, language, reporter_pilot_id)`,
+          )
+          .run(),
+      )
       .then(() => undefined)
       .catch((error) => {
         adminPlayerStatusSchemaPromise = undefined;
@@ -64,7 +91,12 @@ export async function handleChatRequest(
   env: ChatWorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/api/chat/ws" && url.pathname !== "/api/chat/event") return null;
+  if (
+    url.pathname !== "/api/chat/ws" &&
+    url.pathname !== "/api/chat/event" &&
+    url.pathname !== "/api/chat/report"
+  )
+    return null;
   if (!env || !isChatDatabase(env.DB)) {
     return json({ error: "La base de datos no está disponible en este Worker." }, 503);
   }
@@ -74,6 +106,56 @@ export async function handleChatRequest(
   } catch (error) {
     console.error("No se pudo preparar el estado administrativo de jugadores:", error);
     return json({ error: "No se pudo comprobar el estado de la cuenta." }, 503);
+  }
+
+  if (url.pathname === "/api/chat/report" && request.method === "POST") {
+    if (request.headers.get("origin") !== url.origin) {
+      return json({ error: "Solicitud no autorizada." }, 403);
+    }
+    const player = await getChatPlayer(request, db);
+    if (!player) return json({ error: "Inicia sesión con Google para denunciar mensajes." }, 401);
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const messageId = Number(body?.["messageId"]);
+    const targetPilotId =
+      typeof body?.["pilotId"] === "string" ? body["pilotId"].trim() : "";
+    const language = body?.["language"];
+    const reason = typeof body?.["reason"] === "string" ? body["reason"].trim() : "";
+    if (
+      !Number.isSafeInteger(messageId) ||
+      messageId <= 0 ||
+      !PILOT_ID_PATTERN.test(targetPilotId) ||
+      targetPilotId === player.pilot_id ||
+      (language !== "es" && language !== "en") ||
+      reason.length < 5 ||
+      reason.length > 240
+    ) {
+      return json({ error: "Selecciona un mensaje y escribe un motivo de al menos 5 caracteres." }, 400);
+    }
+    try {
+      await db
+        .prepare(
+          `INSERT INTO chat_reports
+           (id, message_id, language, reporter_pilot_id, target_pilot_id, reason, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          crypto.randomUUID(),
+          messageId,
+          language,
+          player.pilot_id,
+          targetPilotId,
+          reason,
+          Date.now(),
+        )
+        .run();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("UNIQUE")) {
+        return json({ error: "Ya denunciaste este mensaje." }, 409);
+      }
+      throw error;
+    }
+    return json({ success: true });
   }
 
   if (url.pathname === "/api/chat/ws" && request.method === "GET") {
