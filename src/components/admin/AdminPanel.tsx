@@ -89,7 +89,7 @@ const SECTIONS: SectionDef[] = [
     desc: "Estado general del juego",
     stats: [
       "Jugadores registrados",
-      "Conectados ahora",
+      "Sesiones vigentes",
       "Pagos pendientes",
       "Disputas abiertas",
       "Alertas",
@@ -562,7 +562,7 @@ function SectionView({
         </div>
       ) : null}
 
-      {def.id === "economia" ? (
+      {def.id === "resumen" ? (\n        <AdminSummarySection />\n      ) : def.id === "economia" ? (
         <EconomySection />
       ) : def.id === "jugadores" ? (
         <PlayersSection />
@@ -728,6 +728,137 @@ function SectionView({
         </>
       )}
     </div>
+  );
+}
+
+
+interface AdminSummaryAlert {
+  id: string;
+  created_at: number;
+  type: string;
+  detail: string;
+  status: string;
+}
+
+interface AdminSummaryPayload {
+  stats: {
+    players: number;
+    activeSessions: number;
+    pendingPayments: number;
+    openDisputes: number;
+    alerts: number;
+  };
+  alerts: AdminSummaryAlert[];
+}
+
+function AdminSummarySection() {
+  const [data, setData] = useState<AdminSummaryPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/admin/summary", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as AdminSummaryPayload & { error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo cargar el resumen.");
+      setData(payload);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo cargar el resumen.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  const cards = [
+    { label: "Jugadores registrados", value: data?.stats.players ?? 0 },
+    { label: "Sesiones vigentes", value: data?.stats.activeSessions ?? 0 },
+    { label: "Pagos OBS pendientes", value: data?.stats.pendingPayments ?? 0 },
+    { label: "Disputas abiertas", value: data?.stats.openDisputes ?? 0 },
+    { label: "Alertas pendientes", value: data?.stats.alerts ?? 0 },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-white/50">
+          Datos reales del servidor · actualización automática cada 30 segundos
+        </p>
+        <button
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded border border-cyan-400/30 px-3 py-1.5 text-xs text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-50"
+        >
+          {loading ? "Actualizando..." : "Actualizar"}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {cards.map((card) => (
+          <div key={card.label} className="rounded border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-[11px] uppercase tracking-wider text-white/60">{card.label}</div>
+            <div className="mt-2 font-arcade text-lg text-cyan-200">
+              {loading && !data ? "…" : card.value.toLocaleString("es-CO")}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {error ? (
+        <div className="rounded border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded border border-white/10">
+        <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
+          <FileClock className="size-3" />
+          Alertas recientes
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] text-left text-sm">
+            <thead>
+              <tr className="text-white/55">
+                <th className="px-3 py-2 font-normal">Fecha</th>
+                <th className="px-3 py-2 font-normal">Tipo</th>
+                <th className="px-3 py-2 font-normal">Detalle</th>
+                <th className="px-3 py-2 font-normal">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.alerts.length ? (
+                data.alerts.map((alert) => (
+                  <tr key={alert.id} className="border-t border-white/5">
+                    <td className="whitespace-nowrap px-3 py-2 text-xs text-white/55">
+                      {alert.created_at ? new Date(alert.created_at).toLocaleString("es-CO") : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-cyan-200">{alert.type}</td>
+                    <td className="max-w-[420px] px-3 py-2 text-white/80">{alert.detail}</td>
+                    <td className="px-3 py-2 text-xs text-amber-200">{alert.status}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="px-3 py-8 text-center text-white/50">
+                    {loading ? "Cargando alertas…" : error ? "No se pudieron cargar las alertas." : "No hay alertas pendientes."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   );
 }
 
