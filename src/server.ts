@@ -4187,7 +4187,8 @@ async function handleMarketRequest(
 
     const now = Date.now();
     if (action === "reject") {
-      const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
+      const reason =
+        typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
       if (reason.length < 5) {
         return json({ error: "Escribe un motivo de rechazo de al menos 5 caracteres." }, 400);
       }
@@ -4357,7 +4358,8 @@ async function handleMarketRequest(
     }
 
     const body = await readJson(request, 4096);
-    const playerQuery = typeof body?.["player"] === "string" ? body["player"].trim().slice(0, 100) : "";
+    const playerQuery =
+      typeof body?.["player"] === "string" ? body["player"].trim().slice(0, 100) : "";
     const currency = body?.["currency"];
     const operation = body?.["operation"];
     const amount = body?.["amount"];
@@ -4946,7 +4948,8 @@ async function handleMarketRequest(
     const body = await readJson(request, 4096);
     const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
     const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 500) : "";
-    const evidenceUrl = typeof body?.["evidence_url"] === "string" ? body["evidence_url"].trim() : "";
+    const evidenceUrl =
+      typeof body?.["evidence_url"] === "string" ? body["evidence_url"].trim() : "";
     if (!orderId || orderId.length > 64 || reason.length < 10) {
       return pilotJson(
         request,
@@ -5022,8 +5025,10 @@ async function handleMarketRequest(
   if (url.pathname === "/api/market/dispute/message" && request.method === "POST") {
     const body = await readJson(request, 4096);
     const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
-    const message = typeof body?.["message"] === "string" ? body["message"].trim().slice(0, 1000) : "";
-    const evidenceUrl = typeof body?.["evidence_url"] === "string" ? body["evidence_url"].trim() : "";
+    const message =
+      typeof body?.["message"] === "string" ? body["message"].trim().slice(0, 1000) : "";
+    const evidenceUrl =
+      typeof body?.["evidence_url"] === "string" ? body["evidence_url"].trim() : "";
     if (!orderId || orderId.length > 64 || message.length < 2) {
       return pilotJson(request, pilotId, { error: "Escribe un mensaje válido." }, 400);
     }
