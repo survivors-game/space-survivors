@@ -5224,42 +5224,12 @@ async function handleMarketRequest(
   }
 
   if (url.pathname === "/api/market/confirm" && request.method === "POST") {
-    const body = await readJson(request, 2048);
-    const orderId = body?.["order_id"];
-    if (typeof orderId !== "string" || orderId.length > 64) {
-      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
-    }
-    try {
-      const result = await db
-        .prepare(
-          `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
-          WHERE id = ? AND buyer_pilot_id = ? AND status = 'PAGO_REPORTADO'
-          RETURNING id`,
-        )
-        .bind(Date.now(), orderId, pilotId)
-        .first<{ id: string }>();
-      if (!result) {
-        return pilotJson(
-          request,
-          pilotId,
-          { error: "La orden no existe, no te pertenece o ya fue procesada." },
-          409,
-        );
-      }
-      return pilotJson(request, pilotId, {
-        success: true,
-        order_id: result.id,
-        status: "COMPLETADA",
-      });
-    } catch (error) {
-      console.error("No se pudo completar la compra del mercado:", error);
-      return pilotJson(
-        request,
-        pilotId,
-        { error: "No se pudo completar la compra; la operación fue revertida." },
-        409,
-      );
-    }
+    return pilotJson(
+      request,
+      pilotId,
+      { error: "El comprador no puede liberar el artículo. Esa acción corresponde al vendedor después de verificar el pago." },
+      403,
+    );
   }
 
   if (url.pathname === "/api/market/cancel" && request.method === "POST") {
