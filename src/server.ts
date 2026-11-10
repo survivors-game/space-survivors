@@ -3826,17 +3826,15 @@ async function handleMarketRequest(
       ? db.prepare(
           `INSERT INTO admin_economy_logs
            (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-           WHERE changes() = 1 AND EXISTS (SELECT 1 FROM pilots WHERE pilot_id = ? AND obsidian = ?)`,
+           SELECT ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?
+           FROM pilots WHERE pilot_id = ? AND obsidian = ?`,
         ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter)
       : db.prepare(
           `INSERT INTO admin_economy_logs
            (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-           WHERE changes() = 1 AND EXISTS (
-             SELECT 1 FROM player_progress
-             WHERE pilot_id = ? AND CAST(COALESCE(json_extract(progress_json, '$.credits'), 0) AS INTEGER) = ?
-           )`,
+           SELECT ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?
+           FROM player_progress
+           WHERE pilot_id = ? AND CAST(COALESCE(json_extract(progress_json, '$.credits'), 0) AS INTEGER) = ?`,
         ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter);
     const results = await db.batch([update, log]);
     if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
@@ -4058,8 +4056,9 @@ async function handleMarketRequest(
           .prepare(
             `INSERT INTO admin_economy_logs
           (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
-          SELECT ?, pilot_id, 'OBS', ?, obsidian - ?, obsidian, ?, ?, ?
-          FROM pilots WHERE pilot_id = ? AND changes() = 1`,
+          SELECT ?, pilot_id, CASE WHEN changes() = 1 THEN 'OBS' ELSE NULL END,
+            ?, obsidian - ?, obsidian, ?, ?, ?
+          FROM pilots WHERE pilot_id = ?`,
           )
           .bind(`econ_${randomHex(10)}`, amount, amount, "PAQUETE_ADMINISTRATIVO", account.email, now, pilotId),
         db
