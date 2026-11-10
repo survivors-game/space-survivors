@@ -71,6 +71,7 @@ const MISSION_SPRITE: Record<MissionIcon, string> = {
 };
 
 const fmt = (n: number) => n.toLocaleString();
+const pct = (n: number) => `${Math.round(n * 100)}%`;
 const shipName = (id: string) => SHIPS.find((s) => s.id === id)?.name ?? id;
 const stageName = (id: string) => STAGES.find((s) => s.id === id)?.name ?? id;
 const weaponName = (id: string) => WEAPONS.find((w) => w.id === id)?.name ?? id;
