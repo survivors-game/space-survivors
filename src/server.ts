@@ -3995,10 +3995,15 @@ async function handleSupportRequest(
 
   if (isPlayer) {
     if (request.method === "GET") {
-      const tickets = await db.prepare(
-        "SELECT id, subject, category, status, priority, created_at, updated_at, closed_at FROM support_tickets WHERE pilot_id = ? ORDER BY updated_at DESC LIMIT 50",
-      ).bind(account.pilot_id).all();
-      return json({ tickets: tickets.results ?? [] });
+      const [tickets, messages] = await Promise.all([
+        db.prepare(
+          "SELECT id, subject, category, status, priority, created_at, updated_at, closed_at FROM support_tickets WHERE pilot_id = ? ORDER BY updated_at DESC LIMIT 50",
+        ).bind(account.pilot_id).all(),
+        db.prepare(
+          "SELECT m.id, m.ticket_id, m.sender_role, m.message, m.created_at FROM support_messages m JOIN support_tickets t ON t.id = m.ticket_id WHERE t.pilot_id = ? ORDER BY m.created_at ASC LIMIT 500",
+        ).bind(account.pilot_id).all(),
+      ]);
+      return json({ tickets: tickets.results ?? [], messages: messages.results ?? [] });
     }
     const body = await readJson(request, 4096);
     const subject = typeof body?.["subject"] === "string" ? body["subject"].trim() : "";
