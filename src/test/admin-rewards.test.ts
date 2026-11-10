@@ -29,7 +29,7 @@ function createDatabase() {
     },
     async batch(batchStatements: Array<{ query?: string }>) {
       batchCount += 1;
-      statements = batchStatements.map((statement) => String(statement));
+      statements = batchStatements.map((statement) => statement.query ?? "");
       return batchStatements.map(() => ({ meta: { changes: 1 } }));
     },
   };
