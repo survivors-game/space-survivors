@@ -3832,10 +3832,7 @@ async function handleBossRequest(
     return json({
       success: true,
       bossId: reward.bossId,
-      obsidian: reward.obsidian,
       cooldownUntil: now + BOSS_COOLDOWN_MS,
-      helperReward: helpSession ? { credits: 50, obsidian: 1 } : null,
-      rewards: drops.map(({ itemName, itemType }) => ({ itemName, itemType })),
     });
   } catch (error) {
     console.error("No se pudo aplicar la recompensa del boss:", error);
