@@ -2229,6 +2229,42 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )`,
+        `CREATE TABLE IF NOT EXISTS p2p_disputes (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL UNIQUE REFERENCES p2p_orders(id),
+          opened_by_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          reason TEXT NOT NULL,
+          evidence_url TEXT,
+          status TEXT NOT NULL DEFAULT 'OPEN'
+            CHECK (status IN ('OPEN', 'RESOLVED_BUYER', 'RESOLVED_SELLER')),
+          created_at INTEGER NOT NULL,
+          resolved_at INTEGER,
+          resolved_by TEXT,
+          resolution_note TEXT
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_p2p_disputes_status_created
+          ON p2p_disputes(status, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS p2p_dispute_messages (
+          id TEXT PRIMARY KEY,
+          dispute_id TEXT NOT NULL REFERENCES p2p_disputes(id),
+          author_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          message TEXT NOT NULL,
+          evidence_url TEXT,
+          created_at INTEGER NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_p2p_dispute_messages_dispute
+          ON p2p_dispute_messages(dispute_id, created_at)`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad
+          ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'DISPUTA')`,
+        `CREATE TABLE IF NOT EXISTS admin_market_logs (
+          id TEXT PRIMARY KEY,
+          order_id TEXT,
+          ad_id TEXT,
+          action TEXT NOT NULL,
+          resolution_note TEXT NOT NULL,
+          admin_email TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`,
         `CREATE TABLE IF NOT EXISTS market_publish_attempts (
           id TEXT PRIMARY KEY,
           pilot_id TEXT NOT NULL,
@@ -3765,11 +3801,13 @@ async function handleMarketRequest(
     /^\/api\/admin\/players\/[^/]+(?:\/status)?$/.test(url.pathname);
   const isAdminEconomyPath = url.pathname === "/api/admin/economy";
   const isAdminPaymentsPath = url.pathname === "/api/admin/payments";
+  const isAdminMarketPath = url.pathname === "/api/admin/market";
   const isAdminPath =
     url.pathname === "/api/admin/credit-obsidian" ||
     isAdminPlayersPath ||
     isAdminEconomyPath ||
-    isAdminPaymentsPath;
+    isAdminPaymentsPath ||
+    isAdminMarketPath;
   if (!isMarketPath && !isAdminPath) return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
@@ -3783,6 +3821,170 @@ async function handleMarketRequest(
   }
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
+  if (isAdminMarketPath) {
+    if (request.method !== "GET" && request.method !== "POST") {
+      return json({ error: "Método no permitido." }, 405);
+    }
+    if (request.method === "POST" && !isSameOriginPost(request, url)) {
+      return json({ error: "Solicitud no autorizada." }, 403);
+    }
+    if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+    if (
+      account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub))
+    ) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
+    }
+
+    if (request.method === "GET") {
+      const [stats, ads, orders, disputes, messages, logs] = await Promise.all([
+        db.prepare(
+          `SELECT
+            (SELECT COUNT(*) FROM p2p_ads WHERE status IN ('ACTIVO', 'PAUSADO')) AS active_ads,
+            (SELECT COUNT(*) FROM p2p_orders WHERE status = 'PENDIENTE') AS pending_orders,
+            (SELECT COUNT(*) FROM p2p_disputes WHERE status = 'OPEN') AS open_disputes,
+            (SELECT COUNT(*) FROM p2p_orders WHERE status = 'COMPLETADA') AS completed_orders`,
+        ).first<{
+          active_ads: number; pending_orders: number; open_disputes: number; completed_orders: number;
+        }>(),
+        db.prepare(
+          `SELECT ad.id, ad.seller_pilot_id, ad.item_name, ad.item_type, ad.price_minor,
+            ad.currency_code, ad.country_code, ad.status, ad.created_at,
+            COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS seller_name
+           FROM p2p_ads ad
+           JOIN pilots p ON p.pilot_id = ad.seller_pilot_id
+           LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
+           ORDER BY ad.created_at DESC LIMIT 100`,
+        ).all(),
+        db.prepare(
+          `SELECT o.id, o.status, o.created_at, o.updated_at, o.payment_method,
+            o.buyer_pilot_id, ad.id AS ad_id, ad.seller_pilot_id, ad.item_name,
+            ad.item_type, ad.price_minor, ad.currency_code, ad.country_code,
+            COALESCE(NULLIF(bp.display_name, ''), buyer.callsign, 'PILOTO') AS buyer_name,
+            COALESCE(NULLIF(sp.display_name, ''), seller.callsign, 'PILOTO') AS seller_name
+           FROM p2p_orders o
+           JOIN p2p_ads ad ON ad.id = o.ad_id
+           JOIN pilots buyer ON buyer.pilot_id = o.buyer_pilot_id
+           JOIN pilots seller ON seller.pilot_id = ad.seller_pilot_id
+           LEFT JOIN player_profiles bp ON bp.pilot_id = buyer.pilot_id
+           LEFT JOIN player_profiles sp ON sp.pilot_id = seller.pilot_id
+           ORDER BY CASE WHEN o.status IN ('DISPUTA', 'PENDIENTE') THEN 0 ELSE 1 END,
+             o.created_at DESC LIMIT 100`,
+        ).all(),
+        db.prepare(
+          `SELECT d.id, d.order_id, d.opened_by_pilot_id, d.reason, d.evidence_url,
+            d.status, d.created_at, d.resolved_at, d.resolved_by, d.resolution_note,
+            o.status AS order_status, o.buyer_pilot_id, ad.seller_pilot_id,
+            ad.item_name, ad.price_minor, ad.currency_code, ad.country_code,
+            COALESCE(NULLIF(op.display_name, ''), opener.callsign, 'PILOTO') AS opened_by_name,
+            COALESCE(NULLIF(bp.display_name, ''), buyer.callsign, 'PILOTO') AS buyer_name,
+            COALESCE(NULLIF(sp.display_name, ''), seller.callsign, 'PILOTO') AS seller_name
+           FROM p2p_disputes d
+           JOIN p2p_orders o ON o.id = d.order_id
+           JOIN p2p_ads ad ON ad.id = o.ad_id
+           JOIN pilots opener ON opener.pilot_id = d.opened_by_pilot_id
+           JOIN pilots buyer ON buyer.pilot_id = o.buyer_pilot_id
+           JOIN pilots seller ON seller.pilot_id = ad.seller_pilot_id
+           LEFT JOIN player_profiles op ON op.pilot_id = opener.pilot_id
+           LEFT JOIN player_profiles bp ON bp.pilot_id = buyer.pilot_id
+           LEFT JOIN player_profiles sp ON sp.pilot_id = seller.pilot_id
+           ORDER BY CASE WHEN d.status = 'OPEN' THEN 0 ELSE 1 END, d.created_at DESC LIMIT 100`,
+        ).all(),
+        db.prepare(
+          `SELECT m.id, m.dispute_id, m.author_pilot_id, m.message, m.evidence_url,
+            m.created_at, COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS author_name
+           FROM p2p_dispute_messages m
+           JOIN pilots p ON p.pilot_id = m.author_pilot_id
+           LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
+           JOIN p2p_disputes d ON d.id = m.dispute_id
+           ORDER BY m.created_at ASC LIMIT 300`,
+        ).all(),
+        db.prepare(
+          "SELECT id, order_id, ad_id, action, resolution_note, admin_email, created_at FROM admin_market_logs ORDER BY created_at DESC LIMIT 100",
+        ).all(),
+      ]);
+      return json({
+        stats: stats ?? { active_ads: 0, pending_orders: 0, open_disputes: 0, completed_orders: 0 },
+        ads: ads.results ?? [],
+        orders: orders.results ?? [],
+        disputes: disputes.results ?? [],
+        messages: messages.results ?? [],
+        logs: logs.results ?? [],
+      });
+    }
+
+    const body = await readJson(request, 4096);
+    const action = body?.action;
+    const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+    if (reason.length < 5) {
+      return json({ error: "Escribe el motivo de la operación (mínimo 5 caracteres)." }, 400);
+    }
+    const now = Date.now();
+
+    if (action === "resolve-buyer" || action === "resolve-seller") {
+      const disputeId = typeof body?.disputeId === "string" ? body.disputeId.trim() : "";
+      if (!/^dsp_[a-f0-9]{24}$/.test(disputeId)) {
+        return json({ error: "Identificador de disputa no válido." }, 400);
+      }
+      const dispute = await db.prepare(
+        `SELECT d.id, d.order_id, d.status, o.ad_id
+         FROM p2p_disputes d JOIN p2p_orders o ON o.id = d.order_id
+         WHERE d.id = ?`,
+      ).bind(disputeId).first<{ id: string; order_id: string; status: string; ad_id: string }>();
+      if (!dispute) return json({ error: "No se encontró la disputa." }, 404);
+      if (dispute.status !== "OPEN") return json({ error: "Esta disputa ya fue resuelta." }, 409);
+      const finalStatus = action === "resolve-buyer" ? "COMPLETADA" : "CANCELADA";
+      const disputeStatus = action === "resolve-buyer" ? "RESOLVED_BUYER" : "RESOLVED_SELLER";
+      try {
+        const results = await db.batch([
+          db.prepare(
+            "UPDATE p2p_orders SET status = 'PENDIENTE', updated_at = ? WHERE id = ? AND status = 'DISPUTA'",
+          ).bind(now, dispute.order_id),
+          db.prepare(
+            "UPDATE p2p_orders SET status = ?, updated_at = ? WHERE id = ? AND status = 'PENDIENTE'",
+          ).bind(finalStatus, now, dispute.order_id),
+          db.prepare(
+            "UPDATE p2p_disputes SET status = ?, resolved_at = ?, resolved_by = ?, resolution_note = ? WHERE id = ? AND status = 'OPEN'",
+          ).bind(disputeStatus, now, account.email, reason, disputeId),
+          db.prepare(
+            "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          ).bind("amk_" + randomHex(10), dispute.order_id, dispute.ad_id, action, reason, account.email, now),
+        ]);
+        if (results.slice(0, 3).some((result) => result.meta?.changes !== 1)) {
+          return json({ error: "No se pudo resolver la disputa. No se modificó la operación." }, 409);
+        }
+      } catch (error) {
+        console.error("No se pudo resolver la disputa P2P:", error);
+        return json({ error: "No se pudo resolver la disputa. La operación no se modificó." }, 409);
+      }
+      return json({ success: true, status: disputeStatus, orderStatus: finalStatus });
+    }
+
+    if (action === "remove-listing") {
+      const adId = typeof body?.adId === "string" ? body.adId.trim() : "";
+      if (!/^ad_[a-f0-9]{16}$/.test(adId)) {
+        return json({ error: "Identificador de publicación no válido." }, 400);
+      }
+      const result = await db.prepare(
+        `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
+         WHERE id = ? AND status IN ('ACTIVO', 'PAUSADO')
+           AND NOT EXISTS (
+             SELECT 1 FROM p2p_orders o WHERE o.ad_id = p2p_ads.id
+               AND o.status IN ('PENDIENTE', 'DISPUTA')
+           )`,
+      ).bind(now, adId).run();
+      if (result.meta?.changes !== 1) {
+        return json({ error: "No se pudo retirar la publicación: puede tener una operación pendiente." }, 409);
+      }
+      await db.prepare(
+        "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, NULL, ?, 'remove-listing', ?, ?, ?)",
+      ).bind("amk_" + randomHex(10), adId, reason, account.email, now).run();
+      return json({ success: true, status: "CANCELADO" });
+    }
+
+    return json({ error: "Operación de mercado no válida." }, 400);
+  }
 
   if (isAdminPaymentsPath) {
     if (request.method !== "GET" && request.method !== "POST") {
@@ -4666,6 +4868,96 @@ async function handleMarketRequest(
       .first<{ quantity: number }>();
     return pilotJson(request, pilotId, { success: true, quantity: row?.quantity ?? 0 });
   }
+  if (url.pathname === "/api/market/dispute" && request.method === "POST") {
+    const body = await readJson(request, 4096);
+    const orderId = typeof body?.order_id === "string" ? body.order_id.trim() : "";
+    const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
+    const evidenceUrl = typeof body?.evidence_url === "string" ? body.evidence_url.trim() : "";
+    if (!orderId || orderId.length > 64 || reason.length < 10) {
+      return pilotJson(request, pilotId, { error: "Indica la orden y explica el problema (mínimo 10 caracteres)." }, 400);
+    }
+    if (evidenceUrl && (evidenceUrl.length > 2048 || !/^https:\/\//i.test(evidenceUrl))) {
+      return pilotJson(request, pilotId, { error: "El enlace de la prueba debe ser HTTPS." }, 400);
+    }
+    const order = await db.prepare(
+      `SELECT o.id, o.status, o.buyer_pilot_id, ad.seller_pilot_id
+       FROM p2p_orders o JOIN p2p_ads ad ON ad.id = o.ad_id WHERE o.id = ?`,
+    ).bind(orderId).first<{ id: string; status: string; buyer_pilot_id: string; seller_pilot_id: string }>();
+    if (!order || (order.buyer_pilot_id !== pilotId && order.seller_pilot_id !== pilotId)) {
+      return pilotJson(request, pilotId, { error: "La orden no existe o no participas en ella." }, 404);
+    }
+    if (order.status !== "PENDIENTE") {
+      return pilotJson(request, pilotId, { error: "Solo se puede disputar una orden pendiente." }, 409);
+    }
+    const now = Date.now();
+    const disputeId = "dsp_" + randomHex(12);
+    try {
+      const results = await db.batch([
+        db.prepare("UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status = 'PENDIENTE'")
+          .bind(now, orderId),
+        db.prepare(
+          "INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, evidence_url, status, created_at) SELECT ?, ?, ?, ?, ?, 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA')",
+        ).bind(disputeId, orderId, pilotId, reason, evidenceUrl || null, now, orderId),
+        db.prepare(
+          "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, evidence_url, created_at) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM p2p_disputes WHERE id = ?)",
+        ).bind("dmsg_" + randomHex(12), disputeId, pilotId, reason, evidenceUrl || null, now, disputeId),
+      ]);
+      if (results.some((result) => result.meta?.changes !== 1)) {
+        return pilotJson(request, pilotId, { error: "No se pudo abrir la disputa." }, 409);
+      }
+    } catch (error) {
+      console.error("No se pudo abrir la disputa P2P:", error);
+      return pilotJson(request, pilotId, { error: "No se pudo abrir la disputa." }, 409);
+    }
+    return pilotJson(request, pilotId, { success: true, dispute_id: disputeId, status: "DISPUTA" });
+  }
+
+  if (url.pathname === "/api/market/dispute/message" && request.method === "POST") {
+    const body = await readJson(request, 4096);
+    const orderId = typeof body?.order_id === "string" ? body.order_id.trim() : "";
+    const message = typeof body?.message === "string" ? body.message.trim().slice(0, 1000) : "";
+    const evidenceUrl = typeof body?.evidence_url === "string" ? body.evidence_url.trim() : "";
+    if (!orderId || orderId.length > 64 || message.length < 2) {
+      return pilotJson(request, pilotId, { error: "Escribe un mensaje válido." }, 400);
+    }
+    if (evidenceUrl && (evidenceUrl.length > 2048 || !/^https:\/\//i.test(evidenceUrl))) {
+      return pilotJson(request, pilotId, { error: "El enlace de la prueba debe ser HTTPS." }, 400);
+    }
+    const dispute = await db.prepare(
+      `SELECT d.id FROM p2p_disputes d
+       JOIN p2p_orders o ON o.id = d.order_id
+       JOIN p2p_ads ad ON ad.id = o.ad_id
+       WHERE o.id = ? AND o.status = 'DISPUTA' AND d.status = 'OPEN'
+         AND (o.buyer_pilot_id = ? OR ad.seller_pilot_id = ?)`,
+    ).bind(orderId, pilotId, pilotId).first<{ id: string }>();
+    if (!dispute) return pilotJson(request, pilotId, { error: "No existe una disputa abierta para esta orden." }, 404);
+    const now = Date.now();
+    await db.prepare(
+      "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, evidence_url, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).bind("dmsg_" + randomHex(12), dispute.id, pilotId, message, evidenceUrl || null, now).run();
+    return pilotJson(request, pilotId, { success: true });
+  }
+
+  if (url.pathname === "/api/market/dispute/messages" && request.method === "GET") {
+    const orderId = url.searchParams.get("order_id") ?? "";
+    const dispute = await db.prepare(
+      `SELECT d.id FROM p2p_disputes d
+       JOIN p2p_orders o ON o.id = d.order_id
+       JOIN p2p_ads ad ON ad.id = o.ad_id
+       WHERE o.id = ? AND (o.buyer_pilot_id = ? OR ad.seller_pilot_id = ?)`,
+    ).bind(orderId, pilotId, pilotId).first<{ id: string }>();
+    if (!dispute) return pilotJson(request, pilotId, { error: "No existe una disputa para esta orden." }, 404);
+    const messages = await db.prepare(
+      `SELECT m.id, m.author_pilot_id, m.message, m.evidence_url, m.created_at,
+        COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS author_name
+       FROM p2p_dispute_messages m
+       JOIN pilots p ON p.pilot_id = m.author_pilot_id
+       LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
+       WHERE m.dispute_id = ? ORDER BY m.created_at ASC LIMIT 100`,
+    ).bind(dispute.id).all();
+    return pilotJson(request, pilotId, { messages: messages.results ?? [] });
+  }
+
   if (url.pathname === "/api/market/listings" && request.method === "GET") {
     const rawPage = Number(url.searchParams.get("page") ?? "1");
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 100_000) : 1;
