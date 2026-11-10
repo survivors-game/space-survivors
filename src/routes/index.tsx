@@ -1229,6 +1229,15 @@ function Index() {
     startingMissionRef.current = true;
     setStartingMission(true);
     try {
+      // Confirmar el VIP directamente con el servidor antes de crear el motor.
+      // Evita iniciar una partida con el valor inicial/stale de React (false).
+      const vipStatus = await marketRequest<{ vip?: boolean; vip_until?: number | null }>(
+        "/api/alliance/mine",
+      );
+      const vipIsActive = vipStatus.vip === true;
+      setHasVip(vipIsActive);
+      setVipUntil(typeof vipStatus.vip_until === "number" ? vipStatus.vip_until : null);
+
       const { cooldowns } = await marketRequest<{ cooldowns: Record<string, number> }>(
         "/api/bosses/status",
       );
