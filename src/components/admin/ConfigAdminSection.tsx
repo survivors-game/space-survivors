@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 type Settings = {
   maintenanceMode: boolean;
@@ -53,7 +53,7 @@ export function ConfigAdminSection() {
   };
   useEffect(()=>{void load();},[]);
 
-  const save = async (event:React.FormEvent<HTMLFormElement>) => {
+  const save = async (event:FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (reason.trim().length < 5) { setError("Escribe el motivo del cambio."); return; }
     if (settings.maintenanceMode && settings.maintenanceMessage.trim().length < 5) {
