@@ -247,6 +247,9 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
   const googleRedirectUri = candidates.find(
     (candidate) => candidate.GOOGLE_REDIRECT_URI,
   )?.GOOGLE_REDIRECT_URI;
+  const adminPanelPassword = candidates.find(
+    (candidate) => candidate.ADMIN_PANEL_PASSWORD,
+  )?.ADMIN_PANEL_PASSWORD;
   const leaderboard = candidates.find((candidate) => candidate.LEADERBOARD)?.LEADERBOARD;
   const turnstileSecretKey = candidates.find(
     (candidate) => candidate.TURNSTILE_SECRET_KEY,
@@ -263,6 +266,7 @@ function getWorkerEnv(request: Request, env: unknown): WorkerEnv | undefined {
     ...(googleClientId ? { GOOGLE_CLIENT_ID: googleClientId } : {}),
     ...(googleClientSecret ? { GOOGLE_CLIENT_SECRET: googleClientSecret } : {}),
     ...(googleRedirectUri ? { GOOGLE_REDIRECT_URI: googleRedirectUri } : {}),
+    ...(adminPanelPassword ? { ADMIN_PANEL_PASSWORD: adminPanelPassword } : {}),
     ...(turnstileSecretKey ? { TURNSTILE_SECRET_KEY: turnstileSecretKey } : {}),
     ...(turnstileSiteKey ? { TURNSTILE_SITE_KEY: turnstileSiteKey } : {}),
   };
