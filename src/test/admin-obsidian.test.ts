@@ -30,7 +30,7 @@ function createDatabase(email: string) {
             return { wallet_address: "google:test-sub", expires_at: Date.now() + 60_000 };
           }
           if (query.includes("FROM admin_sessions")) {
-            return { token_hash: "valid-admin-session" };
+            return { token_hash: "valid-admin-session", google_sub: "test-sub" };
           }
           if (query.includes("FROM player_accounts")) {
             return {
