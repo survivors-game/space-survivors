@@ -37,8 +37,7 @@ function createDatabase() {
             return { results: [{ id: "event-1", name: "Temporada de prueba", status: "ACTIVE" }] };
           if (query.includes("FROM player_progress progress"))
             return { results: [{ pilot_id: "plt_player", callsign: "PILOTO", pt: 120 }] };
-          if (query.includes("FROM admin_season_event_logs"))
-            return { results: [] };
+          if (query.includes("FROM admin_season_event_logs")) return { results: [] };
           return { results: [] };
         },
       };
@@ -74,18 +73,26 @@ describe("administrative seasons and missions dashboard", () => {
   });
 
   it("rejects anonymous requests", async () => {
-    const response = await server.fetch(request(undefined, false), { DB: createDatabase() } as never);
+    const response = await server.fetch(request(undefined, false), {
+      DB: createDatabase(),
+    } as never);
     expect(response.status).toBe(401);
   });
 
   it("requires the second administrative session", async () => {
-    const response = await server.fetch(request(undefined, true, false), { DB: createDatabase() } as never);
+    const response = await server.fetch(request(undefined, true, false), {
+      DB: createDatabase(),
+    } as never);
     expect(response.status).toBe(403);
   });
 
   it("returns season events and player progress", async () => {
     const response = await server.fetch(request(), { DB: createDatabase() } as never);
-    const payload = (await response.json()) as { events: unknown[]; ranking: unknown[]; participants: number };
+    const payload = (await response.json()) as {
+      events: unknown[];
+      ranking: unknown[];
+      participants: number;
+    };
     expect(response.status).toBe(200);
     expect(payload.events).toHaveLength(1);
     expect(payload.ranking).toHaveLength(1);
@@ -108,8 +115,12 @@ describe("administrative seasons and missions dashboard", () => {
     );
     expect(response.status).toBe(200);
     expect(batchStatements[0]).toHaveLength(2);
-    expect(batchStatements[0].some((sql) => sql.includes("INSERT INTO admin_season_events"))).toBe(true);
-    expect(batchStatements[0].some((sql) => sql.includes("INSERT INTO admin_season_event_logs"))).toBe(true);
+    expect(batchStatements[0].some((sql) => sql.includes("INSERT INTO admin_season_events"))).toBe(
+      true,
+    );
+    expect(
+      batchStatements[0].some((sql) => sql.includes("INSERT INTO admin_season_event_logs")),
+    ).toBe(true);
   });
 
   it("prevents two overlapping active events", async () => {
