@@ -59,6 +59,6 @@ export function SecurityAdminSection(){
     {tab==="incidents"?<div className="overflow-x-auto rounded border border-white/10"><table className="w-full min-w-[680px] text-left text-xs"><thead className="bg-white/[0.03] text-white/55"><tr>{["Fecha","Ruta","Detalle del error"].map(x=><th key={x} className="px-3 py-3 font-normal">{x}</th>)}</tr></thead><tbody>
       {errors.map(row=><tr key={row.id} className="border-t border-white/5 text-white/70"><td className="whitespace-nowrap px-3 py-2">{stamp(row.created_at)}</td><td className="px-3 py-2">{row.route}</td><td className="max-w-[520px] whitespace-normal px-3 py-2">{row.error_message}</td></tr>)}
       </tbody></table>{!errors.length?<p className="p-4 text-center text-xs text-white/40">No hay errores guardados.</p>:null}</div>:null}
-    <p className="text-xs text-white/40">Las direcciones IP no se muestran: se guarda una huella cifrada mediante hash para identificar intentos repetidos sin exponer la IP original. Los registros nuevos comienzan desde la activación de esta auditoría; los registros antiguos solo aparecen si sus módulos ya guardaban historial.</p>
+    <p className="text-xs text-white/40">Las direcciones IP no se muestran: se guarda una huella generada mediante hash para identificar intentos repetidos sin exponer la IP original. Los registros nuevos comienzan desde la activación de esta auditoría; los registros antiguos solo aparecen si sus módulos ya guardaban historial.</p>
   </section>;
 }
