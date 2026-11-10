@@ -113,7 +113,7 @@ export const CAMPAIGN_FINAL_BOSSES: BossEvent[] = [{ minute: 15, boss: "leviatha
 
 /* Ajustes de equilibrio del mundo 1 (solo campaña). */
 export const WORLD1_MAX_ENEMIES = 60; // enemigos normales simultáneos (antes: 90)
-export const WORLD1_PICKUP_CHANCE = 0.015; // probabilidad de objeto por enemigo eliminado (antes: 0,6 %)
+export const WORLD1_PICKUP_CHANCE = 0.001; // 0,1 % base para pilotos gratuitos; VIP aplica x3
 
 // Presión adicional exclusiva de las hordas 7, 8 y 9 del mundo 1.
 export const WORLD1_HORDE_PRESSURE = [
