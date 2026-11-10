@@ -1,4 +1,4 @@
-import { defineConfig } from "nitro";
+ import { defineConfig } from "nitro";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -10,7 +10,7 @@ export default defineConfig({
       const contents = await readFile(workerEntry, "utf8");
       await writeFile(
         workerEntry,
-        `${contents}\nexport { ChatRoom, BossHelpRoom, WarRoom } from "./_ssr/ssr.mjs";\n`,
+        `${contents}\nexport { ChatRoom, BossHelpRoom, WarRoom, PilotNotifyRoom } from "./_ssr/ssr.mjs";\n`,
         "utf8",
       );
     },
