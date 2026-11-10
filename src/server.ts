@@ -2577,7 +2577,7 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
               SELECT 1 FROM p2p_orders
               JOIN p2p_ads ON p2p_ads.id = p2p_orders.ad_id
               WHERE p2p_ads.inventory_id = pilot_inventory.id
-                AND p2p_orders.status IN ('ABIERTA', 'PENDIENTE', 'OPEN')
+                AND p2p_orders.status IN ('ABIERTA', 'PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA', 'OPEN')
             )`,
         )
         .run();
@@ -2877,7 +2877,7 @@ async function hasOpenOrder(db: D1Database, adId: string): Promise<boolean> {
   const order = await db
     .prepare(
       `SELECT id FROM p2p_orders
-    WHERE ad_id = ? AND status IN ('ABIERTA', 'PENDIENTE', 'OPEN') LIMIT 1`,
+    WHERE ad_id = ? AND status IN ('ABIERTA', 'PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA', 'OPEN') LIMIT 1`,
     )
     .bind(adId)
     .first<{ id: string }>();
@@ -5625,7 +5625,7 @@ async function handleMarketRequest(
         `UPDATE p2p_ads SET status = ?, updated_at = ?
       WHERE id = ? AND seller_pilot_id = ? AND status = ?
         AND NOT EXISTS (SELECT 1 FROM p2p_orders
-          WHERE ad_id = ? AND status IN ('ABIERTA', 'PENDIENTE', 'OPEN'))`,
+          WHERE ad_id = ? AND status IN ('ABIERTA', 'PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA', 'OPEN'))`,
       )
       .bind(nextStatus, Date.now(), adId, pilotId, ad.status, adId)
       .run();
@@ -5677,7 +5677,7 @@ async function handleMarketRequest(
             `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
           WHERE id = ? AND seller_pilot_id = ? AND status IN ('ACTIVO', 'PAUSADO')
             AND NOT EXISTS (SELECT 1 FROM p2p_orders
-              WHERE ad_id = ? AND status IN ('ABIERTA', 'PENDIENTE', 'OPEN'))`,
+              WHERE ad_id = ? AND status IN ('ABIERTA', 'PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA', 'OPEN'))`,
           )
           .bind(now, adId, pilotId, adId),
         db
