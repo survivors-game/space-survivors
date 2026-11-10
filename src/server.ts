@@ -211,6 +211,33 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
       )`,
         )
         .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS admin_player_status (
+        pilot_id TEXT PRIMARY KEY,
+        suspended_at INTEGER,
+        reason TEXT,
+        updated_at INTEGER NOT NULL
+      )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS admin_player_logs (
+        id TEXT PRIMARY KEY,
+        pilot_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE INDEX IF NOT EXISTS idx_admin_player_logs_pilot
+        ON admin_player_logs(pilot_id, created_at DESC)`,
+        )
+        .run();
     })().catch((error) => {
       schemaPromise = undefined;
       throw error;
@@ -1889,10 +1916,16 @@ async function getAuthenticatedAccount(
     .bind(tokenHash, Date.now())
     .first<{ wallet_address: string; expires_at: number }>();
   if (!session || !session.wallet_address.startsWith("google:")) return null;
-  return db
+  const account = await db
     .prepare(`SELECT google_sub, email, pilot_id FROM player_accounts WHERE google_sub = ?`)
     .bind(session.wallet_address.slice("google:".length))
     .first<PlayerAccount>();
+  if (!account) return null;
+  const playerStatus = await db
+    .prepare("SELECT suspended_at FROM admin_player_status WHERE pilot_id = ?")
+    .bind(account.pilot_id)
+    .first<{ suspended_at: number | null }>();
+  return playerStatus?.suspended_at ? null : account;
 }
 
 async function hasValidAdminSession(
@@ -3631,7 +3664,9 @@ async function handleMarketRequest(
   const url = new URL(request.url);
   const isMarketPath =
     url.pathname.startsWith("/api/market/") || url.pathname.startsWith("/api/inventory/");
-  const isAdminPath = url.pathname === "/api/admin/credit-obsidian";
+  const isAdminPlayersPath =
+    url.pathname === "/api/admin/players" || /^\/api\/admin\/players\/[^/]+(?:\/status)?$/.test(url.pathname);
+  const isAdminPath = url.pathname === "/api/admin/credit-obsidian" || isAdminPlayersPath;
   if (!isMarketPath && !isAdminPath) return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
@@ -3645,6 +3680,177 @@ async function handleMarketRequest(
   }
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
+  if (isAdminPlayersPath) {
+    if (request.method !== "GET" && request.method !== "POST") {
+      return json({ error: "Método no permitido." }, 405);
+    }
+    if (request.method === "POST" && !isSameOriginPost(request, url)) {
+      return json({ error: "Solicitud no autorizada." }, 403);
+    }
+    if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+    if (
+      account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub))
+    ) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
+    }
+
+    const playerPath = url.pathname.match(/^\/api\/admin\/players(?:\/([^/]+)(?:\/status)?)?$/);
+    const pilotId = playerPath?.[1];
+    const isStatusPath = url.pathname.endsWith("/status");
+
+    if (request.method === "GET" && !pilotId) {
+      const search = (url.searchParams.get("search") ?? "").trim().slice(0, 100);
+      const filter = url.searchParams.get("filter") ?? "Todos";
+      const pattern = "%" + search.replace(/[\\%_]/g, "\\  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
+  if (isAdminPath && request.method === "POST") {") + "%";
+      const rows = await db
+        .prepare(
+          `SELECT p.pilot_id, p.callsign, p.obsidian, p.boss_obsidian, p.vip_until,
+            p.created_at, pa.email, pp.display_name, aps.suspended_at, pr.progress_json
+           FROM pilots p
+           JOIN player_accounts pa ON pa.pilot_id = p.pilot_id
+           LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id
+           LEFT JOIN admin_player_status aps ON aps.pilot_id = p.pilot_id
+           LEFT JOIN player_progress pr ON pr.pilot_id = p.pilot_id
+           WHERE (? = '' OR p.pilot_id LIKE ? ESCAPE '\\'
+             OR pa.email LIKE ? ESCAPE '\\'
+             OR p.callsign LIKE ? ESCAPE '\\'
+             OR pp.display_name LIKE ? ESCAPE '\\')
+             AND (? != 'VIP' OR p.vip_until > ?)
+             AND (? != 'Suspendidos' OR aps.suspended_at IS NOT NULL)
+             AND (? != 'Activos' OR aps.suspended_at IS NULL)
+           ORDER BY p.created_at DESC LIMIT 100`,
+        )
+        .bind(search, pattern, pattern, pattern, pattern, filter, Date.now(), filter, filter)
+        .all<{
+          pilot_id: string; callsign: string; obsidian: number; boss_obsidian: number;
+          vip_until: number | null; created_at: number; email: string;
+          display_name: string | null; suspended_at: number | null; progress_json: string | null;
+        }>();
+      const players = (rows.results ?? []).map((row) => {
+        let credits = 0;
+        try {
+          const progress = row.progress_json ? JSON.parse(row.progress_json) as { credits?: unknown } : {};
+          credits = Number(progress.credits) || 0;
+        } catch { /* Un progreso dañado no debe impedir mostrar el resto del perfil. */ }
+        return {
+          pilotId: row.pilot_id,
+          name: row.display_name?.trim() || row.callsign,
+          email: row.email,
+          credits,
+          obsidian: row.obsidian,
+          bossObsidian: row.boss_obsidian,
+          vipUntil: row.vip_until,
+          suspended: row.suspended_at !== null,
+          createdAt: row.created_at,
+        };
+      });
+      return json({ players });
+    }
+
+    if (!pilotId || !validPilotId(pilotId)) return json({ error: "Piloto no válido." }, 400);
+
+    if (request.method === "GET" && !isStatusPath) {
+      const player = await db
+        .prepare(
+          `SELECT p.pilot_id, p.callsign, p.obsidian, p.boss_obsidian, p.vip_until,
+            p.created_at, p.updated_at, p.selected_ship_id, pa.email, pp.display_name,
+            aps.suspended_at, aps.reason, pr.progress_json
+           FROM pilots p
+           JOIN player_accounts pa ON pa.pilot_id = p.pilot_id
+           LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id
+           LEFT JOIN admin_player_status aps ON aps.pilot_id = p.pilot_id
+           LEFT JOIN player_progress pr ON pr.pilot_id = p.pilot_id
+           WHERE p.pilot_id = ?`,
+        )
+        .bind(pilotId)
+        .first<{
+          pilot_id: string; callsign: string; obsidian: number; boss_obsidian: number;
+          vip_until: number | null; created_at: number; updated_at: number;
+          selected_ship_id: string; email: string; display_name: string | null;
+          suspended_at: number | null; reason: string | null; progress_json: string | null;
+        }>();
+      if (!player) return json({ error: "No se encontró el jugador." }, 404);
+      let progress: Record<string, unknown> = {};
+      try { progress = player.progress_json ? JSON.parse(player.progress_json) as Record<string, unknown> : {}; }
+      catch { progress = {}; }
+      const [inventory, referralCount, history] = await Promise.all([
+        db.prepare(
+          "SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source FROM pilot_inventory WHERE pilot_id = ? AND quantity > 0 ORDER BY item_type, item_name",
+        ).bind(pilotId).all<{
+          id: string; item_id: string; item_name: string; item_type: string;
+          quantity: number; is_locked: number; grant_source: string;
+        }>(),
+        db.prepare("SELECT COUNT(*) AS total FROM referrals WHERE referrer_pilot_id = ?")
+          .bind(pilotId).first<{ total: number }>(),
+        db.prepare(
+          "SELECT amount, reason, created_at FROM admin_obsidian_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
+        ).bind(pilotId).all<{ amount: number; reason: string; created_at: number }>(),
+      ]);
+      return json({
+        player: {
+          pilotId: player.pilot_id,
+          name: player.display_name?.trim() || player.callsign,
+          email: player.email,
+          credits: Number(progress.credits) || 0,
+          obsidian: player.obsidian,
+          bossObsidian: player.boss_obsidian,
+          vipUntil: player.vip_until,
+          selectedShipId: player.selected_ship_id,
+          createdAt: player.created_at,
+          updatedAt: player.updated_at,
+          suspended: player.suspended_at !== null,
+          suspensionReason: player.reason,
+          referrals: referralCount?.total ?? 0,
+        },
+        inventory: inventory.results ?? [],
+        history: history.results ?? [],
+      });
+    }
+
+    if (request.method === "POST" && isStatusPath) {
+      const body = await readJson(request, 2048);
+      if (typeof body?.suspended !== "boolean") {
+        return json({ error: "Indica si la cuenta debe quedar suspendida o activa." }, 400);
+      }
+      const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+      if (body.suspended && reason.length < 5) {
+        return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);
+      }
+      const target = await db
+        .prepare("SELECT google_sub FROM player_accounts WHERE pilot_id = ?")
+        .bind(pilotId)
+        .first<{ google_sub: string }>();
+      if (!target) return json({ error: "No se encontró el jugador." }, 404);
+      const now = Date.now();
+      const action = body.suspended ? "SUSPENDIDO" : "REACTIVADO";
+      const statements = [
+        db.prepare(
+          `INSERT INTO admin_player_status (pilot_id, suspended_at, reason, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(pilot_id) DO UPDATE SET
+             suspended_at = excluded.suspended_at,
+             reason = excluded.reason,
+             updated_at = excluded.updated_at`,
+        ).bind(pilotId, body.suspended ? now : null, body.suspended ? reason : null, now),
+        db.prepare(
+          "INSERT INTO admin_player_logs (id, pilot_id, action, reason, created_at) VALUES (?, ?, ?, ?, ?)",
+        ).bind("plog_" + randomHex(8), pilotId, action, reason || "Sin motivo indicado", now),
+      ];
+      if (body.suspended) {
+        statements.push(
+          db.prepare("DELETE FROM auth_sessions WHERE wallet_address = ?").bind("google:" + target.google_sub),
+        );
+      }
+      await db.batch(statements);
+      return json({ success: true, suspended: body.suspended });
+    }
+
+    return json({ error: "Ruta de jugador no encontrada." }, 404);
+  }
 
   if (isAdminPath && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
