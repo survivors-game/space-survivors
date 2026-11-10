@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { SHIPS } from "@/game/data/ships";
 import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
@@ -28,9 +28,8 @@ import {
 } from "lucide-react";
 
 /**
- * Panel de ADMINISTRACIÓN — solo interfaz visual.
- * No hay lógica real: la autenticación y los datos se conectarán en el servidor.
- * Ninguna acción simula resultados; todas avisan que están pendientes de conexión.
+ * Panel de ADMINISTRACIÓN. Las secciones conectadas consultan y modifican datos
+ * reales mediante endpoints protegidos del servidor.
  */
 
 type SectionId =
@@ -744,7 +743,7 @@ function EconomySection() {
     void loadEconomy("Todos", "Todos", "");
   }, []);
 
-  const submitAdjustment = async (event: React.FormEvent<HTMLFormElement>) => {
+  const submitAdjustment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const numericAmount = Number(amount);
     if (!player.trim() || !Number.isSafeInteger(numericAmount) || numericAmount < 1 || reason.trim().length < 5) {
