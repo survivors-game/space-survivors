@@ -4056,12 +4056,20 @@ async function handleMarketRequest(
           .bind(amount, now, pilotId),
         db
           .prepare(
+            `INSERT INTO admin_economy_logs
+          (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
+          SELECT ?, pilot_id, 'OBS', ?, obsidian - ?, obsidian, ?, ?, ?
+          FROM pilots WHERE pilot_id = ? AND changes() = 1`,
+          )
+          .bind(`econ_${randomHex(10)}`, amount, amount, "PAQUETE_ADMINISTRATIVO", account.email, now, pilotId),
+        db
+          .prepare(
             `INSERT INTO admin_obsidian_logs
           (id, pilot_id, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)`,
           )
           .bind(`obs_${randomHex(8)}`, pilotId, amount, "PAQUETE_ADMINISTRATIVO", now),
       ]);
-      if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
+      if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1 || results[2]?.meta?.changes !== 1) {
         return json({ error: "No se pudo acreditar el paquete al piloto." }, 400);
       }
       const pilot = await db
