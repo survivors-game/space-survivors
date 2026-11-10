@@ -68,6 +68,7 @@ import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { PilotHub } from "@/components/hub/PilotHub";
 import { VipModal } from "@/components/hub/VipModal";
+import { AdminPanel } from "@/components/admin/AdminPanel";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import type {
   P2PHistoryOrder,
@@ -272,6 +273,7 @@ function Index() {
   const [hasVip, setHasVip] = useState(false);
   const [vipUntil, setVipUntil] = useState<number | null>(null);
   const [vipModalOpen, setVipModalOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const shipCarouselRef = useRef<HTMLDivElement>(null);
@@ -1841,6 +1843,22 @@ function Index() {
                   {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
                 </span>
               </span>
+            ) : null}
+            {screen === "MENU" &&
+            googlePlayer?.isAdmin &&
+            googlePlayer.email === "emprendedora.onlinevee@gmail.com" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAdminOpen(true)}
+                title="Panel de administración"
+                className="font-arcade h-9 border-rose-400/40 bg-rose-400/10 px-3 text-[8px] uppercase tracking-wider text-rose-300 hover:bg-rose-400/20 hover:text-rose-200"
+              >
+                ADMIN
+              </Button>
+            ) : null}
+            {adminOpen && googlePlayer?.isAdmin ? (
+              <AdminPanel onClose={() => setAdminOpen(false)} />
             ) : null}
             {screen === "MENU" ? (
               <Button
