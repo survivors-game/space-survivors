@@ -583,12 +583,15 @@ async function handleSocialRequest(
       ) {
         return json({ error: "Indica un pilot_id válido y un número de días positivo." }, 400);
       }
-      const vipUntil = Date.now() + days * 24 * 60 * 60 * 1000;
-      const updated = await db
-        .prepare("UPDATE pilots SET vip_until = ?, updated_at = ? WHERE pilot_id = ?")
-        .bind(vipUntil, Date.now(), pilotId)
-        .run();
-      if (updated.meta?.changes !== 1) return json({ error: "No se encontró el piloto." }, 404);
+      await db.prepare("CREATE TABLE IF NOT EXISTS admin_vip_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, action TEXT NOT NULL, days INTEGER NOT NULL, before_until INTEGER, after_until INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)").run();
+      const before = await db.prepare("SELECT vip_until FROM pilots WHERE pilot_id=?").bind(pilotId).first<{vip_until:number|null}>();
+      if (!before) return json({ error: "No se encontró el piloto." }, 404);
+      const timestamp = Date.now();
+      const vipUntil = timestamp + days * 24 * 60 * 60 * 1000;
+      await db.batch([
+        db.prepare("UPDATE pilots SET vip_until = ?, updated_at = ? WHERE pilot_id = ?").bind(vipUntil,timestamp,pilotId),
+        db.prepare("INSERT INTO admin_vip_logs (id,operation_id,pilot_id,action,days,before_until,after_until,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(randomHex(16),randomHex(16),pilotId,"grant",days,before.vip_until,vipUntil,"Asignación VIP desde la ruta administrativa anterior",account.email,timestamp),
+      ]);
       return json({ success: true, pilot_id: pilotId, vip_until: vipUntil });
     }
 
