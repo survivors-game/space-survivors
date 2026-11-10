@@ -29,6 +29,9 @@ function createDatabase(email: string) {
           if (query.includes("FROM auth_sessions")) {
             return { wallet_address: "google:test-sub", expires_at: Date.now() + 60_000 };
           }
+          if (query.includes("FROM admin_sessions")) {
+            return { token_hash: "valid-admin-session" };
+          }
           if (query.includes("FROM player_accounts")) {
             return {
               google_sub: "test-sub",
@@ -54,13 +57,20 @@ function createDatabase(email: string) {
   return { db, leaderboard, getBatchCalls: () => batchCalls };
 }
 
-function makeRequest(session = false) {
+function makeRequest(session = false, adminSession = false) {
   return new Request("https://game.example/api/admin/credit-obsidian", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin: "https://game.example",
-      ...(session ? { cookie: "__Host-ss_session=test-session" } : {}),
+      ...(session
+        ? {
+            cookie: [
+              "__Host-ss_session=test-session",
+              ...(adminSession ? ["__Host-ss_admin=test-admin-session"] : []),
+            ].join("; "),
+          }
+        : {}),
     },
     body: JSON.stringify({ pilotId: PILOT_ID, packagesCount: 1 }),
   });
@@ -75,7 +85,7 @@ describe("administrative obsidian credits", () => {
     const responses = await Promise.all([
       server.fetch(makeRequest(), { DB: anonymousDb.db }),
       server.fetch(makeRequest(true), { DB: playerDb.db }),
-      server.fetch(makeRequest(true), { DB: adminDb.db, LEADERBOARD: adminDb.leaderboard }),
+      server.fetch(makeRequest(true, true), { DB: adminDb.db, LEADERBOARD: adminDb.leaderboard }),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([401, 403, 200]);
