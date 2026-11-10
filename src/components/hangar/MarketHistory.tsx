@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatP2PPrice, P2P_COUNTRIES, type P2PHistoryOrder } from "@/game/data/market";
 
@@ -47,7 +47,7 @@ export function MarketHistory({
     }
   };
 
-  const loadThread = async (orderId: string) => {
+  const loadThread = useCallback(async (orderId: string) => {
     try {
       const response = await fetch(`/api/market/dispute/messages?order_id=${encodeURIComponent(orderId)}`, { credentials: "same-origin" });
       const data = await response.json() as { messages?: DisputeMessage[]; error?: string };
@@ -56,13 +56,13 @@ export function MarketHistory({
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo cargar la conversación.");
     }
-  };
+  }, []);
 
   useEffect(() => {
     for (const order of orders) {
       if (order.status === "DISPUTA") void loadThread(order.order_id);
     }
-  }, [orders]);
+  }, [orders, loadThread]);
 
   const openDispute = async (orderId: string) => {
     const draft = disputeForms[orderId] ?? { reason: "", evidence: "" };
