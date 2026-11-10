@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import server from "@/server";
 
 const ADMIN_EMAIL="emprendedora.onlinevee@gmail.com";
-const PILOT_ID="plt_vip_player_123456";
+const PILOT_ID="plt_1234567890abcdef12345678";
 let vipUntil:number|null=null;
 let batches:string[][]=[];
 function createDatabase(){
