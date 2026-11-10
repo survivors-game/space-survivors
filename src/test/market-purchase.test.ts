@@ -350,6 +350,66 @@ describe("P2P purchase flow", () => {
     ).toBe(BUYER_ID);
   });
 
+  it("resolves a dispute for the seller and returns the item to the listing", async () => {
+    const listingId = await createListing();
+    const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
+    const opened = await requestJson<{ dispute_id: string }>("/api/market/dispute", "POST", {
+      order_id: bought.payload.order_id,
+      reason: "El comprador no demuestra el pago.",
+    });
+    expect(opened.response.status).toBe(200);
+
+    const resolved = await server.fetch(
+      new Request("https://game.example/api/admin/market", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://game.example",
+          cookie: `__Host-ss_session=${ADMIN_TOKEN}; __Host-ss_admin=${ADMIN_SESSION_TOKEN}`,
+        },
+        body: JSON.stringify({
+          action: "resolve-seller",
+          disputeId: opened.payload.dispute_id,
+          reason: "No se acreditó evidencia suficiente del pago.",
+        }),
+      }),
+      { DB: database },
+    );
+    expect(resolved.status).toBe(200);
+    expect((await resolved.json() as { orderStatus: string }).orderStatus).toBe("CANCELADA");
+    expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe("ACTIVO");
+    expect(db.prepare("SELECT pilot_id, is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()).toMatchObject({
+      pilot_id: SELLER_ID,
+      is_locked: 0,
+    });
+  });
+
+  it("removes a listing administratively and unlocks the seller's item", async () => {
+    const listingId = await createListing();
+    const response = await server.fetch(
+      new Request("https://game.example/api/admin/market", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://game.example",
+          cookie: `__Host-ss_session=${ADMIN_TOKEN}; __Host-ss_admin=${ADMIN_SESSION_TOKEN}`,
+        },
+        body: JSON.stringify({
+          action: "remove-listing",
+          adId: listingId,
+          reason: "Publicación incumple las reglas del mercado.",
+        }),
+      }),
+      { DB: database },
+    );
+    expect(response.status).toBe(200);
+    expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe("CANCELADO");
+    expect(db.prepare("SELECT is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()?.["is_locked"]).toBe(0);
+  });
+
   it("cancels a pending order without refunding the commission", async () => {
     const listingId = await createListing();
     const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
