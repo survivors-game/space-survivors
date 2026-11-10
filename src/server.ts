@@ -523,7 +523,7 @@ async function handleSocialRequest(
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api/alliance/") || url.pathname === "/api/admin/set-vip") {
+  if (url.pathname.startsWith("/api/alliance/") || url.pathname === "/api/admin/set-vip" || url.pathname === "/api/admin/vip") {
     return handleAllianceRequest(request, env);
   }
   if (url.pathname === "/api/vip/buy") return handleVipBuy(request, env);
@@ -543,7 +543,8 @@ async function handleSocialRequest(
     const url = new URL(request.url);
     const isAlliancePath = url.pathname.startsWith("/api/alliance/");
     const isAdminVipPath = url.pathname === "/api/admin/set-vip";
-    if (!isAlliancePath && !isAdminVipPath) return null;
+    const isAdminVipManagementPath = url.pathname === "/api/admin/vip";
+    if (!isAlliancePath && !isAdminVipPath && !isAdminVipManagementPath) return null;
     if (!env?.DB)
       return json({ error: "La base de datos no está disponible en este Worker." }, 503);
     if (request.method !== "GET" && request.method !== "POST") {
@@ -589,6 +590,55 @@ async function handleSocialRequest(
         .run();
       if (updated.meta?.changes !== 1) return json({ error: "No se encontró el piloto." }, 404);
       return json({ success: true, pilot_id: pilotId, vip_until: vipUntil });
+    }
+
+    if (isAdminVipManagementPath) {
+      if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+      if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) {
+        return json({ error: "Acceso administrativo requerido." }, 403);
+      }
+      await db.prepare("CREATE TABLE IF NOT EXISTS admin_vip_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, action TEXT NOT NULL, days INTEGER NOT NULL, before_until INTEGER, after_until INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)").run();
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_vip_logs_date ON admin_vip_logs(created_at DESC)").run();
+
+      if (request.method === "GET") {
+        const search = (url.searchParams.get("search") ?? "").trim().slice(0, 120);
+        const pattern = "%" + search.toLowerCase() + "%";
+        const players = await db.prepare("SELECT p.pilot_id,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email,p.vip_until FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE ?='' OR lower(p.pilot_id) LIKE ? OR lower(p.callsign) LIKE ? OR lower(COALESCE(profile.display_name,'')) LIKE ? OR lower(COALESCE(pa.email,'')) LIKE ? ORDER BY CASE WHEN p.vip_until > ? THEN 0 ELSE 1 END,p.vip_until DESC LIMIT 200").bind(search,pattern,pattern,pattern,pattern,Date.now()).all();
+        const logs = await db.prepare("SELECT l.id,l.pilot_id,l.action,l.days,l.before_until,l.after_until,l.reason,l.admin_email,l.created_at,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email FROM admin_vip_logs l JOIN pilots p ON p.pilot_id=l.pilot_id LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE ?='' OR lower(l.pilot_id) LIKE ? OR lower(p.callsign) LIKE ? OR lower(COALESCE(profile.display_name,'')) LIKE ? OR lower(COALESCE(pa.email,'')) LIKE ? ORDER BY l.created_at DESC LIMIT 100").bind(search,pattern,pattern,pattern,pattern).all();
+        const now = Date.now();
+        const stats = await db.prepare("SELECT SUM(CASE WHEN vip_until > ? THEN 1 ELSE 0 END) AS active,SUM(CASE WHEN vip_until > ? AND vip_until <= ? THEN 1 ELSE 0 END) AS expiring_soon FROM pilots").bind(now,now,now+7*86400000).first<{active:number|null;expiring_soon:number|null}>();
+        return json({players:players.results??[],logs:logs.results??[],stats:{active:stats?.active??0,expiring_soon:stats?.expiring_soon??0}});
+      }
+
+      const body = await readJson(request);
+      const action = body?.["action"];
+      const operationId = body?.["operationId"];
+      const recipient = body?.["recipient"];
+      const days = body?.["days"];
+      const reason = body?.["reason"];
+      if (!["grant","renew","revoke"].includes(String(action)) || typeof operationId !== "string" || !/^[a-zA-Z0-9-]{16,80}$/.test(operationId) || typeof reason !== "string" || reason.trim().length < 5 || reason.trim().length > 240) {
+        return json({error:"Indica una operación, un motivo de 5 a 240 caracteres y un identificador válido."},400);
+      }
+      if (action !== "revoke" && (typeof days !== "number" || !Number.isSafeInteger(days) || days < 1 || days > 3650)) {
+        return json({error:"La duración debe estar entre 1 y 3650 días."},400);
+      }
+      const lookup = typeof recipient === "string" ? recipient.trim().slice(0,120) : "";
+      if (!lookup) return json({error:"Indica el ID, correo o nombre del jugador."},400);
+      const isId = validPilotId(lookup);
+      const matches = await db.prepare("SELECT p.pilot_id,p.vip_until FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id WHERE (?=1 AND p.pilot_id=?) OR (?=0 AND (lower(COALESCE(pa.email,''))=lower(?) OR lower(COALESCE(profile.display_name,''))=lower(?) OR lower(p.callsign)=lower(?))) LIMIT 2").bind(isId?1:0,lookup,isId?1:0,lookup,lookup,lookup).all<{pilot_id:string;vip_until:number|null}>();
+      const found = matches.results ?? [];
+      if (!found.length) return json({error:"No se encontró el jugador."},404);
+      if (found.length > 1) return json({error:"Hay varios jugadores con ese nombre. Usa el ID o correo."},409);
+      const target = found[0]!;
+      const now = Date.now();
+      const beforeUntil = target.vip_until;
+      const afterUntil = action === "revoke" ? null : action === "grant" ? now + Number(days)*86400000 : Math.max(now,beforeUntil??0)+Number(days)*86400000;
+      const timestamp = Date.now();
+      await db.batch([
+        db.prepare("UPDATE pilots SET vip_until=?,updated_at=? WHERE pilot_id=?").bind(afterUntil,timestamp,target.pilot_id),
+        db.prepare("INSERT INTO admin_vip_logs (id,operation_id,pilot_id,action,days,before_until,after_until,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(randomHex(16),operationId,target.pilot_id,String(action),Number(days??0),beforeUntil,afterUntil,reason.trim(),account.email,timestamp),
+      ]);
+      return json({success:true,pilot_id:target.pilot_id,action,days:Number(days??0),vip_until:afterUntil});
     }
 
     if (!account) return json({ error: "Inicia sesión con Google para usar las alianzas." }, 401);
