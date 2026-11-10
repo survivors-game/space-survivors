@@ -202,6 +202,27 @@ export class ChatRoom extends DurableObject {
         return Response.json({ success: true, enabled: payload["enabled"] });
       }
 
+      if (action === "delete-last-12-hours" || action === "delete-last-24-hours" || action === "delete-all-messages") {
+        const cutoff = action === "delete-last-12-hours"
+          ? now - 12 * 60 * 60 * 1000
+          : action === "delete-last-24-hours"
+            ? now - 24 * 60 * 60 * 1000
+            : null;
+        const count = cutoff === null
+          ? this.ctx.storage.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM chat_messages").toArray()[0]?.count ?? 0
+          : this.ctx.storage.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM chat_messages WHERE timestamp >= ?", cutoff).toArray()[0]?.count ?? 0;
+        if (cutoff === null) {
+          this.ctx.storage.sql.exec("DELETE FROM chat_messages");
+        } else {
+          this.ctx.storage.sql.exec("DELETE FROM chat_messages WHERE timestamp >= ?", cutoff);
+        }
+        const notice = JSON.stringify({ type: "history-cleared", deletedCount: Number(count) });
+        for (const socket of this.ctx.getWebSockets()) {
+          try { socket.send(notice); } catch { socket.close(1011, "Chat delivery failed"); }
+        }
+        return Response.json({ success: true, deletedCount: Number(count) });
+      }
+
       if (action === "delete-message") {
         const messageId = Number(payload?.["messageId"]);
         if (!Number.isSafeInteger(messageId) || messageId <= 0) {
