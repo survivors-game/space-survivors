@@ -82,7 +82,7 @@ const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const GOOGLE_STATE_TTL_MS = 10 * 60 * 1000;
-const BOSS_ATTEMPT_TTL_MS = 30 * 60 * 1000;
+const BOSS_ATTEMPT_TTL_MS = 20 * 60 * 1000;
 const BOSS_COMBAT_PARAMS: Record<
   string,
   { hp: number; damage: number; minCombatMs: number; maxHitDamage: number }
