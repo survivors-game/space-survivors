@@ -613,7 +613,7 @@ function SectionView({
                 : ""
             }
           >
-            {def.id === "premios" ? <RewardForm onAction={onAction} /> : null}
+            {def.id === "premios" ? <RewardForm /> : null}
             {def.form ? (
               <form
                 className="space-y-3 rounded border border-white/10 bg-white/[0.03] p-4"
@@ -3158,175 +3158,121 @@ function PlayersSection() {
   );
 }
 
-type RewardType = "nave" | "vip" | "objeto" | "obs" | "cr";
-const REWARD_TYPES: { id: RewardType; label: string }[] = [
-  { id: "nave", label: "Nave" },
-  { id: "vip", label: "VIP" },
-  { id: "objeto", label: "Objeto" },
-  { id: "obs", label: "OBS" },
-  { id: "cr", label: "CR" },
-];
-// Catálogo sin alias duplicados (p. ej. "magnet" e "iman").
-const REWARD_ITEMS = INVENTORY_CATALOG.filter(
-  (item, i, all) => all.findIndex((o) => o.label === item.label) === i,
-);
 
+type RewardType = "ship" | "VIP" | "item" | "OBS" | "CR";
+const REWARD_ITEMS = INVENTORY_CATALOG.filter(
+  (item, i, all) => all.findIndex((entry) => entry.label === item.label) === i,
+);
 const inputCls =
   "mt-1 h-10 w-full rounded border border-white/10 bg-black/40 px-2 text-sm text-white outline-none focus:border-cyan-400/40";
 
-function RewardForm({ onAction }: { onAction: (l: string) => void }) {
+function RewardForm() {
+  type RewardLog = {
+    id: string; pilot_id: string; callsign: string; email: string | null;
+    reward_type: RewardType; reward_name: string; quantity: number;
+    event_name: string; reason: string; admin_email: string; created_at: number;
+  };
   const [recipient, setRecipient] = useState("");
-  const [type, setType] = useState<RewardType>("nave");
+  const [type, setType] = useState<RewardType>("ship");
   const [shipId, setShipId] = useState(SHIPS[0]?.id ?? "");
-  const [vipDays, setVipDays] = useState("30");
   const [itemId, setItemId] = useState(REWARD_ITEMS[0]?.itemId ?? "");
-  const [qty, setQty] = useState("1");
-  const [amount, setAmount] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [eventName, setEventName] = useState("");
+  const [reason, setReason] = useState("");
+  const [search, setSearch] = useState("");
+  const [rewards, setRewards] = useState<RewardLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const summary = (() => {
-    if (type === "nave") return `nave ${SHIPS.find((s) => s.id === shipId)?.name ?? ""}`;
-    if (type === "vip") return `${vipDays} días de VIP`;
-    if (type === "objeto")
-      return `${qty} × ${REWARD_ITEMS.find((i) => i.itemId === itemId)?.label ?? ""}`;
-    return `${amount || 0} ${type.toUpperCase()}`;
-  })();
+  const load = async (query = search) => {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/admin/rewards?search=" + encodeURIComponent(query.trim()), { credentials: "same-origin" });
+      const data = (await response.json()) as { rewards?: RewardLog[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo cargar el historial.");
+      setRewards(data.rewards ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo cargar el historial.");
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { void load(""); }, []);
 
-  const valid =
-    recipient.trim().length > 0 &&
-    (type === "vip" ? Number(vipDays) > 0 : true) &&
-    (type === "objeto" ? Number(qty) > 0 : true) &&
-    (type === "obs" || type === "cr" ? Number(amount) > 0 : true);
-
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amount = Number(quantity);
+    if (!recipient.trim() || !Number.isSafeInteger(amount) || amount < 1 || reason.trim().length < 5) {
+      setError("Completa el jugador, la cantidad y el motivo."); return;
+    }
+    const rewardId = type === "ship" ? shipId : type === "item" ? itemId : type.toLowerCase();
+    const rewardName = type === "ship" ? (SHIPS.find((ship) => ship.id === shipId)?.name ?? "nave") :
+      type === "item" ? (REWARD_ITEMS.find((item) => item.itemId === itemId)?.label ?? "objeto") : type;
+    const summary = type === "VIP" ? amount + " días de VIP" : amount + " " + rewardName;
+    if (!window.confirm("¿Confirmas entregar " + summary + " a " + recipient.trim() + "?")) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/admin/rewards", {
+        method: "POST", credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operationId: crypto.randomUUID(), recipient: recipient.trim(), rewardType: type,
+          rewardId, quantity: amount, eventName: eventName.trim(), reason: reason.trim(),
+        }),
+      });
+      const data = (await response.json()) as { error?: string; reward_name?: string; quantity?: number };
+      if (!response.ok) throw new Error(data.error || "No se pudo entregar el premio.");
+      setNotice("Premio entregado correctamente: " + (data.quantity ?? amount) + " " + (data.reward_name ?? rewardName) + ".");
+      setRecipient(""); setQuantity("1"); setReason("");
+      await load("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo entregar el premio.");
+    } finally { setBusy(false); }
+  };
+  const date = (value: number) => new Date(value).toLocaleString("es-CO");
   return (
-    <form
-      className="space-y-4 rounded border border-white/10 bg-white/[0.03] p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (valid) onAction(`Entregar ${summary} a ${recipient.trim()}`);
-      }}
-    >
-      <div className="text-xs uppercase tracking-wider text-cyan-200">Entregar premio</div>
-
-      <label className="block text-xs text-white/70">
-        Jugador (ID, correo o nombre de usuario)
-        <input
-          value={recipient}
-          onChange={(e) => setRecipient(e.target.value)}
-          placeholder="plt_xxxx · correo@ejemplo.com · Piloto"
-          className={`${inputCls} placeholder:text-white/40`}
-        />
-      </label>
-
-      <div>
-        <div className="text-xs text-white/70">Tipo de premio</div>
-        <div className="mt-1 grid grid-cols-5 gap-1">
-          {REWARD_TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setType(t.id)}
-              className={`rounded border py-2 text-xs ${type === t.id ? "border-cyan-400/50 bg-cyan-400/20 text-cyan-100" : "border-white/10 text-white/70 hover:bg-white/5"}`}
-            >
-              {t.label}
-            </button>
-          ))}
+    <div className="space-y-5">
+      <form className="space-y-4 rounded border border-white/10 bg-white/[0.03] p-4" onSubmit={submit}>
+        <div className="text-xs uppercase tracking-wider text-cyan-200">Entregar premio o corregir recompensa no recibida</div>
+        <label className="block text-xs text-white/70">Jugador (ID, correo o nombre)
+          <input required value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="plt_xxxx · correo@ejemplo.com · Piloto" className={inputCls} />
+        </label>
+        <div><div className="text-xs text-white/70">Tipo de premio</div><div className="mt-1 grid grid-cols-5 gap-1">
+          {([["ship","Nave"],["VIP","VIP"],["item","Objeto"],["OBS","OBS"],["CR","CR"]] as [RewardType,string][]).map(([value,label]) =>
+            <button key={value} type="button" onClick={() => setType(value)} className={"rounded border py-2 text-xs " + (type===value ? "border-cyan-400/50 bg-cyan-400/20 text-cyan-100" : "border-white/10 text-white/70 hover:bg-white/5")}>{label}</button>
+          )}
+        </div></div>
+        {type==="ship" ? <label className="block text-xs text-white/70">Nave<select value={shipId} onChange={(event)=>setShipId(event.target.value)} className={inputCls}>{SHIPS.map(ship=><option key={ship.id} value={ship.id}>{ship.name} · {ship.role}</option>)}</select></label> : null}
+        {type==="item" ? <label className="block text-xs text-white/70">Objeto<select value={itemId} onChange={(event)=>setItemId(event.target.value)} className={inputCls}>{REWARD_ITEMS.map(item=><option key={item.itemId} value={item.itemId}>{item.label}</option>)}</select></label> : null}
+        <label className="block text-xs text-white/70">{type==="VIP"?"Duración del VIP (días)":type==="ship"?"Cantidad (las naves se entregan de una en una)":"Cantidad"}
+          <input type="number" min={1} max={type==="VIP"?3650:type==="ship"?1:type==="item"?1000:1000000000} value={quantity} onChange={(event)=>setQuantity(event.target.value)} className={inputCls}/>
+        </label>
+        <label className="block text-xs text-white/70">Evento o temporada (opcional)
+          <input maxLength={100} value={eventName} onChange={(event)=>setEventName(event.target.value)} placeholder="Ej. Evento de lanzamiento" className={inputCls}/>
+        </label>
+        <label className="block text-xs text-white/70">Motivo de la entrega (obligatorio)
+          <textarea required minLength={5} maxLength={240} rows={3} value={reason} onChange={(event)=>setReason(event.target.value)} placeholder="Ej. Premio del evento o corrección de recompensa no recibida" className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm text-white outline-none focus:border-cyan-400/40"/>
+        </label>
+        <button type="submit" disabled={busy||!recipient.trim()||reason.trim().length<5} className="w-full rounded bg-amber-400/90 py-2.5 text-sm font-bold uppercase tracking-wider text-black hover:bg-amber-300 disabled:opacity-40">{busy?"Entregando...":"Entregar premio"}</button>
+        {error?<p role="alert" className="text-sm text-rose-300">{error}</p>:null}
+        {notice?<p role="status" className="text-sm text-emerald-300">{notice}</p>:null}
+      </form>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2"><h3 className="text-xs uppercase tracking-wider text-white/70">Historial de premios entregados</h3>
+          <input value={search} onChange={(event)=>setSearch(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter")void load();}} placeholder="Buscar jugador o evento" className="ml-auto h-9 min-w-0 rounded border border-white/10 bg-black/40 px-2 text-xs text-white"/>
+          <button onClick={()=>void load()} className="rounded border border-white/15 px-3 py-2 text-xs text-white/70">Buscar</button>
         </div>
-      </div>
-
-      {type === "nave" ? (
-        <label className="block text-xs text-white/70">
-          Nave
-          <select value={shipId} onChange={(e) => setShipId(e.target.value)} className={inputCls}>
-            {SHIPS.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} · {s.role}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
-      {type === "vip" ? (
-        <label className="block text-xs text-white/70">
-          Días de VIP a regalar
-          <input
-            type="number"
-            min={1}
-            value={vipDays}
-            onChange={(e) => setVipDays(e.target.value)}
-            className={inputCls}
-          />
-          <div className="mt-2 flex flex-wrap gap-1">
-            {[1, 7, 15, 30, 90].map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setVipDays(String(d))}
-                className={`rounded px-2.5 py-1 text-xs ${vipDays === String(d) ? "bg-amber-400/20 text-amber-200" : "text-white/70 hover:bg-white/5"}`}
-              >
-                {d} días
-              </button>
-            ))}
-          </div>
-        </label>
-      ) : null}
-
-      {type === "objeto" ? (
-        <div className="grid grid-cols-[1fr_90px] gap-2">
-          <label className="block text-xs text-white/70">
-            Objeto
-            <select value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls}>
-              {REWARD_ITEMS.map((i) => (
-                <option key={i.itemId} value={i.itemId}>
-                  {i.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-xs text-white/70">
-            Cantidad
-            <input
-              type="number"
-              min={1}
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              className={inputCls}
-            />
-          </label>
+        <div className="overflow-x-auto rounded border border-white/10"><table className="w-full min-w-[760px] text-left text-xs">
+          <thead className="bg-white/[0.03] text-white/55"><tr>{["Fecha","Jugador","Premio","Evento","Motivo","Administración"].map(label=><th key={label} className="px-3 py-2 font-normal">{label}</th>)}</tr></thead>
+          <tbody>{rewards.map(reward=><tr key={reward.id} className="border-t border-white/5 text-white/70">
+            <td className="px-3 py-2">{date(reward.created_at)}</td><td className="px-3 py-2">{reward.callsign}<br/><span className="text-white/40">{reward.email??reward.pilot_id}</span></td>
+            <td className="px-3 py-2">{reward.quantity} × {reward.reward_name}{reward.reward_type==="VIP"?" días":""}</td><td className="px-3 py-2">{reward.event_name||"—"}</td>
+            <td className="max-w-[220px] whitespace-normal px-3 py-2">{reward.reason}</td><td className="px-3 py-2">{reward.admin_email}</td>
+          </tr>)}</tbody></table>
+          {!loading&&!rewards.length?<p className="p-4 text-center text-xs text-white/40">Todavía no hay premios registrados.</p>:null}
+          {loading?<p className="p-4 text-center text-xs text-white/40">Cargando historial...</p>:null}
         </div>
-      ) : null}
-
-      {type === "obs" || type === "cr" ? (
-        <label className="block text-xs text-white/70">
-          Cantidad de {type.toUpperCase()}
-          <input
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0"
-            className={`${inputCls} placeholder:text-white/40`}
-          />
-        </label>
-      ) : null}
-
-      <div className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/75">
-        Resumen: <span className="text-white">{summary}</span>
-        {recipient.trim() ? (
-          <>
-            {" "}
-            → <span className="text-cyan-200">{recipient.trim()}</span>
-          </>
-        ) : null}
-      </div>
-
-      <button
-        type="submit"
-        disabled={!valid}
-        className="w-full rounded bg-amber-400/90 py-2.5 text-sm font-bold uppercase tracking-wider text-black hover:bg-amber-300 disabled:opacity-40"
-      >
-        Entregar premio
-      </button>
-    </form>
+      </section>
+    </div>
   );
 }
