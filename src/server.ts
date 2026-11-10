@@ -6290,7 +6290,9 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
-      const supportResponse = await handleSupportRequest(request, workerEnv);\n      if (supportResponse) return supportResponse;\n      const announcementsResponse = await handleAnnouncementsRequest(request, workerEnv);
+      const supportResponse = await handleSupportRequest(request, workerEnv);
+      if (supportResponse) return supportResponse;
+      const announcementsResponse = await handleAnnouncementsRequest(request, workerEnv);
       if (announcementsResponse) return announcementsResponse;
       const adminChatResponse = await handleAdminChatRequest(request, workerEnv);
       if (adminChatResponse) return adminChatResponse;
