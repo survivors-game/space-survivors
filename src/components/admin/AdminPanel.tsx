@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SHIPS } from "@/game/data/ships";
 import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
@@ -281,6 +281,53 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [confirm, setConfirm] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/auth/status", { credentials: "same-origin" })
+      .then(async (response) => {
+        const data = (await response.json()) as { authenticated?: boolean };
+        if (active && response.ok) setUnlocked(data.authenticated === true);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const unlock = async (password: string): Promise<boolean> => {
+    try {
+      const response = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (response.ok) {
+        setUnlocked(true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const closeAdmin = async () => {
+    if (unlocked) {
+      try {
+        await fetch("/api/admin/auth/logout", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        });
+      } catch {
+        // La sesión también vence automáticamente en el servidor.
+      }
+    }
+    onClose();
+  };
+
   const ask = (label: string) => {
     setNotice(null);
     setConfirm(label);
@@ -293,7 +340,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[80] flex bg-[#05060f]/95 font-pixel text-white backdrop-blur-sm">
       {!unlocked ? (
-        <AdminLogin onUnlock={() => setUnlocked(true)} onClose={onClose} />
+        <AdminLogin onUnlock={unlock} onClose={closeAdmin} />
       ) : (
         <div className="flex h-full w-full min-w-0">
           {/* Sidebar */}
@@ -334,7 +381,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               })}
             </nav>
             <button
-              onClick={onClose}
+              onClick={closeAdmin}
               className="m-2 rounded border border-rose-400/30 px-3 py-2 text-xs uppercase tracking-wider text-rose-300 hover:bg-rose-400/10"
             >
               Salir del panel
@@ -404,8 +451,16 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function AdminLogin({ onUnlock, onClose }: { onUnlock: () => void; onClose: () => void }) {
+function AdminLogin({
+  onUnlock,
+  onClose,
+}: {
+  onUnlock: (password: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
   const [pwd, setPwd] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   return (
     <div className="m-auto w-full max-w-sm p-4">
       <div className="relative rounded-lg border border-amber-400/30 bg-[#0a0c1c] p-6 shadow-[0_0_60px_#fbbf2418]">
@@ -427,9 +482,14 @@ function AdminLogin({ onUnlock, onClose }: { onUnlock: () => void; onClose: () =
         </p>
         <form
           className="mt-5 space-y-3"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (pwd) onUnlock();
+            if (!pwd || busy) return;
+            setBusy(true);
+            setError("");
+            const accepted = await onUnlock(pwd);
+            if (!accepted) setError("No se pudo validar el acceso. Revisa la contraseña e inténtalo de nuevo.");
+            setBusy(false);
           }}
         >
           <div className="flex items-center gap-2 rounded border border-white/10 bg-black/40 px-3">
@@ -445,15 +505,13 @@ function AdminLogin({ onUnlock, onClose }: { onUnlock: () => void; onClose: () =
           </div>
           <button
             type="submit"
-            disabled={!pwd}
+            disabled={!pwd || busy}
             className="w-full rounded bg-amber-400/90 py-2.5 text-sm font-bold uppercase tracking-widest text-black transition hover:bg-amber-300 disabled:opacity-40"
           >
-            Desbloquear
+            {busy ? "Verificando..." : "Desbloquear"}
           </button>
         </form>
-        <p className="mt-4 text-center text-[11px] text-white/50">
-          Vista de diseño: la verificación real se hará en el servidor.
-        </p>
+        {error ? <p role="alert" className="mt-3 text-center text-xs text-rose-300">{error}</p> : null}
       </div>
     </div>
   );
