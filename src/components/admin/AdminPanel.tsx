@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SHIPS } from "@/game/data/ships";
 import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
@@ -749,7 +749,7 @@ function MarketAdminSection() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -770,11 +770,11 @@ function MarketAdminSection() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  const act = async (action: string, data: Record<string, unknown>, key: string) => {
+  const act = async (data: Record<string, unknown>, key: string) => {
     const reason = reasons[key]?.trim() ?? "";
     if (reason.length < 5) {
       setError("Escribe el motivo de la decisión (mínimo 5 caracteres).");
@@ -855,8 +855,8 @@ function MarketAdminSection() {
               {dispute.status === "OPEN" ? <>
                 <label className="block text-xs text-white/55">Motivo de la resolución<input value={reasons[key] ?? ""} onChange={(event) => setReasons((current) => ({...current,[key]:event.target.value}))} maxLength={240} className={inputCls} placeholder="Explica brevemente la decisión..." /></label>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={Boolean(busy)} onClick={() => void act("resolve-buyer",{action:"resolve-buyer",disputeId:dispute.id},key)} className="rounded bg-emerald-400/90 px-3 py-2 text-xs font-bold text-black disabled:opacity-40">{busy === key ? "Procesando..." : "Resolver a favor del comprador"}</button>
-                  <button type="button" disabled={Boolean(busy)} onClick={() => void act("resolve-seller",{action:"resolve-seller",disputeId:dispute.id},key)} className="rounded border border-amber-400/40 px-3 py-2 text-xs text-amber-100 disabled:opacity-40">Resolver a favor del vendedor</button>
+                  <button type="button" disabled={Boolean(busy)} onClick={() => void act({action:"resolve-buyer",disputeId:dispute.id},key)} className="rounded bg-emerald-400/90 px-3 py-2 text-xs font-bold text-black disabled:opacity-40">{busy === key ? "Procesando..." : "Resolver a favor del comprador"}</button>
+                  <button type="button" disabled={Boolean(busy)} onClick={() => void act({action:"resolve-seller",disputeId:dispute.id},key)} className="rounded border border-amber-400/40 px-3 py-2 text-xs text-amber-100 disabled:opacity-40">Resolver a favor del vendedor</button>
                 </div>
               </> : <p className="text-xs text-white/45">Resolución: {dispute.resolution_note || "Sin nota"} · {dispute.resolved_by || ""}</p>}
             </article>;
@@ -876,7 +876,7 @@ function MarketAdminSection() {
       {view === "Publicaciones" ? <div className="space-y-2">
         {filteredAds.map((ad) => <article key={ad.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 p-3 text-xs">
           <div><b className="text-white">{ad.item_name} · {ad.id}</b><p className="mt-1 text-white/50">{ad.seller_name} ({ad.seller_pilot_id}) · {money(ad.price_minor,ad.currency_code)} · {ad.status} · {date(ad.created_at)}</p></div>
-          {["ACTIVO","PAUSADO"].includes(ad.status) ? <div className="min-w-48 space-y-2"><input value={reasons[ad.id] ?? ""} onChange={(event) => setReasons((current) => ({...current,[ad.id]:event.target.value}))} placeholder="Motivo para retirar..." className={inputCls} /><button type="button" disabled={Boolean(busy)} onClick={() => void act("remove-listing",{action:"remove-listing",adId:ad.id},ad.id)} className="rounded border border-rose-400/40 px-3 py-2 text-xs text-rose-200 disabled:opacity-40">Retirar publicación</button></div> : null}
+          {["ACTIVO","PAUSADO"].includes(ad.status) ? <div className="min-w-48 space-y-2"><input value={reasons[ad.id] ?? ""} onChange={(event) => setReasons((current) => ({...current,[ad.id]:event.target.value}))} placeholder="Motivo para retirar..." className={inputCls} /><button type="button" disabled={Boolean(busy)} onClick={() => void act({action:"remove-listing",adId:ad.id},ad.id)} className="rounded border border-rose-400/40 px-3 py-2 text-xs text-rose-200 disabled:opacity-40">Retirar publicación</button></div> : null}
         </article>)}
         {!filteredAds.length && !loading ? <p className="p-4 text-sm text-white/50">No hay publicaciones.</p> : null}
       </div> : null}
