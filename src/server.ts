@@ -2363,11 +2363,13 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
               )
               AND quantity > 0;
           END`,
+        `DROP TRIGGER IF EXISTS market_order_confirm_guard`,
+        `DROP TRIGGER IF EXISTS market_order_confirm_apply`,
         `CREATE TRIGGER IF NOT EXISTS market_order_confirm_guard
           BEFORE UPDATE OF status ON p2p_orders
           WHEN NEW.status = 'COMPLETADA' AND OLD.status != 'COMPLETADA'
           BEGIN
-            SELECT CASE WHEN OLD.status != 'PENDIENTE'
+            SELECT CASE WHEN OLD.status NOT IN ('PENDIENTE', 'PAGO_REPORTADO')
               OR NOT EXISTS (
                 SELECT 1 FROM p2p_ads ad
                 JOIN pilot_inventory item ON item.id = ad.inventory_id
@@ -2379,7 +2381,7 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           END`,
         `CREATE TRIGGER IF NOT EXISTS market_order_confirm_apply
           AFTER UPDATE OF status ON p2p_orders
-          WHEN NEW.status = 'COMPLETADA' AND OLD.status = 'PENDIENTE'
+          WHEN NEW.status = 'COMPLETADA' AND OLD.status IN ('PENDIENTE', 'PAGO_REPORTADO')
           BEGIN
             UPDATE pilot_inventory
             SET quantity = quantity + (
@@ -2486,6 +2488,12 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
       if (!(orderColumns.results ?? []).some((column) => column.name === "payment_method")) {
         await db.prepare("ALTER TABLE p2p_orders ADD COLUMN payment_method TEXT").run();
       }
+      if (!(orderColumns.results ?? []).some((column) => column.name === "buyer_paid_at")) {
+        await db.prepare("ALTER TABLE p2p_orders ADD COLUMN buyer_paid_at INTEGER").run();
+      }
+      await db.prepare(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')",
+      ).run();
       await db
         .prepare(
           `UPDATE p2p_ads
@@ -4886,14 +4894,14 @@ async function handleMarketRequest(
     if (!order || (order.buyer_pilot_id !== pilotId && order.seller_pilot_id !== pilotId)) {
       return pilotJson(request, pilotId, { error: "La orden no existe o no participas en ella." }, 404);
     }
-    if (order.status !== "PENDIENTE") {
-      return pilotJson(request, pilotId, { error: "Solo se puede disputar una orden pendiente." }, 409);
+    if (order.status !== "PENDIENTE" && order.status !== "PAGO_REPORTADO") {
+      return pilotJson(request, pilotId, { error: "Solo se puede disputar una orden en curso." }, 409);
     }
     const now = Date.now();
     const disputeId = "dsp_" + randomHex(12);
     try {
       const results = await db.batch([
-        db.prepare("UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status = 'PENDIENTE'")
+        db.prepare("UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status IN ('PENDIENTE', 'PAGO_REPORTADO')")
           .bind(now, orderId),
         db.prepare(
           "INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, evidence_url, status, created_at) SELECT ?, ?, ?, ?, ?, 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA')",
@@ -5175,6 +5183,46 @@ async function handleMarketRequest(
     });
   }
 
+  if (url.pathname === "/api/market/report-payment" && request.method === "POST") {
+    const body = await readJson(request, 2048);
+    const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
+    if (!orderId || orderId.length > 64) {
+      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
+    }
+    const result = await db.prepare(
+      `UPDATE p2p_orders SET status = 'PAGO_REPORTADO', buyer_paid_at = ?, updated_at = ?
+       WHERE id = ? AND buyer_pilot_id = ? AND status = 'PENDIENTE'
+       RETURNING id`,
+    ).bind(Date.now(), Date.now(), orderId, pilotId).first<{ id: string }>();
+    if (!result) return pilotJson(request, pilotId, { error: "La orden no existe, no te pertenece o ya fue procesada." }, 409);
+    return pilotJson(request, pilotId, { success: true, order_id: result.id, status: "PAGO_REPORTADO" });
+  }
+
+  if (url.pathname === "/api/market/release" && request.method === "POST") {
+    const body = await readJson(request, 2048);
+    const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
+    if (!orderId || orderId.length > 64) {
+      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
+    }
+    const seller = await db.prepare(
+      "SELECT ad.seller_pilot_id FROM p2p_orders o JOIN p2p_ads ad ON ad.id = o.ad_id WHERE o.id = ?",
+    ).bind(orderId).first<{ seller_pilot_id: string }>();
+    if (!seller || seller.seller_pilot_id !== pilotId) {
+      return pilotJson(request, pilotId, { error: "Solo el vendedor de esta orden puede liberar el artículo." }, 403);
+    }
+    try {
+      const result = await db.prepare(
+        `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
+         WHERE id = ? AND status = 'PAGO_REPORTADO' RETURNING id`,
+      ).bind(Date.now(), orderId).first<{ id: string }>();
+      if (!result) return pilotJson(request, pilotId, { error: "La orden aún no tiene el pago reportado o ya fue procesada." }, 409);
+      return pilotJson(request, pilotId, { success: true, order_id: result.id, status: "COMPLETADA" });
+    } catch (error) {
+      console.error("No se pudo liberar el artículo del mercado:", error);
+      return pilotJson(request, pilotId, { error: "No se pudo liberar el artículo. La operación fue revertida." }, 409);
+    }
+  }
+
   if (url.pathname === "/api/market/confirm" && request.method === "POST") {
     const body = await readJson(request, 2048);
     const orderId = body?.["order_id"];
@@ -5185,7 +5233,7 @@ async function handleMarketRequest(
       const result = await db
         .prepare(
           `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
-          WHERE id = ? AND buyer_pilot_id = ? AND status = 'PENDIENTE'
+          WHERE id = ? AND buyer_pilot_id = ? AND status = 'PAGO_REPORTADO'
           RETURNING id`,
         )
         .bind(Date.now(), orderId, pilotId)
