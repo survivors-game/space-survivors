@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SeasonAdminSection } from "./SeasonAdminSection";
 import { AlliancesAdminSection } from "./AlliancesAdminSection";
 import { VipAdminSection } from "./VipAdminSection";
@@ -1077,6 +1077,7 @@ function AnnouncementsAdminSection() {
     type: "NOTICIA" | "EVENTO" | "MANTENIMIENTO" | "TEMPORADA";
     message: string;
     status: "PUBLISHED" | "DRAFT";
+    color: string | null;
     created_at: number;
     updated_at: number;
   };
@@ -1092,6 +1093,7 @@ function AnnouncementsAdminSection() {
     type: "NOTICIA" as Announcement["type"],
     message: "",
     status: "PUBLISHED" as Announcement["status"],
+    color: "#00f0ff",
   };
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -1188,6 +1190,7 @@ function AnnouncementsAdminSection() {
       type: announcement.type,
       message: announcement.message,
       status: announcement.status,
+      color: announcement.color ?? "#00f0ff",
     });
     setError("");
     setNotice("");
@@ -1231,6 +1234,18 @@ function AnnouncementsAdminSection() {
             <option value="MANTENIMIENTO">Mantenimiento</option>
             <option value="TEMPORADA">Temporada</option>
           </select>
+        </label>
+        <label className="block text-xs text-white/65">
+          Color del anuncio
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="color"
+              value={form.color}
+              onChange={(event) => setForm((current) => ({ ...current, color: event.target.value }))}
+              className="h-10 w-14 cursor-pointer border border-white/10 bg-black/40 p-1"
+            />
+            <span className="font-mono text-xs text-white/70">{form.color.toUpperCase()}</span>
+          </div>
         </label>
         <label className="block text-xs text-white/65">
           Mensaje

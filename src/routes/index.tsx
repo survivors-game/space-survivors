@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -3035,6 +3035,7 @@ type TickerAnnouncement = {
   title: string;
   type: string;
   message: string;
+  color: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -3081,22 +3082,22 @@ function AnnouncementTicker({ className = "" }: { className?: string }) {
   const renderSegment = (copy: boolean) => (
     <div className="flex shrink-0 items-center" aria-hidden={copy}>
       {items.map((item) => {
-        const color = TICKER_TYPE_COLOR[item.type] ?? "#00f0ff";
+        const color = item.color ?? TICKER_TYPE_COLOR[item.type] ?? "#00f0ff";
         return (
           <span
             key={`${copy ? "copy" : "main"}-${item.id}`}
             className="flex shrink-0 items-center gap-3 whitespace-nowrap px-6"
           >
             <span
-              className="px-2 py-0.5 text-sm font-bold uppercase tracking-wider"
+              className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider"
               style={{ color, border: `1px solid ${color}88`, background: `${color}14` }}
             >
               {item.type}
             </span>
-            <span className="text-lg font-bold uppercase tracking-wide text-white">
+            <span className="text-base font-bold uppercase tracking-wide" style={{ color }}>
               {item.title}
             </span>
-            <span className="text-lg text-white/80">{item.message}</span>
+            <span className="text-base text-white/80">{item.message}</span>
             <span className="px-4 text-cyan-300/60" aria-hidden="true">
               ◆
             </span>

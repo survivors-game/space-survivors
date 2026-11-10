@@ -1,4 +1,4 @@
-import "./lib/error-capture";
+ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -3995,6 +3995,8 @@ function rollChance(probability: number): boolean {
   return value / 0x1_0000_0000 < probability;
 }
 
+let announcementColorColumnReady = false;
+
 async function handleAnnouncementsRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -4033,6 +4035,14 @@ async function handleAnnouncementsRequest(
         "CREATE INDEX IF NOT EXISTS idx_admin_announcement_logs_created ON admin_announcement_logs(created_at DESC)",
       )
       .run();
+    if (!announcementColorColumnReady) {
+      try {
+        await db.prepare("ALTER TABLE admin_announcements ADD COLUMN color TEXT").run();
+      } catch {
+        // La columna ya existe.
+      }
+      announcementColorColumnReady = true;
+    }
   } catch (error) {
     console.error("No se pudo preparar el sistema de anuncios:", error);
     return json({ error: "No se pudo preparar el sistema de anuncios." }, 503);
@@ -4041,7 +4051,7 @@ async function handleAnnouncementsRequest(
   if (isPublic) {
     const announcements = await db
       .prepare(
-        "SELECT id, title, type, message, created_at, updated_at FROM admin_announcements WHERE status = 'PUBLISHED' ORDER BY updated_at DESC LIMIT 10",
+        "SELECT id, title, type, message, color, created_at, updated_at FROM admin_announcements WHERE status = 'PUBLISHED' ORDER BY updated_at DESC LIMIT 10",
       )
       .all();
     return json({ announcements: announcements.results ?? [] });
@@ -4059,7 +4069,7 @@ async function handleAnnouncementsRequest(
     const [announcements, logs] = await Promise.all([
       db
         .prepare(
-          "SELECT id, title, type, message, status, created_at, updated_at FROM admin_announcements ORDER BY updated_at DESC LIMIT 100",
+          "SELECT id, title, type, message, status, color, created_at, updated_at FROM admin_announcements ORDER BY updated_at DESC LIMIT 100",
         )
         .all(),
       db
@@ -4078,6 +4088,11 @@ async function handleAnnouncementsRequest(
   const message = typeof body?.["message"] === "string" ? body["message"].trim() : "";
   const type = body?.["type"];
   const status = body?.["status"];
+  const rawColor = body?.["color"];
+  const color =
+    typeof rawColor === "string" && /^#[0-9a-f]{6}$/i.test(rawColor.trim())
+      ? rawColor.trim().toLowerCase()
+      : null;
   if (!["create", "update", "delete"].includes(String(action)))
     return json({ error: "Acción de anuncio no válida." }, 400);
   if (action !== "delete") {
@@ -4099,16 +4114,16 @@ async function handleAnnouncementsRequest(
     announcementId = crypto.randomUUID();
     await db
       .prepare(
-        "INSERT INTO admin_announcements (id, title, type, message, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO admin_announcements (id, title, type, message, status, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .bind(announcementId, title, type, message, status, now, now)
+      .bind(announcementId, title, type, message, status, color, now, now)
       .run();
   } else if (action === "update") {
     const result = await db
       .prepare(
-        "UPDATE admin_announcements SET title = ?, type = ?, message = ?, status = ?, updated_at = ? WHERE id = ?",
+        "UPDATE admin_announcements SET title = ?, type = ?, message = ?, status = ?, color = ?, updated_at = ? WHERE id = ?",
       )
-      .bind(title, type, message, status, now, id)
+      .bind(title, type, message, status, color, now, id)
       .run();
     if (!result.meta?.changes) return json({ error: "El anuncio no existe." }, 404);
   } else {
