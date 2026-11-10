@@ -5350,7 +5350,7 @@ async function handleMarketRequest(
     return pilotJson(request, pilotId, {
       orders: (orders.results ?? []).map((order) => {
         const country = (P2P_COUNTRIES[order.country] ? order.country : "CO") as P2PCountry;
-        const showPayment = order.role === "COMPRADOR" && order.status === "PENDIENTE";
+        const showPayment = order.role === "COMPRADOR" && ["PENDIENTE", "PAGO_REPORTADO"].includes(order.status);
         const details = paymentDataForAd(order);
         const selectedKey =
           order.payment_method ?? (showPayment ? decodeMethods(order.payment_methods)[0] : null);
