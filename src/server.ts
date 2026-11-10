@@ -3851,7 +3851,7 @@ async function handleMarketRequest(
         db.prepare(
           `SELECT
             (SELECT COUNT(*) FROM p2p_ads WHERE status IN ('ACTIVO', 'PAUSADO')) AS active_ads,
-            (SELECT COUNT(*) FROM p2p_orders WHERE status = 'PENDIENTE') AS pending_orders,
+            (SELECT COUNT(*) FROM p2p_orders WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO')) AS pending_orders,
             (SELECT COUNT(*) FROM p2p_disputes WHERE status = 'OPEN') AS open_disputes,
             (SELECT COUNT(*) FROM p2p_orders WHERE status = 'COMPLETADA') AS completed_orders`,
         ).first<{
@@ -3878,7 +3878,7 @@ async function handleMarketRequest(
            JOIN pilots seller ON seller.pilot_id = ad.seller_pilot_id
            LEFT JOIN player_profiles bp ON bp.pilot_id = buyer.pilot_id
            LEFT JOIN player_profiles sp ON sp.pilot_id = seller.pilot_id
-           ORDER BY CASE WHEN o.status IN ('DISPUTA', 'PENDIENTE') THEN 0 ELSE 1 END,
+           ORDER BY CASE WHEN o.status IN ('DISPUTA', 'PENDIENTE', 'PAGO_REPORTADO') THEN 0 ELSE 1 END,
              o.created_at DESC LIMIT 100`,
         ).all(),
         db.prepare(
