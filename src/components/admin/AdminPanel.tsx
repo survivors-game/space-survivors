@@ -720,6 +720,7 @@ function ChatAdminSection() {
   const [reports, setReports] = useState<Report[]>([]);
   const [mutes, setMutes] = useState<Mute[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [chatEnabled, setChatEnabled] = useState(true);
   const [tab, setTab] = useState<"mensajes" | "denuncias" | "silenciados" | "historial">("mensajes");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -730,9 +731,9 @@ function ChatAdminSection() {
     setLoading(true); setError("");
     try {
       const response = await fetch("/api/admin/chat", { credentials: "same-origin" });
-      const data = (await response.json()) as { messages?: Message[]; reports?: Report[]; mutes?: Mute[]; logs?: Log[]; error?: string };
+      const data = (await response.json()) as { messages?: Message[]; reports?: Report[]; mutes?: Mute[]; logs?: Log[]; chatEnabled?: boolean; error?: string };
       if (!response.ok) throw new Error(data.error || "No se pudo cargar el chat.");
-      setMessages(data.messages ?? []); setReports(data.reports ?? []); setMutes(data.mutes ?? []); setLogs(data.logs ?? []);
+      setMessages(data.messages ?? []); setReports(data.reports ?? []); setMutes(data.mutes ?? []); setLogs(data.logs ?? []); setChatEnabled(data.chatEnabled !== false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo cargar el chat."); }
     finally { setLoading(false); }
   };
@@ -757,6 +758,7 @@ function ChatAdminSection() {
     <section className="space-y-4">
       <div className="flex flex-wrap gap-2">{tabs.map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} className={`border px-3 py-2 text-xs ${tab === id ? "border-cyan-300 bg-cyan-400/10 text-cyan-100" : "border-white/10 text-white/60 hover:bg-white/5"}`}>{label}</button>)}
         <button type="button" disabled={loading || busy} onClick={() => void load()} className="ml-auto border border-white/15 px-3 py-2 text-xs text-white/70 disabled:opacity-40">Actualizar</button>
+        <button type="button" disabled={loading || busy} onClick={() => { const reason = askReason(chatEnabled ? "Motivo para suspender el chat global:" : "Motivo para reactivar el chat global:"); if (reason) void act({ action: "set-chat-enabled", enabled: chatEnabled ? 0 : 1, reason }); }} className={`border px-3 py-2 text-xs disabled:opacity-40 ${chatEnabled ? "border-rose-400/30 text-rose-200" : "border-emerald-400/30 text-emerald-200"}`}>{chatEnabled ? "Suspender chat global" : "Reactivar chat global"}</button>
       </div>
       <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar jugador o mensaje..." className="h-9 w-full border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-cyan-400/50" />
       {error ? <p className="border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-200">{error}</p> : null}
