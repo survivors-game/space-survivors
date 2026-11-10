@@ -3942,7 +3942,6 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
-
 async function handleAdminRewardsRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -3959,15 +3958,21 @@ async function handleAdminRewardsRequest(
   try {
     await ensureAuthSchema(db);
     await ensureMarketSchema(db);
-    await db.prepare(
-      "CREATE TABLE IF NOT EXISTS admin_reward_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, reward_type TEXT NOT NULL, reward_id TEXT NOT NULL, reward_name TEXT NOT NULL, quantity INTEGER NOT NULL, event_name TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)"
-    ).run();
-    await db.prepare(
-      "CREATE INDEX IF NOT EXISTS idx_admin_reward_logs_created ON admin_reward_logs(created_at DESC)"
-    ).run();
-    await db.prepare(
-      "CREATE INDEX IF NOT EXISTS idx_admin_reward_logs_pilot ON admin_reward_logs(pilot_id, created_at DESC)"
-    ).run();
+    await db
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS admin_reward_logs (id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE, pilot_id TEXT NOT NULL, reward_type TEXT NOT NULL, reward_id TEXT NOT NULL, reward_name TEXT NOT NULL, quantity INTEGER NOT NULL, event_name TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_reward_logs_created ON admin_reward_logs(created_at DESC)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_reward_logs_pilot ON admin_reward_logs(pilot_id, created_at DESC)",
+      )
+      .run();
   } catch (error) {
     console.error("No se pudo preparar el sistema de recompensas:", error);
     return json({ error: "No se pudo preparar el sistema de recompensas." }, 503);
@@ -3978,27 +3983,35 @@ async function handleAdminRewardsRequest(
   if (
     account.email.toLowerCase() !== ADMIN_EMAIL ||
     !(await hasValidAdminSession(db, request, account.google_sub))
-  ) return json({ error: "Acceso administrativo requerido." }, 403);
+  )
+    return json({ error: "Acceso administrativo requerido." }, 403);
 
   if (request.method === "GET") {
     const search = (url.searchParams.get("search") ?? "").trim().slice(0, 100);
     const pattern = "%" + search.replace(/[\\%_]/g, (character) => "\\" + character) + "%";
-    const rows = await db.prepare(
-      "SELECT l.id, l.operation_id, l.pilot_id, l.reward_type, l.reward_id, l.reward_name, l.quantity, l.event_name, l.reason, l.admin_email, l.created_at, p.callsign, pa.email FROM admin_reward_logs l JOIN pilots p ON p.pilot_id = l.pilot_id LEFT JOIN player_accounts pa ON pa.pilot_id = l.pilot_id WHERE (? = '' OR l.pilot_id LIKE ? ESCAPE '\\' OR p.callsign LIKE ? ESCAPE '\\' OR pa.email LIKE ? ESCAPE '\\' OR l.event_name LIKE ? ESCAPE '\\') ORDER BY l.created_at DESC LIMIT 100"
-    ).bind(search, pattern, pattern, pattern, pattern).all();
+    const rows = await db
+      .prepare(
+        "SELECT l.id, l.operation_id, l.pilot_id, l.reward_type, l.reward_id, l.reward_name, l.quantity, l.event_name, l.reason, l.admin_email, l.created_at, p.callsign, pa.email FROM admin_reward_logs l JOIN pilots p ON p.pilot_id = l.pilot_id LEFT JOIN player_accounts pa ON pa.pilot_id = l.pilot_id WHERE (? = '' OR l.pilot_id LIKE ? ESCAPE '\\' OR p.callsign LIKE ? ESCAPE '\\' OR pa.email LIKE ? ESCAPE '\\' OR l.event_name LIKE ? ESCAPE '\\') ORDER BY l.created_at DESC LIMIT 100",
+      )
+      .bind(search, pattern, pattern, pattern, pattern)
+      .all();
     return json({ rewards: rows.results ?? [] });
   }
 
   const body = await readJson(request, 4096);
   const operationId = body?.["operationId"];
-  const recipient = typeof body?.["recipient"] === "string" ? body["recipient"].trim().slice(0, 160) : "";
+  const recipient =
+    typeof body?.["recipient"] === "string" ? body["recipient"].trim().slice(0, 160) : "";
   const rewardType = body?.["rewardType"];
   const rewardId = typeof body?.["rewardId"] === "string" ? body["rewardId"] : "";
   const quantity = body?.["quantity"];
   const eventName = typeof body?.["eventName"] === "string" ? body["eventName"].trim() : "";
   const reason = typeof body?.["reason"] === "string" ? body["reason"].trim() : "";
   if (typeof operationId !== "string" || !/^[0-9a-f-]{36}$/i.test(operationId))
-    return json({ error: "La operación no tiene un identificador válido. Inténtalo de nuevo." }, 400);
+    return json(
+      { error: "La operación no tiene un identificador válido. Inténtalo de nuevo." },
+      400,
+    );
   if (!recipient) return json({ error: "Indica el jugador que recibirá el premio." }, 400);
   if (typeof rewardType !== "string" || !["ship", "item", "CR", "OBS", "VIP"].includes(rewardType))
     return json({ error: "Selecciona un tipo de premio válido." }, 400);
@@ -4009,16 +4022,22 @@ async function handleAdminRewardsRequest(
   if (eventName.length > 100)
     return json({ error: "El nombre del evento no puede superar 100 caracteres." }, 400);
 
-  const duplicate = await db.prepare(
-    "SELECT id FROM admin_reward_logs WHERE operation_id = ?"
-  ).bind(operationId).first<{ id: string }>();
-  if (duplicate) return json({ error: "Esta entrega ya fue procesada. Actualiza el historial." }, 409);
+  const duplicate = await db
+    .prepare("SELECT id FROM admin_reward_logs WHERE operation_id = ?")
+    .bind(operationId)
+    .first<{ id: string }>();
+  if (duplicate)
+    return json({ error: "Esta entrega ya fue procesada. Actualiza el historial." }, 409);
 
-  const matches = await db.prepare(
-    "SELECT p.pilot_id, p.callsign, pa.email FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id WHERE p.pilot_id = ? OR lower(pa.email) = lower(?) OR lower(p.callsign) = lower(?) OR lower(pp.display_name) = lower(?) LIMIT 2"
-  ).bind(recipient, recipient, recipient, recipient).all<{ pilot_id: string; callsign: string; email: string | null }>();
+  const matches = await db
+    .prepare(
+      "SELECT p.pilot_id, p.callsign, pa.email FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id WHERE p.pilot_id = ? OR lower(pa.email) = lower(?) OR lower(p.callsign) = lower(?) OR lower(pp.display_name) = lower(?) LIMIT 2",
+    )
+    .bind(recipient, recipient, recipient, recipient)
+    .all<{ pilot_id: string; callsign: string; email: string | null }>();
   if (!matches.results?.length) return json({ error: "No se encontró ese jugador." }, 404);
-  if (matches.results.length > 1) return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
+  if (matches.results.length > 1)
+    return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
   const player = matches.results[0]!;
   const now = Date.now();
   const logId = crypto.randomUUID();
@@ -4029,40 +4048,80 @@ async function handleAdminRewardsRequest(
   if (rewardType === "CR" || rewardType === "OBS") {
     if (quantity > 1000000000) return json({ error: "La cantidad máxima es 1.000.000.000." }, 400);
     name = rewardType;
-    statements = rewardType === "OBS"
-      ? [db.prepare("UPDATE pilots SET obsidian = obsidian + ?, updated_at = ? WHERE pilot_id = ?").bind(quantity, now, player.pilot_id)]
-      : [db.prepare(
-          "INSERT INTO player_progress (pilot_id, progress_json, updated_at) VALUES (?, json_object('credits', ?), ?) ON CONFLICT(pilot_id) DO UPDATE SET progress_json = json_set(CASE WHEN json_valid(player_progress.progress_json) THEN player_progress.progress_json ELSE json_object('credits', 0) END, '$.credits', COALESCE(CAST(json_extract(CASE WHEN json_valid(player_progress.progress_json) THEN player_progress.progress_json ELSE json_object('credits', 0) END, '$.credits') AS INTEGER), 0) + ?), updated_at = excluded.updated_at"
-        ).bind(player.pilot_id, quantity, now, quantity)];
+    statements =
+      rewardType === "OBS"
+        ? [
+            db
+              .prepare(
+                "UPDATE pilots SET obsidian = obsidian + ?, updated_at = ? WHERE pilot_id = ?",
+              )
+              .bind(quantity, now, player.pilot_id),
+          ]
+        : [
+            db
+              .prepare(
+                "INSERT INTO player_progress (pilot_id, progress_json, updated_at) VALUES (?, json_object('credits', ?), ?) ON CONFLICT(pilot_id) DO UPDATE SET progress_json = json_set(CASE WHEN json_valid(player_progress.progress_json) THEN player_progress.progress_json ELSE json_object('credits', 0) END, '$.credits', COALESCE(CAST(json_extract(CASE WHEN json_valid(player_progress.progress_json) THEN player_progress.progress_json ELSE json_object('credits', 0) END, '$.credits') AS INTEGER), 0) + ?), updated_at = excluded.updated_at",
+              )
+              .bind(player.pilot_id, quantity, now, quantity),
+          ];
   } else if (rewardType === "VIP") {
     if (quantity > 3650) return json({ error: "La duración máxima de VIP es 3.650 días." }, 400);
     name = "VIP";
     rewardKey = "vip";
-    statements = [db.prepare(
-      "UPDATE pilots SET vip_until = MAX(COALESCE(vip_until, 0), ?) + ?, updated_at = ? WHERE pilot_id = ?"
-    ).bind(now, quantity * 86400000, now, player.pilot_id)];
+    statements = [
+      db
+        .prepare(
+          "UPDATE pilots SET vip_until = MAX(COALESCE(vip_until, 0), ?) + ?, updated_at = ? WHERE pilot_id = ?",
+        )
+        .bind(now, quantity * 86400000, now, player.pilot_id),
+    ];
   } else if (rewardType === "ship") {
     if (!VALID_SHIP_IDS.has(rewardId)) return json({ error: "Selecciona una nave válida." }, 400);
     if (quantity !== 1) return json({ error: "Las naves se entregan de una en una." }, 400);
     const ship = SHIPS.find((entry) => entry.id === rewardId);
     if (!ship) return json({ error: "No se encontró la nave seleccionada." }, 400);
     name = ship.name;
-    statements = [db.prepare(
-      "INSERT INTO pilot_inventory (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at) VALUES (?, ?, ?, ?, 'nave', 1, 0, 'legacy', ?, ?) ON CONFLICT(pilot_id, item_id) DO UPDATE SET quantity = pilot_inventory.quantity + 1, updated_at = excluded.updated_at"
-    ).bind(crypto.randomUUID(), player.pilot_id, rewardId, name, now, now)];
+    statements = [
+      db
+        .prepare(
+          "INSERT INTO pilot_inventory (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at) VALUES (?, ?, ?, ?, 'nave', 1, 0, 'legacy', ?, ?) ON CONFLICT(pilot_id, item_id) DO UPDATE SET quantity = pilot_inventory.quantity + 1, updated_at = excluded.updated_at",
+        )
+        .bind(crypto.randomUUID(), player.pilot_id, rewardId, name, now, now),
+    ];
   } else {
     const item = INVENTORY_CATALOG.find((entry) => entry.itemId === rewardId);
     if (!item) return json({ error: "Selecciona un objeto válido." }, 400);
-    if (quantity > 1000) return json({ error: "La cantidad máxima por entrega es 1.000 objetos." }, 400);
+    if (quantity > 1000)
+      return json({ error: "La cantidad máxima por entrega es 1.000 objetos." }, 400);
     name = item.label;
-    statements = [db.prepare(
-      "INSERT INTO pilot_inventory (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at) VALUES (?, ?, ?, ?, 'objeto', ?, 0, 'legacy', ?, ?) ON CONFLICT(pilot_id, item_id) DO UPDATE SET quantity = pilot_inventory.quantity + excluded.quantity, updated_at = excluded.updated_at"
-    ).bind(crypto.randomUUID(), player.pilot_id, rewardId, name, quantity, now, now)];
+    statements = [
+      db
+        .prepare(
+          "INSERT INTO pilot_inventory (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at) VALUES (?, ?, ?, ?, 'objeto', ?, 0, 'legacy', ?, ?) ON CONFLICT(pilot_id, item_id) DO UPDATE SET quantity = pilot_inventory.quantity + excluded.quantity, updated_at = excluded.updated_at",
+        )
+        .bind(crypto.randomUUID(), player.pilot_id, rewardId, name, quantity, now, now),
+    ];
   }
 
-  statements.push(db.prepare(
-    "INSERT INTO admin_reward_logs (id, operation_id, pilot_id, reward_type, reward_id, reward_name, quantity, event_name, reason, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-  ).bind(logId, operationId, player.pilot_id, rewardType, rewardKey, name, quantity, eventName, reason, account.email, now));
+  statements.push(
+    db
+      .prepare(
+        "INSERT INTO admin_reward_logs (id, operation_id, pilot_id, reward_type, reward_id, reward_name, quantity, event_name, reason, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .bind(
+        logId,
+        operationId,
+        player.pilot_id,
+        rewardType,
+        rewardKey,
+        name,
+        quantity,
+        eventName,
+        reason,
+        account.email,
+        now,
+      ),
+  );
 
   try {
     const results = await db.batch(statements);
@@ -4070,9 +4129,23 @@ async function handleAdminRewardsRequest(
       return json({ error: "No se pudo entregar el premio al jugador." }, 409);
   } catch (error) {
     console.error("No se pudo registrar la recompensa:", error);
-    return json({ error: "No se pudo completar la entrega. Actualiza el historial antes de volver a intentarlo." }, 409);
+    return json(
+      {
+        error:
+          "No se pudo completar la entrega. Actualiza el historial antes de volver a intentarlo.",
+      },
+      409,
+    );
   }
-  return json({ success: true, id: logId, pilot_id: player.pilot_id, reward_type: rewardType, reward_name: name, quantity, event_name: eventName });
+  return json({
+    success: true,
+    id: logId,
+    pilot_id: player.pilot_id,
+    reward_type: rewardType,
+    reward_name: name,
+    quantity,
+    event_name: eventName,
+  });
 }
 
 async function handleSupportRequest(
