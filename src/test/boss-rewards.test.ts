@@ -457,11 +457,14 @@ describe("server-validated boss combat", () => {
         evidence,
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as Record<string, unknown>;
+      const body = (await response.json()) as {
+        success: boolean;
+        obsidian: number;
+        rewards: { itemName: string; itemType: string }[];
+      };
       expect(body.success).toBe(true);
-      expect(body).not.toHaveProperty("obsidian");
-      expect(body).not.toHaveProperty("rewards");
-      expect(body).not.toHaveProperty("helperReward");
+      expect(body.obsidian).toBe(reward.obsidian);
+      expect(body.rewards.length).toBeLessThanOrEqual(2);
 
       const replay = await claimBoss(
         db,
