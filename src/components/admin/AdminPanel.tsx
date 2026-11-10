@@ -544,9 +544,7 @@ function SectionView({
               onAction(def.form!.submit);
             }}
           >
-            <div className="text-xs uppercase tracking-wider text-cyan-200">
-              {def.form.title}
-            </div>
+            <div className="text-xs uppercase tracking-wider text-cyan-200">{def.form.title}</div>
             {def.form.fields.map((f) => (
               <label
                 key={f.label}
@@ -788,7 +786,8 @@ function RewardForm({ onAction }: { onAction: (l: string) => void }) {
         Resumen: <span className="text-white">{summary}</span>
         {recipient.trim() ? (
           <>
-            {" "}→ <span className="text-cyan-200">{recipient.trim()}</span>
+            {" "}
+            → <span className="text-cyan-200">{recipient.trim()}</span>
           </>
         ) : null}
       </div>
