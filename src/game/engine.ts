@@ -1520,12 +1520,12 @@ export class Engine {
     if (xp > 0) this.dropGem(e.x, e.y, xp);
     else if (Math.random() < 0.3) this.dropGem(e.x, e.y, 1);
     const pk = e.elite
-      ? 0.15
+      ? 0.005
       : d.behavior === "spawnling"
         ? 0
         : this.stage.id === WORLD1_ID && !this.isEndless
           ? WORLD1_PICKUP_CHANCE
-          : 0.006;
+          : 0.0005;
     if (Math.random() < Math.min(1, pk * vipDropMultiplier(this.vipActive)))
       this.dropPickup(e.x, e.y);
     if (d.behavior === "parasite")
@@ -1536,11 +1536,6 @@ export class Engine {
 
   private finishBoss(e: Enemy) {
     const def = e.boss!;
-    this.cb.onChatEvent?.({
-      type: "boss_kill",
-      bossName: def.name,
-      shipName: this.ship.name,
-    });
     this.kills++;
     this.killsByType[def.id] = (this.killsByType[def.id] ?? 0) + 1;
     this.bossesDefeated.push(def.id);
