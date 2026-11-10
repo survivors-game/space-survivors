@@ -54,14 +54,14 @@ function createDatabase(options?: { email?: string; obsidian?: number; credits?:
   return { db, getBatchCalls: () => batchCalls };
 }
 
-function makeRequest(body: Record<string, unknown>, authenticated = true) {
+function makeRequest(body: Record<string, unknown>, authenticated = true, panelSession = true) {
   return new Request("https://game.example/api/admin/economy", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin: "https://game.example",
       ...(authenticated
-        ? { cookie: "__Host-ss_session=admin; __Host-ss_admin=admin-panel" }
+        ? { cookie: "__Host-ss_session=admin" + (panelSession ? "; __Host-ss_admin=admin-panel" : "") }
         : {}),
     },
     body: JSON.stringify(body),
@@ -76,6 +76,16 @@ describe("administrative CR and OBS economy", () => {
       { DB: mock.db },
     );
     expect(response.status).toBe(401);
+    expect(mock.getBatchCalls()).toBe(0);
+  });
+
+  it("requires the second administrative password session", async () => {
+    const mock = createDatabase();
+    const response = await server.fetch(
+      makeRequest({ player: PILOT_ID, currency: "OBS", operation: "credit", amount: 10, reason: "Ajuste de prueba" }, true, false),
+      { DB: mock.db },
+    );
+    expect(response.status).toBe(403);
     expect(mock.getBatchCalls()).toBe(0);
   });
 
