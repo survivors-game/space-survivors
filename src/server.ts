@@ -3942,6 +3942,138 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
+
+async function handleAdminSeasonsRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/admin/seasons") return null;
+  if (request.method !== "GET" && request.method !== "POST")
+    return json({ error: "Método no permitido." }, 405);
+  if (request.method === "POST" && !isSameOriginPost(request, url))
+    return json({ error: "Solicitud no autorizada." }, 403);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_season_events (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
+      starts_at INTEGER NOT NULL, ends_at INTEGER NOT NULL,
+      reward_description TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'DRAFT',
+      created_by TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      CHECK (ends_at > starts_at), CHECK (status IN ('DRAFT','ACTIVE','FINISHED'))
+    )`).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_season_events_dates ON admin_season_events(starts_at, ends_at, status)").run();
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_season_event_logs (
+      id TEXT PRIMARY KEY, event_id TEXT NOT NULL, action TEXT NOT NULL,
+      event_name TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
+    )`).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_season_event_logs_created ON admin_season_event_logs(created_at DESC)").run();
+  } catch (error) {
+    console.error("No se pudo preparar la gestión de temporadas:", error);
+    return json({ error: "No se pudo preparar la gestión de temporadas." }, 503);
+  }
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+  if (account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub)))
+    return json({ error: "Acceso administrativo requerido." }, 403);
+
+  if (request.method === "GET") {
+    const [events, ranking, totals, logs] = await Promise.all([
+      db.prepare("SELECT id, name, description, starts_at, ends_at, reward_description, status, created_by, created_at, updated_at FROM admin_season_events ORDER BY starts_at DESC LIMIT 100").all(),
+      db.prepare(`SELECT p.pilot_id, COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS callsign,
+        pa.email, COALESCE(CAST(json_extract(progress.progress_json, '$.season.pt') AS INTEGER), 0) AS pt,
+        json_extract(progress.progress_json, '$.season.seasonId') AS season_id,
+        COALESCE(json_array_length(json_extract(progress.progress_json, '$.season.dailyCompletedIds')), 0) AS daily_completed,
+        COALESCE(json_array_length(json_extract(progress.progress_json, '$.season.weeklyCompletedIds')), 0) AS weekly_completed
+        FROM player_progress progress JOIN pilots p ON p.pilot_id = progress.pilot_id
+        LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
+        LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id
+        ORDER BY pt DESC LIMIT 100`).all(),
+      db.prepare("SELECT COUNT(*) AS participants FROM player_progress WHERE json_valid(progress_json) AND json_type(progress_json, '$.season') = 'object'").first(),
+      db.prepare("SELECT event_id, action, event_name, admin_email, created_at FROM admin_season_event_logs ORDER BY created_at DESC LIMIT 100").all(),
+    ]);
+    const now = Date.now();
+    const active = (events.results ?? []).filter((event: Record<string, unknown>) =>
+      event["status"] === "ACTIVE" && Number(event["starts_at"]) <= now && Number(event["ends_at"]) > now
+    );
+    return json({ events: events.results ?? [], ranking: ranking.results ?? [],
+      participants: totals?.participants ?? 0, activeEvents: active.length, logs: logs.results ?? [] });
+  }
+
+  const body = await readJson(request, 4096);
+  const action = body?.["action"];
+  const id = typeof body?.["id"] === "string" ? body["id"].trim() : "";
+  const name = typeof body?.["name"] === "string" ? body["name"].trim() : "";
+  const description = typeof body?.["description"] === "string" ? body["description"].trim() : "";
+  const rewardDescription = typeof body?.["rewardDescription"] === "string" ? body["rewardDescription"].trim() : "";
+  const startsAt = body?.["startsAt"];
+  const endsAt = body?.["endsAt"];
+  const status = body?.["status"];
+  if (!["create", "update", "status", "delete"].includes(String(action)))
+    return json({ error: "Acción de temporada no válida." }, 400);
+  if (action !== "delete" && action !== "status") {
+    if (name.length < 3 || name.length > 90 || description.length < 5 || description.length > 1200)
+      return json({ error: "Completa un nombre y una descripción válidos." }, 400);
+    if (!Number.isSafeInteger(startsAt) || !Number.isSafeInteger(endsAt) ||
+        (startsAt as number) < 0 || (endsAt as number) <= (startsAt as number))
+      return json({ error: "Las fechas de inicio y fin no son válidas." }, 400);
+    if (rewardDescription.length > 500)
+      return json({ error: "La descripción del premio no puede superar 500 caracteres." }, 400);
+    if (status !== "DRAFT" && status !== "ACTIVE" && status !== "FINISHED")
+      return json({ error: "Estado de temporada no válido." }, 400);
+  }
+  if (action !== "create" && !/^[a-f0-9-]{36}$/i.test(id))
+    return json({ error: "Identificador de temporada no válido." }, 400);
+  if (action === "status" && status !== "DRAFT" && status !== "ACTIVE" && status !== "FINISHED")
+    return json({ error: "Estado de temporada no válido." }, 400);
+  if (action === "delete") {
+    const existing = await db.prepare("SELECT name FROM admin_season_events WHERE id = ?").bind(id).first<{name:string}>();
+    if (!existing) return json({ error: "No se encontró la temporada." }, 404);
+    const now = Date.now();
+    await db.batch([
+      db.prepare("DELETE FROM admin_season_events WHERE id = ?").bind(id),
+      db.prepare("INSERT INTO admin_season_event_logs (id,event_id,action,event_name,admin_email,created_at) VALUES (?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), id, "delete", existing.name, account.email, now),
+    ]);
+    return json({ success: true });
+  }
+  const now = Date.now();
+  const eventId = action === "create" ? crypto.randomUUID() : id;
+  if (status === "ACTIVE") {
+    const conflict = await db.prepare("SELECT id FROM admin_season_events WHERE status = 'ACTIVE' AND id != ? AND ends_at > ? LIMIT 1")
+      .bind(eventId, now).first<{id:string}>();
+    if (conflict) return json({ error: "Ya existe otra temporada activa. Finalízala antes de activar esta." }, 409);
+  }
+  if (action === "status") {
+    const existing = await db.prepare("SELECT name FROM admin_season_events WHERE id = ?").bind(id).first<{name:string}>();
+    if (!existing) return json({ error: "No se encontró la temporada." }, 404);
+    await db.batch([
+      db.prepare("UPDATE admin_season_events SET status = ?, updated_at = ? WHERE id = ?").bind(status, now, id),
+      db.prepare("INSERT INTO admin_season_event_logs (id,event_id,action,event_name,admin_email,created_at) VALUES (?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(), id, "status:" + status, existing.name, account.email, now),
+    ]);
+    return json({ success: true, id });
+  }
+  if (action === "create") {
+    await db.batch([
+      db.prepare("INSERT INTO admin_season_events (id,name,description,starts_at,ends_at,reward_description,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
+        .bind(eventId,name,description,startsAt,endsAt,rewardDescription,status,account.email,now,now),
+      db.prepare("INSERT INTO admin_season_event_logs (id,event_id,action,event_name,admin_email,created_at) VALUES (?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(),eventId,"create",name,account.email,now),
+    ]);
+  } else {
+    const result = await db.prepare("UPDATE admin_season_events SET name=?,description=?,starts_at=?,ends_at=?,reward_description=?,status=?,updated_at=? WHERE id=?")
+      .bind(name,description,startsAt,endsAt,rewardDescription,status,now,id).run();
+    if (result.meta?.changes !== 1) return json({ error: "No se encontró la temporada." }, 404);
+    await db.prepare("INSERT INTO admin_season_event_logs (id,event_id,action,event_name,admin_email,created_at) VALUES (?,?,?,?,?,?)")
+      .bind(crypto.randomUUID(),id,"update",name,account.email,now).run();
+  }
+  return json({ success: true, id: eventId });
+}
+
 async function handleAdminRewardsRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -6576,6 +6708,8 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
+      const seasonsResponse = await handleAdminSeasonsRequest(request, workerEnv);
+      if (seasonsResponse) return seasonsResponse;
       const rewardsResponse = await handleAdminRewardsRequest(request, workerEnv);
       if (rewardsResponse) return rewardsResponse;
       const supportResponse = await handleSupportRequest(request, workerEnv);
