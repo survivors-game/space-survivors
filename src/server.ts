@@ -2175,6 +2175,30 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           ON admin_economy_logs(created_at DESC)`,
         `CREATE INDEX IF NOT EXISTS idx_admin_economy_logs_pilot
           ON admin_economy_logs(pilot_id, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS admin_payment_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          wallet_address TEXT NOT NULL DEFAULT '',
+          qr_url TEXT,
+          updated_by TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS obsidian_payment_requests (
+          id TEXT PRIMARY KEY,
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          obsidian_amount INTEGER NOT NULL CHECK (obsidian_amount > 0),
+          crypto_amount TEXT NOT NULL,
+          currency TEXT NOT NULL CHECK (currency IN ('USDT', 'USDC')),
+          network TEXT NOT NULL CHECK (network = 'POLYGON'),
+          tx_hash TEXT NOT NULL UNIQUE,
+          wallet_address TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+          created_at INTEGER NOT NULL,
+          reviewed_at INTEGER,
+          reviewed_by TEXT,
+          rejection_reason TEXT
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_obsidian_payment_status_created
+          ON obsidian_payment_requests(status, created_at DESC)`,
         `CREATE TABLE IF NOT EXISTS boss_cooldowns (
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           boss_id TEXT NOT NULL,
@@ -3740,8 +3764,12 @@ async function handleMarketRequest(
     url.pathname === "/api/admin/players" ||
     /^\/api\/admin\/players\/[^/]+(?:\/status)?$/.test(url.pathname);
   const isAdminEconomyPath = url.pathname === "/api/admin/economy";
+  const isAdminPaymentsPath = url.pathname === "/api/admin/payments";
   const isAdminPath =
-    url.pathname === "/api/admin/credit-obsidian" || isAdminPlayersPath || isAdminEconomyPath;
+    url.pathname === "/api/admin/credit-obsidian" ||
+    isAdminPlayersPath ||
+    isAdminEconomyPath ||
+    isAdminPaymentsPath;
   if (!isMarketPath && !isAdminPath) return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
@@ -3755,6 +3783,209 @@ async function handleMarketRequest(
   }
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+
+  if (isAdminPaymentsPath) {
+    if (request.method !== "GET" && request.method !== "POST") {
+      return json({ error: "Método no permitido." }, 405);
+    }
+    if (request.method === "POST" && !isSameOriginPost(request, url)) {
+      return json({ error: "Solicitud no autorizada." }, 403);
+    }
+    if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+    if (
+      account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub))
+    ) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
+    }
+
+    if (request.method === "GET") {
+      const [settings, rows] = await Promise.all([
+        db
+          .prepare(
+            "SELECT wallet_address, qr_url, updated_at FROM admin_payment_settings WHERE id = 1",
+          )
+          .first<{ wallet_address: string; qr_url: string | null; updated_at: number }>(),
+        db
+          .prepare(
+            `SELECT r.id, r.pilot_id, r.obsidian_amount, r.crypto_amount, r.currency,
+              r.network, r.tx_hash, r.wallet_address, r.status, r.created_at,
+              r.reviewed_at, r.reviewed_by, r.rejection_reason, p.callsign, pa.email
+             FROM obsidian_payment_requests r
+             JOIN pilots p ON p.pilot_id = r.pilot_id
+             LEFT JOIN player_accounts pa ON pa.pilot_id = r.pilot_id
+             ORDER BY CASE WHEN r.status = 'PENDING' THEN 0 ELSE 1 END,
+               r.created_at DESC LIMIT 100`,
+          )
+          .all<{
+            id: string;
+            pilot_id: string;
+            obsidian_amount: number;
+            crypto_amount: string;
+            currency: "USDT" | "USDC";
+            network: "POLYGON";
+            tx_hash: string;
+            wallet_address: string;
+            status: "PENDING" | "APPROVED" | "REJECTED";
+            created_at: number;
+            reviewed_at: number | null;
+            reviewed_by: string | null;
+            rejection_reason: string | null;
+            callsign: string;
+            email: string | null;
+          }>(),
+      ]);
+      return json({
+        settings: settings ?? { wallet_address: "", qr_url: null, updated_at: null },
+        payments: rows.results ?? [],
+      });
+    }
+
+    const body = await readJson(request, 4096);
+    const action = body?.action;
+    if (action === "save-wallet") {
+      const walletAddress =
+        typeof body?.walletAddress === "string" ? body.walletAddress.trim() : "";
+      const qrUrl = typeof body?.qrUrl === "string" ? body.qrUrl.trim() : "";
+      if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+        return json({ error: "La dirección de wallet Polygon no es válida." }, 400);
+      }
+      if (
+        qrUrl.length > 2048 ||
+        (qrUrl !== "" &&
+          (() => {
+            try {
+              return new URL(qrUrl).protocol !== "https:";
+            } catch {
+              return true;
+            }
+          })())
+      ) {
+        return json({ error: "La dirección de la imagen QR debe ser un enlace HTTPS válido." }, 400);
+      }
+      const now = Date.now();
+      await db
+        .prepare(
+          `INSERT INTO admin_payment_settings (id, wallet_address, qr_url, updated_by, updated_at)
+           VALUES (1, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET wallet_address = excluded.wallet_address,
+             qr_url = excluded.qr_url, updated_by = excluded.updated_by,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(walletAddress, qrUrl || null, account.email, now)
+        .run();
+      return json({ success: true, settings: { wallet_address: walletAddress, qr_url: qrUrl || null } });
+    }
+
+    if (action !== "approve" && action !== "reject") {
+      return json({ error: "Operación de pago no válida." }, 400);
+    }
+    const paymentId = typeof body?.paymentId === "string" ? body.paymentId.trim() : "";
+    if (!/^pay_[a-f0-9]{20}$/.test(paymentId)) {
+      return json({ error: "Identificador de pago no válido." }, 400);
+    }
+    const payment = await db
+      .prepare(
+        "SELECT id, pilot_id, obsidian_amount, currency, network, tx_hash, status FROM obsidian_payment_requests WHERE id = ?",
+      )
+      .bind(paymentId)
+      .first<{
+        id: string;
+        pilot_id: string;
+        obsidian_amount: number;
+        currency: "USDT" | "USDC";
+        network: "POLYGON";
+        tx_hash: string;
+        status: "PENDING" | "APPROVED" | "REJECTED";
+      }>();
+    if (!payment) return json({ error: "No se encontró el pago." }, 404);
+    if (payment.status !== "PENDING") {
+      return json({ error: "Este pago ya fue revisado y no se puede procesar otra vez." }, 409);
+    }
+
+    const now = Date.now();
+    if (action === "reject") {
+      const reason =
+        typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+      if (reason.length < 5) {
+        return json({ error: "Escribe un motivo de rechazo de al menos 5 caracteres." }, 400);
+      }
+      const result = await db
+        .prepare(
+          `UPDATE obsidian_payment_requests SET status = 'REJECTED',
+            reviewed_at = ?, reviewed_by = ?, rejection_reason = ?
+           WHERE id = ? AND status = 'PENDING'`,
+        )
+        .bind(now, account.email, reason, paymentId)
+        .run();
+      if (result.meta?.changes !== 1) {
+        return json({ error: "El pago ya fue revisado. Actualiza la lista." }, 409);
+      }
+      return json({ success: true, status: "REJECTED" });
+    }
+
+    const pilot = await db
+      .prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?")
+      .bind(payment.pilot_id)
+      .first<{ obsidian: number }>();
+    if (!pilot) return json({ error: "No se encontró el jugador del pago." }, 404);
+    const balanceBefore = pilot.obsidian;
+    const balanceAfter = balanceBefore + payment.obsidian_amount;
+    if (!Number.isSafeInteger(balanceAfter) || balanceAfter < 0) {
+      return json({ error: "El saldo del jugador no se puede actualizar." }, 409);
+    }
+    const reason = `Compra OBS por ${payment.currency} en Polygon · TX ${payment.tx_hash}`;
+    try {
+      const results = await db.batch([
+        db
+          .prepare(
+            `UPDATE pilots SET obsidian = ?, updated_at = ?
+             WHERE pilot_id = ? AND obsidian = ?
+               AND EXISTS (
+                 SELECT 1 FROM obsidian_payment_requests
+                 WHERE id = ? AND status = 'PENDING'
+               )`,
+          )
+          .bind(balanceAfter, now, payment.pilot_id, balanceBefore, paymentId),
+        db
+          .prepare(
+            `UPDATE obsidian_payment_requests SET status = 'APPROVED',
+              reviewed_at = ?, reviewed_by = ?
+             WHERE id = ? AND status = 'PENDING'
+               AND EXISTS (
+                 SELECT 1 FROM pilots WHERE pilot_id = ? AND obsidian = ?
+               )`,
+          )
+          .bind(now, account.email, paymentId, payment.pilot_id, balanceAfter),
+        db
+          .prepare(
+            `INSERT INTO admin_economy_logs
+             (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
+             SELECT ?, ?, CASE WHEN changes() = 1 THEN 'OBS' ELSE NULL END,
+               ?, ?, ?, ?, ?, ?
+             FROM obsidian_payment_requests WHERE id = ? AND status = 'APPROVED'`,
+          )
+          .bind(
+            `econ_${randomHex(10)}`,
+            payment.pilot_id,
+            payment.obsidian_amount,
+            balanceBefore,
+            balanceAfter,
+            reason,
+            account.email,
+            now,
+            paymentId,
+          ),
+      ]);
+      if (results.some((result) => result.meta?.changes !== 1)) {
+        return json({ error: "No se pudo acreditar el pago. El saldo no fue modificado." }, 409);
+      }
+    } catch (error) {
+      console.error("No se pudo aprobar el pago de OBS:", error);
+      return json({ error: "No se pudo aprobar el pago. El saldo no fue modificado." }, 409);
+    }
+    return json({ success: true, status: "APPROVED", balanceBefore, balanceAfter });
+  }
 
   if (isAdminEconomyPath) {
     if (request.method !== "GET" && request.method !== "POST") {
