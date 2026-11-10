@@ -600,10 +600,17 @@ describe("P2P purchase flow", () => {
       payment_method: "NEQUI",
     });
     expect(bought.response.status).toBe(200);
-    const confirmed = await requestJson<{ status: string }>("/api/market/confirm", "POST", {
+    const reported = await requestJson<{ status: string }>("/api/market/report-payment", "POST", {
       order_id: bought.payload.order_id,
     });
-    expect(confirmed.response.status).toBe(200);
+    expect(reported.response.status).toBe(200);
+    const released = await requestJson<{ status: string }>(
+      "/api/market/release",
+      "POST",
+      { order_id: bought.payload.order_id },
+      SELLER_TOKEN,
+    );
+    expect(released.response.status).toBe(200);
     expect(
       db
         .prepare(
