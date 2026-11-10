@@ -80,19 +80,22 @@ describe("administrative obsidian credits", () => {
   it("only allows the verified Google administrator account to credit obsidian", async () => {
     const anonymousDb = createDatabase("");
     const playerDb = createDatabase("player@example.com");
+    const adminWithoutPanelSessionDb = createDatabase("emprendedora.onlinevee@gmail.com");
     const adminDb = createDatabase("emprendedora.onlinevee@gmail.com");
 
     const responses = await Promise.all([
       server.fetch(makeRequest(), { DB: anonymousDb.db }),
       server.fetch(makeRequest(true), { DB: playerDb.db }),
+      server.fetch(makeRequest(true), { DB: adminWithoutPanelSessionDb.db }),
       server.fetch(makeRequest(true, true), { DB: adminDb.db, LEADERBOARD: adminDb.leaderboard }),
     ]);
 
-    expect(responses.map((response) => response.status)).toEqual([401, 403, 200]);
+    expect(responses.map((response) => response.status)).toEqual([401, 403, 403, 200]);
     expect(anonymousDb.getBatchCalls()).toBe(0);
     expect(playerDb.getBatchCalls()).toBe(0);
+    expect(adminWithoutPanelSessionDb.getBatchCalls()).toBe(0);
     expect(adminDb.getBatchCalls()).toBe(1);
-    expect(await responses[2]!.json()).toMatchObject({
+    expect(await responses[3]!.json()).toMatchObject({
       success: true,
       credited: 10,
       obsidian: 15,
