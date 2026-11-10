@@ -701,12 +701,14 @@ function PlayersSection() {
     quantity: number; is_locked: number; grant_source: string;
   };
   type HistoryItem = { amount: number; reason: string; created_at: number };
+  type AdminAction = { action: string; reason: string; created_at: number };
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Todos");
   const [players, setPlayers] = useState<Player[]>([]);
   const [selected, setSelected] = useState<PlayerDetail | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [reason, setReason] = useState("");
@@ -738,12 +740,14 @@ function PlayersSection() {
         credentials: "same-origin",
       });
       const data = await response.json() as {
-        player?: PlayerDetail; inventory?: InventoryItem[]; history?: HistoryItem[]; error?: string;
+        player?: PlayerDetail; inventory?: InventoryItem[]; history?: HistoryItem[];
+        adminActions?: AdminAction[]; error?: string;
       };
       if (!response.ok || !data.player) throw new Error(data.error || "No se pudo abrir el perfil.");
       setSelected(data.player);
       setInventory(data.inventory ?? []);
       setHistory(data.history ?? []);
+      setAdminActions(data.adminActions ?? []);
       setReason("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo abrir el perfil.");
@@ -901,6 +905,17 @@ function PlayersSection() {
                 </table>
               </div>
             ) : <p className="p-4 text-sm text-white/45">Inventario vacío.</p>}
+          </div>
+
+          <div className="overflow-hidden rounded border border-white/10">
+            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">Acciones administrativas</h3>
+            {adminActions.length ? adminActions.map((entry, index) => (
+              <div key={index} className="flex flex-wrap justify-between gap-2 border-t border-white/5 px-3 py-2 text-sm">
+                <span>{entry.action}</span>
+                <span className="text-white/60">{entry.reason}</span>
+                <span className="text-xs text-white/45">{dateLabel(entry.created_at)}</span>
+              </div>
+            )) : <p className="p-4 text-sm text-white/45">Sin acciones administrativas registradas.</p>}
           </div>
 
           <div className="overflow-hidden rounded border border-white/10">
