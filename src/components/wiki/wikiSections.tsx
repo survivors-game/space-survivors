@@ -694,16 +694,7 @@ const economia: WikiSection = {
         La obsidiana es una moneda especial que se obtiene al derrotar jefes. Se usa para
         actividades del mercado, como publicar anuncios de naves y objetos.
       </P>
-      <Grid>
-        {BOSSES.map((b) => {
-          const r = BOSS_REWARDS.find((x) => x.bossId === b.id);
-          return (
-            <Card key={b.id} sprite={b.sprite} color={b.color} title={b.name}>
-              <Stat label="Obsidiana por derrota" value={r ? `${r.obsidian} OBS` : "--"} />
-            </Card>
-          );
-        })}
-      </Grid>
+      <P>La cantidad de obsidiana obtenida se comunica al piloto al derrotar cada jefe.</P>
     </>
   ),
 };
