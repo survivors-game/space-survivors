@@ -1702,6 +1702,9 @@ async function handleAuthRequest(
       .bind(identity.sub)
       .first<PlayerAccount>();
     if (!account) {
+      if ((await readGameSetting(db,"registration_enabled","true")) !== "true") {
+        return googleRedirect(`${url.origin}/?google_error=registration_closed`);
+      }
       const existingEmail = await db
         .prepare(`SELECT google_sub, email, pilot_id FROM player_accounts WHERE email = ?`)
         .bind(email)
@@ -4011,6 +4014,107 @@ async function handleAnnouncementsRequest(
 
 
 
+
+async function handleAdminConfigRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/admin/config") return null;
+  if (request.method !== "GET" && request.method !== "POST") return json({ error: "Método no permitido." }, 405);
+  if (request.method === "POST" && !isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  const db = env.DB;
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+  if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub)))
+    return json({ error: "Acceso administrativo requerido." }, 403);
+  try {
+    await ensureAuthSchema(db);
+    await db.prepare(\`CREATE TABLE IF NOT EXISTS admin_game_settings (
+      setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL, updated_at INTEGER NOT NULL
+    )\`).run();
+    await db.prepare(\`CREATE TABLE IF NOT EXISTS admin_game_settings_logs (
+      id TEXT PRIMARY KEY, setting_key TEXT NOT NULL, old_value TEXT NOT NULL,
+      new_value TEXT NOT NULL, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
+    )\`).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_game_settings_logs_created ON admin_game_settings_logs(created_at DESC)").run();
+    const defaults: Record<string,string> = {
+      maintenance_mode: "false", registration_enabled: "true",
+      maintenance_message: "Estamos realizando tareas de mantenimiento. Vuelve pronto.",
+      events_enabled: "true", rewards_enabled: "true",
+    };
+    for (const [key,value] of Object.entries(defaults)) {
+      await db.prepare("INSERT OR IGNORE INTO admin_game_settings (setting_key,setting_value,updated_at) VALUES (?,?,?)").bind(key,value,Date.now()).run();
+    }
+  } catch (error) {
+    console.error("No se pudo preparar la configuración administrativa:", error);
+    return json({ error: "No se pudo preparar la configuración administrativa." }, 503);
+  }
+  if (request.method === "GET") {
+    const [settings,logs] = await Promise.all([
+      db.prepare("SELECT setting_key,setting_value,updated_at FROM admin_game_settings").all(),
+      db.prepare("SELECT setting_key,old_value,new_value,reason,admin_email,created_at FROM admin_game_settings_logs ORDER BY created_at DESC LIMIT 100").all(),
+    ]);
+    const values: Record<string,string> = {};
+    for (const row of settings.results ?? []) values[String(row.setting_key)] = String(row.setting_value);
+    return json({ settings: {
+      maintenanceMode: values.maintenance_mode === "true",
+      registrationEnabled: values.registration_enabled !== "false",
+      maintenanceMessage: values.maintenance_message ?? "",
+      eventsEnabled: values.events_enabled !== "false",
+      rewardsEnabled: values.rewards_enabled !== "false",
+    }, logs: logs.results ?? [] });
+  }
+  const body = await readJson(request, 4096);
+  const settings = body?.["settings"];
+  const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0,240) : "";
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return json({ error: "No se recibieron ajustes válidos." }, 400);
+  if (reason.length < 5) return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);
+  const input = settings as Record<string,unknown>;
+  const allowed: Record<string,unknown> = {
+    maintenance_mode: input["maintenanceMode"], registration_enabled: input["registrationEnabled"],
+    maintenance_message: input["maintenanceMessage"], events_enabled: input["eventsEnabled"],
+    rewards_enabled: input["rewardsEnabled"],
+  };
+  const updates: Array<{key:string;value:string;oldValue:string}> = [];
+  for (const [key,value] of Object.entries(allowed)) {
+    if (value === undefined) continue;
+    if (key === "maintenance_message") {
+      if (typeof value !== "string" || value.trim().length < 5 || value.length > 500) return json({ error: "El mensaje de mantenimiento debe tener entre 5 y 500 caracteres." },400);
+    } else if (typeof value !== "boolean") return json({ error: "Uno de los interruptores contiene un valor no válido." },400);
+    const old = await db.prepare("SELECT setting_value FROM admin_game_settings WHERE setting_key=?").bind(key).first<{setting_value:string}>();
+    const nextValue = typeof value === "boolean" ? String(value) : value.trim();
+    if ((old?.setting_value ?? "") !== nextValue) updates.push({key,value:nextValue,oldValue:old?.setting_value ?? ""});
+  }
+  if (!updates.length) return json({ success:true, changed:0 });
+  const now = Date.now();
+  await db.batch(updates.flatMap(item => [
+    db.prepare("INSERT INTO admin_game_settings (setting_key,setting_value,updated_at) VALUES (?,?,?) ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,updated_at=excluded.updated_at").bind(item.key,item.value,now),
+    db.prepare("INSERT INTO admin_game_settings_logs (id,setting_key,old_value,new_value,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?)").bind(crypto.randomUUID(),item.key,item.oldValue,item.value,reason,account.email,now),
+  ]));
+  return json({ success:true, changed:updates.length });
+}
+
+async function readGameSetting(db: D1Database, key: string, fallback: string): Promise<string> {
+  try {
+    const row = await db.prepare("SELECT setting_value FROM admin_game_settings WHERE setting_key=?").bind(key).first<{setting_value:string}>();
+    return row?.setting_value ?? fallback;
+  } catch { return fallback; }
+}
+
+async function handleMaintenanceGate(request: Request, env: WorkerEnv | undefined): Promise<Response | null> {
+  if (!env?.DB || (await readGameSetting(env.DB,"maintenance_mode","false")) !== "true") return null;
+  const pathname = new URL(request.url).pathname;
+  if (pathname.startsWith("/api/admin/") || pathname.startsWith("/api/auth/")) return null;
+  const account = await getAuthenticatedAccount(env.DB,await requestSessionHash(request));
+  if (account?.email.toLowerCase() === ADMIN_EMAIL) return null;
+  const message = await readGameSetting(env.DB,"maintenance_message","Estamos realizando tareas de mantenimiento. Vuelve pronto.");
+  if (pathname.startsWith("/api/")) return json({error:message,maintenance:true},503);
+  const safe = message.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  return new Response("<!doctype html><html lang=\\"es\\"><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><title>Mantenimiento</title><body style=\\"margin:0;min-height:100vh;display:grid;place-items:center;background:#070b18;color:#e8eefc;font:16px system-ui;text-align:center\\"><main style=\\"max-width:560px;padding:32px\\"><h1>SPACE SURVIVORS</h1><p>"+safe+"</p></main></body></html>",{status:503,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+}
+
 async function handleAdminSecurityRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -4336,6 +4440,7 @@ async function handleAdminSeasonsRequest(
     });
   }
 
+  if ((await readGameSetting(db,"events_enabled","true")) !== "true") return json({ error: "La gestión de eventos está desactivada desde Configuración." },403);
   const body = await readJson(request, 4096);
   const action = body?.["action"];
   const id = typeof body?.["id"] === "string" ? body["id"].trim() : "";
@@ -4515,6 +4620,7 @@ async function handleAdminRewardsRequest(
     return json({ rewards: rows.results ?? [] });
   }
 
+  if ((await readGameSetting(db,"rewards_enabled","true")) !== "true") return json({ error: "La entrega administrativa de recompensas está desactivada desde Configuración." },403);
   const body = await readJson(request, 4096);
   const operationId = body?.["operationId"];
   const recipient =
@@ -7093,6 +7199,10 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
+      const maintenanceResponse = await handleMaintenanceGate(request, workerEnv);
+      if (maintenanceResponse) return maintenanceResponse;
+      const configAdminResponse = await handleAdminConfigRequest(request, workerEnv);
+      if (configAdminResponse) return configAdminResponse;
       const securityAdminResponse = await handleAdminSecurityRequest(request, workerEnv);
       if (securityAdminResponse) return securityAdminResponse;
       const alliancesAdminResponse = await handleAdminAlliancesRequest(request, workerEnv);
