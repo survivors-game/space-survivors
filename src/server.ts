@@ -4128,6 +4128,125 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
+
+async function handleAdminSummaryRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/admin/summary") return null;
+  if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar la autenticación del resumen:", error);
+    return json({ error: "No se pudo preparar el resumen administrativo." }, 503);
+  }
+
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+  if (
+    account.email.toLowerCase() !== ADMIN_EMAIL ||
+    !(await hasValidAdminSession(db, request, account.google_sub))
+  ) {
+    return json({ error: "Acceso administrativo requerido." }, 403);
+  }
+
+  try {
+    await ensureMarketSchema(db);
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_server_errors (
+          id TEXT PRIMARY KEY, route TEXT NOT NULL, error_message TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )`,
+      )
+      .run();
+  } catch (error) {
+    console.error("No se pudo preparar el resumen administrativo:", error);
+    return json({ error: "No se pudo preparar el resumen administrativo." }, 503);
+  }
+
+  const count = async (sql: string, values: unknown[] = []): Promise<number> => {
+    try {
+      const row = await db.prepare(sql).bind(...values).first<Record<string, unknown>>();
+      return Number(row?.["count"] ?? 0);
+    } catch {
+      return 0;
+    }
+  };
+  const rows = async (sql: string, values: unknown[] = []): Promise<Record<string, unknown>[]> => {
+    try {
+      const result = await db.prepare(sql).bind(...values).all<Record<string, unknown>>();
+      return result.results ?? [];
+    } catch {
+      return [];
+    }
+  };
+
+  const now = Date.now();
+  const [players, activeSessions, pendingPayments, openDisputes, openSupport, openReports, recentErrors] =
+    await Promise.all([
+      count("SELECT COUNT(*) AS count FROM pilots"),
+      count("SELECT COUNT(*) AS count FROM auth_sessions WHERE wallet_address LIKE 'google:%' AND expires_at > ?", [now]),
+      count("SELECT COUNT(*) AS count FROM obsidian_payment_requests WHERE status = 'PENDING'"),
+      count("SELECT COUNT(*) AS count FROM p2p_disputes WHERE status = 'OPEN'"),
+      count("SELECT COUNT(*) AS count FROM support_tickets WHERE status IN ('OPEN','IN_PROGRESS')"),
+      count("SELECT COUNT(*) AS count FROM chat_reports WHERE status = 'OPEN'"),
+      count("SELECT COUNT(*) AS count FROM admin_server_errors WHERE created_at > ?", [now - 86400000]),
+    ]);
+
+  const [payments, disputes, support, reports, errors] = await Promise.all([
+    rows(
+      "SELECT id,created_at,'Pago OBS pendiente' AS type,CAST(obsidian_amount AS TEXT) || ' OBS · ' || currency AS detail,status FROM obsidian_payment_requests WHERE status='PENDING' ORDER BY created_at DESC LIMIT 10",
+    ),
+    rows(
+      "SELECT id,created_at,'Disputa P2P' AS type,reason AS detail,status FROM p2p_disputes WHERE status='OPEN' ORDER BY created_at DESC LIMIT 10",
+    ),
+    rows(
+      "SELECT id,created_at,'Ticket de soporte' AS type,subject AS detail,status FROM support_tickets WHERE status IN ('OPEN','IN_PROGRESS') ORDER BY created_at DESC LIMIT 10",
+    ),
+    rows(
+      "SELECT id,created_at,'Denuncia de chat' AS type,reason AS detail,status FROM chat_reports WHERE status='OPEN' ORDER BY created_at DESC LIMIT 10",
+    ),
+    rows(
+      "SELECT id,created_at,'Error del servidor' AS type,route || ': ' || error_message AS detail,'INCIDENCIA' AS status FROM admin_server_errors WHERE created_at > ? ORDER BY created_at DESC LIMIT 10",
+      [now - 86400000],
+    ),
+  ]);
+
+  const alerts = [
+    ...payments,
+    ...disputes,
+    ...support,
+    ...reports,
+    ...errors,
+  ]
+    .map((row) => ({
+      id: String(row["id"] ?? crypto.randomUUID()),
+      created_at: Number(row["created_at"] ?? 0),
+      type: String(row["type"] ?? "Aviso"),
+      detail: String(row["detail"] ?? "").slice(0, 240),
+      status: String(row["status"] ?? "PENDIENTE"),
+    }))
+    .sort((a, b) => b.created_at - a.created_at)
+    .slice(0, 20);
+
+  return json({
+    stats: {
+      players,
+      activeSessions,
+      pendingPayments,
+      openDisputes,
+      alerts: openSupport + openReports + recentErrors + pendingPayments,
+    },
+    alerts,
+  });
+}
+
 async function handleAdminConfigRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -4199,14 +4318,14 @@ async function handleAdminConfigRequest(
     ]);
     const values: Record<string, string> = {};
     for (const row of settings.results ?? [])
-      values[String(row.setting_key)] = String(row.setting_value);
+      values[String(row["setting_key"])] = String(row["setting_value"]);
     return json({
       settings: {
-        maintenanceMode: values.maintenance_mode === "true",
-        registrationEnabled: values.registration_enabled !== "false",
-        maintenanceMessage: values.maintenance_message ?? "",
-        eventsEnabled: values.events_enabled !== "false",
-        rewardsEnabled: values.rewards_enabled !== "false",
+        maintenanceMode: values["maintenance_mode"] === "true",
+        registrationEnabled: values["registration_enabled"] !== "false",
+        maintenanceMessage: values["maintenance_message"] ?? "",
+        eventsEnabled: values["events_enabled"] !== "false",
+        rewardsEnabled: values["rewards_enabled"] !== "false",
       },
       logs: logs.results ?? [],
     });
@@ -4813,7 +4932,7 @@ async function handleAdminSeasonsRequest(
     return json({
       events: events.results ?? [],
       ranking: ranking.results ?? [],
-      participants: totals?.participants ?? 0,
+      participants: totals?.["participants"] ?? 0,
       activeEvents: active.length,
       logs: logs.results ?? [],
     });
@@ -7585,7 +7704,7 @@ export default {
       const workerEnv = getWorkerEnv(request, env);
       const maintenanceResponse = await handleMaintenanceGate(request, workerEnv);
       if (maintenanceResponse) return maintenanceResponse;
-      const configAdminResponse = await handleAdminConfigRequest(request, workerEnv);
+      const summaryAdminResponse = await handleAdminSummaryRequest(request, workerEnv);\n      if (summaryAdminResponse) return summaryAdminResponse;\n      const configAdminResponse = await handleAdminConfigRequest(request, workerEnv);
       if (configAdminResponse) return configAdminResponse;
       const securityAdminResponse = await handleAdminSecurityRequest(request, workerEnv);
       if (securityAdminResponse) return securityAdminResponse;
