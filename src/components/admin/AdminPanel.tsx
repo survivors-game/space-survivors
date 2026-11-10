@@ -814,6 +814,9 @@ function MarketAdminSection() {
     <section className="space-y-5">
       {notice ? <p role="status" className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
       {error ? <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+      <p className="rounded border border-white/10 bg-white/[0.03] p-3 text-xs text-white/55">
+        La administración decide únicamente la entrega o devolución del artículo dentro del juego. Los pagos entre jugadores son directos y el juego no puede comprobar ni revertir transferencias externas.
+      </p>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           ["Publicaciones activas", stats.active_ads],
