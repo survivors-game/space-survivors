@@ -20,7 +20,7 @@ describe("vip constants", () => {
   it("define the agreed prices and bonuses", () => {
     expect(VIP_DURATION_DAYS).toBe(30);
     expect(VIP_PRICE_OBSIDIAN).toBe(20);
-    expect(VIP_DROP_BONUS).toBe(0.35);
+    expect(VIP_DROP_BONUS).toBe(2);
     expect(VIP_CREDIT_BONUS).toBe(0.2);
   });
 });
@@ -78,8 +78,8 @@ describe("obsidian balance check", () => {
 });
 
 describe("combat multipliers", () => {
-  it("drop chance is +35% with VIP and neutral without", () => {
-    expect(vipDropMultiplier(true)).toBeCloseTo(1.35);
+  it("triples drop chance with VIP and stays neutral without", () => {
+    expect(vipDropMultiplier(true)).toBe(3);
     expect(vipDropMultiplier(false)).toBe(1);
   });
 
