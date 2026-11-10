@@ -402,7 +402,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 <span className="size-1.5 rounded-full bg-emerald-400" /> Sesión de mando
               </span>
               <button
-                onClick={onClose}
+                onClick={closeAdmin}
                 className="ml-auto rounded p-1 text-white/65 hover:text-white"
                 aria-label="Cerrar"
               >
