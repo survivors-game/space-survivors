@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { SHIPS } from "@/game/data/ships";
+import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -203,7 +205,6 @@ const SECTIONS: SectionDef[] = [
     tables: [
       { title: "Recompensas", cols: c("Fecha", "Piloto", "Recompensa", "Origen", "Estado") },
     ],
-    actions: [{ label: "Entregar recompensa" }],
   },
   {
     id: "misiones",
@@ -529,7 +530,12 @@ function SectionView({
         </div>
       ) : null}
 
-      <div className={def.form ? "grid gap-5 lg:grid-cols-[minmax(0,340px)_1fr]" : ""}>
+      <div
+        className={
+          def.form || def.id === "premios" ? "grid gap-5 lg:grid-cols-[minmax(0,360px)_1fr]" : ""
+        }
+      >
+        {def.id === "premios" ? <RewardForm onAction={onAction} /> : null}
         {def.form ? (
           <form
             className="space-y-3 rounded border border-white/10 bg-white/[0.03] p-4"
