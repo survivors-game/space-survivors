@@ -178,7 +178,7 @@ export class ChatRoom extends DurableObject {
           "DELETE FROM chat_messages WHERE id = ?",
           messageId,
         );
-        if ((deleted as { changes?: number }).changes === 0) {
+        if (deleted.rowsWritten === 0) {
           return Response.json({ error: "El mensaje ya no existe." }, { status: 404 });
         }
         const notice = JSON.stringify({ type: "deleted", messageId });
