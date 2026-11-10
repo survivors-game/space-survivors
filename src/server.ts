@@ -7127,6 +7127,24 @@ export default {
     } catch (error) {
       console.error(error);
       const pathname = new URL(request.url).pathname;
+      if (pathname.startsWith("/api/")) {
+        try {
+          const errorEnv = getWorkerEnv(request, env);
+          if (errorEnv?.DB) {
+            await errorEnv.DB.prepare(`CREATE TABLE IF NOT EXISTS admin_server_errors (
+              id TEXT PRIMARY KEY, route TEXT NOT NULL, error_message TEXT NOT NULL,
+              created_at INTEGER NOT NULL
+            )`).run();
+            const message = error instanceof Error
+              ? (error.name + ": " + error.message).slice(0, 500)
+              : String(error).slice(0, 500);
+            await errorEnv.DB.prepare("INSERT INTO admin_server_errors (id,route,error_message,created_at) VALUES (?,?,?,?)")
+              .bind(randomHex(16),pathname.slice(0,160),message,Date.now()).run();
+          }
+        } catch (loggingError) {
+          console.error("No se pudo guardar el error del servidor:", loggingError);
+        }
+      }
       if (
         pathname.startsWith("/api/auth/") ||
         pathname.startsWith("/api/chat/") ||
