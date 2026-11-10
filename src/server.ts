@@ -4044,10 +4044,10 @@ async function handleAdminSecurityRequest(
     return json({ error: "No se pudo preparar seguridad y auditoría." }, 503);
   }
 
-  const query = async (sql: string) => {
+  const query = async (sql: string): Promise<Record<string, unknown>[]> => {
     try {
       const result = await db.prepare(sql).all();
-      return result.results ?? [];
+      return (result.results ?? []) as Record<string, unknown>[];
     } catch {
       return [];
     }
