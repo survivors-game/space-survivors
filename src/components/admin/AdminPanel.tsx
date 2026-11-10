@@ -3,6 +3,7 @@ import { SeasonAdminSection } from "./SeasonAdminSection";
 import { AlliancesAdminSection } from "./AlliancesAdminSection";
 import { VipAdminSection } from "./VipAdminSection";
 import { SecurityAdminSection } from "./SecurityAdminSection";
+import { ConfigAdminSection } from "./ConfigAdminSection";
 import { SHIPS } from "@/game/data/ships";
 import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
@@ -260,13 +261,14 @@ const SECTIONS: SectionDef[] = [
     id: "config",
     label: "Configuración",
     icon: Settings,
-    desc: "Ajustes generales del juego",
+    desc: "Mantenimiento, registro, eventos y recompensas",
     form: {
       title: "Ajustes generales",
       fields: [
         { label: "Modo mantenimiento", type: "toggle" },
         { label: "Registro de nuevos pilotos", type: "toggle" },
-        { label: "Chat global", type: "toggle" },
+        { label: "Eventos y temporadas", type: "toggle" },
+        { label: "Entrega de recompensas", type: "toggle" },
         { label: "Mensaje de mantenimiento", type: "textarea" },
       ],
       submit: "Guardar ajustes",
@@ -582,6 +584,8 @@ function SectionView({
         <VipAdminSection />
       ) : def.id === "seguridad" ? (
         <SecurityAdminSection />
+      ) : def.id === "config" ? (
+        <ConfigAdminSection />
       ) : (
         <>
           {def.stats ? (
