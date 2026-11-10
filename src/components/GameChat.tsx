@@ -121,7 +121,10 @@ export function GameChat() {
       currentSocket.addEventListener("message", (event) => {
         if (!active) return;
         try {
-          const payload = JSON.parse(event.data) as { type?: string; messageId?: number } & Partial<ChatMessage>;
+          const payload = JSON.parse(event.data) as {
+            type?: string;
+            messageId?: number;
+          } & Partial<ChatMessage>;
           if (payload.type === "deleted" && typeof payload.messageId === "number") {
             setMessages((current) => current.filter((item) => item.id !== payload.messageId));
             return;
@@ -383,7 +386,9 @@ export function GameChat() {
                         <button
                           className="px-2 py-1 text-left text-[10px] text-rose-300 hover:bg-slate-700"
                           onClick={async () => {
-                            const reason = window.prompt("¿Por qué quieres denunciar este mensaje?");
+                            const reason = window.prompt(
+                              "¿Por qué quieres denunciar este mensaje?",
+                            );
                             if (!reason?.trim()) return;
                             try {
                               const response = await fetch("/api/chat/report", {
@@ -397,11 +402,18 @@ export function GameChat() {
                                   reason: reason.trim(),
                                 }),
                               });
-                              const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-                              if (!response.ok) throw new Error(payload?.error ?? "No se pudo enviar la denuncia.");
+                              const payload = (await response.json().catch(() => null)) as {
+                                error?: string;
+                              } | null;
+                              if (!response.ok)
+                                throw new Error(payload?.error ?? "No se pudo enviar la denuncia.");
                               setChatNotice("DENUNCIA ENVIADA A MODERACIÓN");
                             } catch (error) {
-                              setChatNotice(error instanceof Error ? error.message : "No se pudo enviar la denuncia.");
+                              setChatNotice(
+                                error instanceof Error
+                                  ? error.message
+                                  : "No se pudo enviar la denuncia.",
+                              );
                             } finally {
                               setSelectedPlayer(null);
                             }

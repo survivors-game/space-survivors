@@ -116,8 +116,7 @@ export async function handleChatRequest(
     if (!player) return json({ error: "Inicia sesión con Google para denunciar mensajes." }, 401);
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const messageId = Number(body?.["messageId"]);
-    const targetPilotId =
-      typeof body?.["pilotId"] === "string" ? body["pilotId"].trim() : "";
+    const targetPilotId = typeof body?.["pilotId"] === "string" ? body["pilotId"].trim() : "";
     const language = body?.["language"];
     const reason = typeof body?.["reason"] === "string" ? body["reason"].trim() : "";
     if (
@@ -129,7 +128,10 @@ export async function handleChatRequest(
       reason.length < 5 ||
       reason.length > 240
     ) {
-      return json({ error: "Selecciona un mensaje y escribe un motivo de al menos 5 caracteres." }, 400);
+      return json(
+        { error: "Selecciona un mensaje y escribe un motivo de al menos 5 caracteres." },
+        400,
+      );
     }
     try {
       await db

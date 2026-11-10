@@ -3806,33 +3806,70 @@ async function handleAdminChatRequest(
 ): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname !== "/api/admin/chat") return null;
-  if (request.method !== "GET" && request.method !== "POST") return json({ error: "Método no permitido." }, 405);
-  if (!env?.DB || !env.CHAT_ROOM) return json({ error: "El servicio de chat no está disponible." }, 503);
-  if (request.method === "POST" && !isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+  if (request.method !== "GET" && request.method !== "POST")
+    return json({ error: "Método no permitido." }, 405);
+  if (!env?.DB || !env.CHAT_ROOM)
+    return json({ error: "El servicio de chat no está disponible." }, 503);
+  if (request.method === "POST" && !isSameOriginPost(request, url))
+    return json({ error: "Solicitud no autorizada." }, 403);
   const db = env.DB;
   try {
     await ensureAuthSchema(db);
-    await db.prepare("CREATE TABLE IF NOT EXISTS admin_chat_logs (id TEXT PRIMARY KEY, action TEXT NOT NULL, target_pilot_id TEXT, message_id INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)").run();
-    await db.prepare("CREATE TABLE IF NOT EXISTS chat_reports (id TEXT PRIMARY KEY, message_id INTEGER NOT NULL, language TEXT NOT NULL, reporter_pilot_id TEXT NOT NULL, target_pilot_id TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, reviewed_at INTEGER, reviewed_by TEXT, resolution_note TEXT)").run();
-    await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_reports_unique ON chat_reports(message_id, language, reporter_pilot_id)").run();
-    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_chat_logs_created ON admin_chat_logs(created_at DESC)").run();
+    await db
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS admin_chat_logs (id TEXT PRIMARY KEY, action TEXT NOT NULL, target_pilot_id TEXT, message_id INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE TABLE IF NOT EXISTS chat_reports (id TEXT PRIMARY KEY, message_id INTEGER NOT NULL, language TEXT NOT NULL, reporter_pilot_id TEXT NOT NULL, target_pilot_id TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, reviewed_at INTEGER, reviewed_by TEXT, resolution_note TEXT)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_reports_unique ON chat_reports(message_id, language, reporter_pilot_id)",
+      )
+      .run();
+    await db
+      .prepare(
+        "CREATE INDEX IF NOT EXISTS idx_admin_chat_logs_created ON admin_chat_logs(created_at DESC)",
+      )
+      .run();
   } catch (error) {
     console.error("No se pudo preparar la moderación del chat:", error);
     return json({ error: "No se pudo preparar la moderación del chat." }, 503);
   }
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-  if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) return json({ error: "Acceso administrativo requerido." }, 403);
+  if (
+    account.email.toLowerCase() !== ADMIN_EMAIL ||
+    !(await hasValidAdminSession(db, request, account.google_sub))
+  )
+    return json({ error: "Acceso administrativo requerido." }, 403);
   const room = env.CHAT_ROOM.get(env.CHAT_ROOM.idFromName("global"));
   if (request.method === "GET") {
     const [roomResponse, reports, logs] = await Promise.all([
       room.fetch(new Request("https://chat-room/admin")),
-      db.prepare("SELECT r.id, r.message_id, r.language, r.reporter_pilot_id, r.target_pilot_id, r.reason, r.status, r.created_at, r.reviewed_at, r.resolution_note, COALESCE(NULLIF(rp.display_name, ''), reporter.callsign, 'PILOTO') AS reporter_name, COALESCE(NULLIF(tp.display_name, ''), target.callsign, 'PILOTO') AS target_name FROM chat_reports r LEFT JOIN pilots reporter ON reporter.pilot_id = r.reporter_pilot_id LEFT JOIN pilots target ON target.pilot_id = r.target_pilot_id LEFT JOIN player_profiles rp ON rp.pilot_id = r.reporter_pilot_id LEFT JOIN player_profiles tp ON tp.pilot_id = r.target_pilot_id ORDER BY CASE WHEN r.status = 'OPEN' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 100").all(),
-      db.prepare("SELECT action, target_pilot_id, message_id, reason, admin_email, created_at FROM admin_chat_logs ORDER BY created_at DESC LIMIT 100").all(),
+      db
+        .prepare(
+          "SELECT r.id, r.message_id, r.language, r.reporter_pilot_id, r.target_pilot_id, r.reason, r.status, r.created_at, r.reviewed_at, r.resolution_note, COALESCE(NULLIF(rp.display_name, ''), reporter.callsign, 'PILOTO') AS reporter_name, COALESCE(NULLIF(tp.display_name, ''), target.callsign, 'PILOTO') AS target_name FROM chat_reports r LEFT JOIN pilots reporter ON reporter.pilot_id = r.reporter_pilot_id LEFT JOIN pilots target ON target.pilot_id = r.target_pilot_id LEFT JOIN player_profiles rp ON rp.pilot_id = r.reporter_pilot_id LEFT JOIN player_profiles tp ON tp.pilot_id = r.target_pilot_id ORDER BY CASE WHEN r.status = 'OPEN' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 100",
+        )
+        .all(),
+      db
+        .prepare(
+          "SELECT action, target_pilot_id, message_id, reason, admin_email, created_at FROM admin_chat_logs ORDER BY created_at DESC LIMIT 100",
+        )
+        .all(),
     ]);
-    if (!roomResponse.ok) return json({ error: "No se pudo consultar el historial del chat." }, 502);
+    if (!roomResponse.ok)
+      return json({ error: "No se pudo consultar el historial del chat." }, 502);
     const roomData = (await roomResponse.json()) as { messages?: unknown[]; mutes?: unknown[] };
-    return json({ messages: roomData.messages ?? [], mutes: roomData.mutes ?? [], reports: reports.results ?? [], logs: logs.results ?? [] });
+    return json({
+      messages: roomData.messages ?? [],
+      mutes: roomData.mutes ?? [],
+      reports: reports.results ?? [],
+      logs: logs.results ?? [],
+    });
   }
   const body = await readJson(request, 4096);
   const action = body?.["action"];
@@ -3841,18 +3878,53 @@ async function handleAdminChatRequest(
   const pilotId = typeof body?.["pilotId"] === "string" ? body["pilotId"].trim() : "";
   const messageId = Number(body?.["messageId"]);
   const enabled = body?.["enabled"];
-  if (typeof action !== "string" || !["delete-message", "mute", "ban", "unmute", "close-report", "set-chat-enabled"].includes(action)) return json({ error: "Acción de chat no válida." }, 400);
+  if (
+    typeof action !== "string" ||
+    !["delete-message", "mute", "ban", "unmute", "close-report", "set-chat-enabled"].includes(
+      action,
+    )
+  )
+    return json({ error: "Acción de chat no válida." }, 400);
   if (reason.length < 5) return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);
   if (action === "close-report") {
     if (!/^[a-f0-9-]{36}$/i.test(reportId)) return json({ error: "Denuncia no válida." }, 400);
-    const result = await db.prepare("UPDATE chat_reports SET status = 'REVIEWED', reviewed_at = ?, reviewed_by = ?, resolution_note = ? WHERE id = ? AND status = 'OPEN'").bind(Date.now(), account.email, reason, reportId).run();
-    if (!result.meta?.changes) return json({ error: "La denuncia ya fue revisada o no existe." }, 409);
+    const result = await db
+      .prepare(
+        "UPDATE chat_reports SET status = 'REVIEWED', reviewed_at = ?, reviewed_by = ?, resolution_note = ? WHERE id = ? AND status = 'OPEN'",
+      )
+      .bind(Date.now(), account.email, reason, reportId)
+      .run();
+    if (!result.meta?.changes)
+      return json({ error: "La denuncia ya fue revisada o no existe." }, 409);
   } else {
-    const roomResponse = await room.fetch(new Request("https://chat-room/admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, pilotId, messageId, reason, enabled }) }));
+    const roomResponse = await room.fetch(
+      new Request("https://chat-room/admin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, pilotId, messageId, reason, enabled }),
+      }),
+    );
     const result = (await roomResponse.json().catch(() => null)) as { error?: string } | null;
-    if (!roomResponse.ok) return json({ error: result?.error ?? "No se pudo aplicar la moderación." }, roomResponse.status);
+    if (!roomResponse.ok)
+      return json(
+        { error: result?.error ?? "No se pudo aplicar la moderación." },
+        roomResponse.status,
+      );
   }
-  await db.prepare("INSERT INTO admin_chat_logs (id, action, target_pilot_id, message_id, reason, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), action, /^plt_[0-9a-f]{24}$/.test(pilotId) ? pilotId : null, Number.isSafeInteger(messageId) && messageId > 0 ? messageId : null, reason, account.email, Date.now()).run();
+  await db
+    .prepare(
+      "INSERT INTO admin_chat_logs (id, action, target_pilot_id, message_id, reason, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(
+      crypto.randomUUID(),
+      action,
+      /^plt_[0-9a-f]{24}$/.test(pilotId) ? pilotId : null,
+      Number.isSafeInteger(messageId) && messageId > 0 ? messageId : null,
+      reason,
+      account.email,
+      Date.now(),
+    )
+    .run();
   return json({ success: true });
 }
 async function handleMarketRequest(
