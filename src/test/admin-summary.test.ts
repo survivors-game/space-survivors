@@ -91,7 +91,7 @@ describe("administrative summary", () => {
       activeSessions: 3,
       pendingPayments: 2,
       openDisputes: 1,
-      alerts: 12,
+      alerts: 13,
     });
     expect(payload.alerts).toHaveLength(1);
     expect(payload.alerts[0]?.type).toBe("Error del servidor");
