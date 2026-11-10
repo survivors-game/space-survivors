@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { SHIPS } from "@/game/data/ships";
+import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -203,7 +205,6 @@ const SECTIONS: SectionDef[] = [
     tables: [
       { title: "Recompensas", cols: c("Fecha", "Piloto", "Recompensa", "Origen", "Estado") },
     ],
-    actions: [{ label: "Entregar recompensa" }],
   },
   {
     id: "misiones",
@@ -301,7 +302,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           >
             <div className="flex items-center gap-2 border-b border-amber-400/20 px-4 py-3">
               <Shield className="size-4 text-amber-300" />
-              <span className="font-arcade text-[9px] tracking-widest text-amber-300">
+              <span className="font-arcade text-[11px] tracking-widest text-amber-300">
                 ADMINISTRACIÓN
               </span>
               <button
@@ -324,7 +325,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                       setNavOpen(false);
                       setNotice(null);
                     }}
-                    className={`flex w-full items-center gap-2.5 rounded px-3 py-2 text-left text-[11px] transition ${active ? "bg-amber-400/15 text-amber-200 shadow-[inset_2px_0_0_#fbbf24]" : "text-white/60 hover:bg-white/5 hover:text-white"}`}
+                    className={`flex w-full items-center gap-2.5 rounded px-3 py-2 text-left text-sm transition ${active ? "bg-amber-400/15 text-amber-200 shadow-[inset_2px_0_0_#fbbf24]" : "text-white/75 hover:bg-white/5 hover:text-white"}`}
                   >
                     <Icon className="size-3.5 shrink-0" />
                     {s.label}
@@ -334,7 +335,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             </nav>
             <button
               onClick={onClose}
-              className="m-2 rounded border border-rose-400/30 px-3 py-2 text-[10px] uppercase tracking-wider text-rose-300 hover:bg-rose-400/10"
+              className="m-2 rounded border border-rose-400/30 px-3 py-2 text-xs uppercase tracking-wider text-rose-300 hover:bg-rose-400/10"
             >
               Salir del panel
             </button>
@@ -350,12 +351,12 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
               >
                 <Menu className="size-5 text-cyan-300" />
               </button>
-              <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-emerald-300">
+              <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-emerald-300">
                 <span className="size-1.5 rounded-full bg-emerald-400" /> Sesión de mando
               </span>
               <button
                 onClick={onClose}
-                className="ml-auto rounded p-1 text-white/50 hover:text-white"
+                className="ml-auto rounded p-1 text-white/65 hover:text-white"
                 aria-label="Cerrar"
               >
                 <X className="size-4" />
@@ -377,7 +378,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
           <div className="w-full max-w-sm rounded-lg border border-amber-400/30 bg-[#0a0c1c] p-5 shadow-[0_0_40px_#fbbf2420]">
             <div className="mb-3 flex items-center gap-2 text-amber-300">
               <AlertTriangle className="size-4" />
-              <span className="font-arcade text-[9px] tracking-widest">CONFIRMAR OPERACIÓN</span>
+              <span className="font-arcade text-[11px] tracking-widest">CONFIRMAR OPERACIÓN</span>
             </div>
             <p className="mb-5 text-sm text-white/80">
               ¿Seguro que quieres ejecutar <b className="text-white">“{confirm}”</b>?
@@ -385,13 +386,13 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirm(null)}
-                className="rounded border border-white/15 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+                className="rounded border border-white/15 px-3 py-1.5 text-sm text-white/80 hover:bg-white/5"
               >
                 Cancelar
               </button>
               <button
                 onClick={doConfirm}
-                className="rounded bg-amber-400/90 px-3 py-1.5 text-xs font-bold text-black hover:bg-amber-300"
+                className="rounded bg-amber-400/90 px-3 py-1.5 text-sm font-bold text-black hover:bg-amber-300"
               >
                 Confirmar
               </button>
@@ -410,7 +411,7 @@ function AdminLogin({ onUnlock, onClose }: { onUnlock: () => void; onClose: () =
       <div className="relative rounded-lg border border-amber-400/30 bg-[#0a0c1c] p-6 shadow-[0_0_60px_#fbbf2418]">
         <button
           onClick={onClose}
-          className="absolute right-3 top-3 text-white/40 hover:text-white"
+          className="absolute right-3 top-3 text-white/55 hover:text-white"
           aria-label="Cerrar"
         >
           <X className="size-4" />
@@ -418,10 +419,10 @@ function AdminLogin({ onUnlock, onClose }: { onUnlock: () => void; onClose: () =
         <div className="mx-auto mb-4 grid size-14 place-items-center rounded-full border border-amber-400/40 bg-amber-400/10">
           <Lock className="size-6 text-amber-300" />
         </div>
-        <h2 className="font-arcade text-center text-[10px] tracking-[0.3em] text-amber-300">
+        <h2 className="font-arcade text-center text-xs tracking-[0.3em] text-amber-300">
           ACCESO DE MANDO
         </h2>
-        <p className="mt-2 text-center text-[11px] text-white/50">
+        <p className="mt-2 text-center text-sm text-white/65">
           Introduce la contraseña administrativa
         </p>
         <form
@@ -432,25 +433,25 @@ function AdminLogin({ onUnlock, onClose }: { onUnlock: () => void; onClose: () =
           }}
         >
           <div className="flex items-center gap-2 rounded border border-white/10 bg-black/40 px-3">
-            <KeyRound className="size-4 text-white/40" />
+            <KeyRound className="size-4 text-white/55" />
             <input
               type="password"
               value={pwd}
               onChange={(e) => setPwd(e.target.value)}
               placeholder="••••••••"
-              className="h-10 flex-1 bg-transparent text-sm tracking-widest outline-none placeholder:text-white/20"
+              className="h-10 flex-1 bg-transparent text-sm tracking-widest outline-none placeholder:text-white/35"
               autoFocus
             />
           </div>
           <button
             type="submit"
             disabled={!pwd}
-            className="w-full rounded bg-amber-400/90 py-2.5 text-xs font-bold uppercase tracking-widest text-black transition hover:bg-amber-300 disabled:opacity-40"
+            className="w-full rounded bg-amber-400/90 py-2.5 text-sm font-bold uppercase tracking-widest text-black transition hover:bg-amber-300 disabled:opacity-40"
           >
             Desbloquear
           </button>
         </form>
-        <p className="mt-4 text-center text-[9px] text-white/30">
+        <p className="mt-4 text-center text-[11px] text-white/50">
           Vista de diseño: la verificación real se hará en el servidor.
         </p>
       </div>
@@ -476,21 +477,21 @@ function SectionView({
           <Icon className="size-4 text-cyan-300" />
         </div>
         <div>
-          <h1 className="font-arcade text-[11px] tracking-widest text-cyan-200">
+          <h1 className="font-arcade text-sm tracking-widest text-cyan-200">
             {def.label.toUpperCase()}
           </h1>
-          <p className="text-[11px] text-white/45">{def.desc}</p>
+          <p className="text-sm text-white/60">{def.desc}</p>
         </div>
       </div>
 
       {notice ? (
-        <div className="flex items-center gap-2 rounded border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">
+        <div className="flex items-center gap-2 rounded border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
           <Activity className="size-3.5" />
           {notice}
         </div>
       ) : null}
       {def.note ? (
-        <div className="rounded border border-fuchsia-400/30 bg-fuchsia-400/10 px-3 py-2 text-[11px] text-fuchsia-200">
+        <div className="rounded border border-fuchsia-400/30 bg-fuchsia-400/10 px-3 py-2 text-sm text-fuchsia-200">
           {def.note}
         </div>
       ) : null}
@@ -499,8 +500,8 @@ function SectionView({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {def.stats.map((s) => (
             <div key={s} className="rounded border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-[9px] uppercase tracking-wider text-white/45">{s}</div>
-              <div className="mt-1 font-arcade text-sm text-white/30">--</div>
+              <div className="text-[11px] uppercase tracking-wider text-white/60">{s}</div>
+              <div className="mt-1 font-arcade text-sm text-white/50">--</div>
             </div>
           ))}
         </div>
@@ -509,10 +510,10 @@ function SectionView({
       {def.filters ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3">
-            <Search className="size-3.5 text-white/40" />
+            <Search className="size-3.5 text-white/55" />
             <input
               placeholder="Buscar..."
-              className="h-9 flex-1 bg-transparent text-xs outline-none placeholder:text-white/25"
+              className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
             />
           </div>
           <div className="flex flex-wrap gap-1">
@@ -520,7 +521,7 @@ function SectionView({
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded px-2.5 py-1.5 text-[10px] ${filter === f ? "bg-cyan-400/20 text-cyan-200" : "text-white/50 hover:bg-white/5"}`}
+                className={`rounded px-2.5 py-1.5 text-xs ${filter === f ? "bg-cyan-400/20 text-cyan-200" : "text-white/65 hover:bg-white/5"}`}
               >
                 {f}
               </button>
@@ -529,7 +530,12 @@ function SectionView({
         </div>
       ) : null}
 
-      <div className={def.form ? "grid gap-5 lg:grid-cols-[minmax(0,340px)_1fr]" : ""}>
+      <div
+        className={
+          def.form || def.id === "premios" ? "grid gap-5 lg:grid-cols-[minmax(0,360px)_1fr]" : ""
+        }
+      >
+        {def.id === "premios" ? <RewardForm onAction={onAction} /> : null}
         {def.form ? (
           <form
             className="space-y-3 rounded border border-white/10 bg-white/[0.03] p-4"
@@ -538,7 +544,7 @@ function SectionView({
               onAction(def.form!.submit);
             }}
           >
-            <div className="text-[10px] uppercase tracking-wider text-cyan-200">
+            <div className="text-xs uppercase tracking-wider text-cyan-200">
               {def.form.title}
             </div>
             {def.form.fields.map((f) => (
@@ -546,18 +552,18 @@ function SectionView({
                 key={f.label}
                 className={
                   f.type === "toggle"
-                    ? "flex items-center justify-between text-[11px] text-white/70"
-                    : "block text-[10px] text-white/50"
+                    ? "flex items-center justify-between text-sm text-white/80"
+                    : "block text-xs text-white/65"
                 }
               >
                 {f.label}
                 {f.type === "textarea" ? (
                   <textarea
                     rows={3}
-                    className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-xs outline-none focus:border-cyan-400/40"
+                    className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm outline-none focus:border-cyan-400/40"
                   />
                 ) : f.type === "select" ? (
-                  <select className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-xs outline-none">
+                  <select className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-sm outline-none">
                     {f.options?.map((o) => (
                       <option key={o}>{o}</option>
                     ))}
@@ -565,13 +571,13 @@ function SectionView({
                 ) : f.type === "toggle" ? (
                   <input type="checkbox" className="size-4 accent-cyan-400" />
                 ) : (
-                  <input className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-xs outline-none focus:border-cyan-400/40" />
+                  <input className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-sm outline-none focus:border-cyan-400/40" />
                 )}
               </label>
             ))}
             <button
               type="submit"
-              className={`w-full rounded py-2 text-[11px] font-bold uppercase tracking-wider ${def.form.danger ? "bg-amber-400/90 text-black" : "bg-cyan-400/90 text-black"} hover:opacity-90`}
+              className={`w-full rounded py-2 text-sm font-bold uppercase tracking-wider ${def.form.danger ? "bg-amber-400/90 text-black" : "bg-cyan-400/90 text-black"} hover:opacity-90`}
             >
               {def.form.submit}
             </button>
@@ -581,14 +587,14 @@ function SectionView({
         <div className="min-w-0 space-y-5">
           {def.tables?.map((t) => (
             <div key={t.title} className="overflow-hidden rounded border border-white/10">
-              <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] uppercase tracking-wider text-white/60">
+              <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
                 <FileClock className="size-3" />
                 {t.title}
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-[11px]">
+                <table className="w-full min-w-[520px] text-left text-sm">
                   <thead>
-                    <tr className="text-white/40">
+                    <tr className="text-white/55">
                       {t.cols.map((col) => (
                         <th key={col.key} className="px-3 py-2 font-normal">
                           {col.label}
@@ -598,7 +604,7 @@ function SectionView({
                   </thead>
                   <tbody>
                     <tr>
-                      <td colSpan={t.cols.length} className="px-3 py-8 text-center text-white/30">
+                      <td colSpan={t.cols.length} className="px-3 py-8 text-center text-white/50">
                         Sin datos · {PENDING.toLowerCase()}
                       </td>
                     </tr>
@@ -613,7 +619,7 @@ function SectionView({
                 <button
                   key={a.label}
                   onClick={() => onAction(a.label)}
-                  className={`rounded border px-3 py-1.5 text-[10px] uppercase tracking-wider ${a.danger ? "border-rose-400/40 text-rose-300 hover:bg-rose-400/10" : "border-cyan-400/30 text-cyan-200 hover:bg-cyan-400/10"}`}
+                  className={`rounded border px-3 py-1.5 text-xs uppercase tracking-wider ${a.danger ? "border-rose-400/40 text-rose-300 hover:bg-rose-400/10" : "border-cyan-400/30 text-cyan-200 hover:bg-cyan-400/10"}`}
                 >
                   {a.label}
                 </button>
@@ -623,5 +629,177 @@ function SectionView({
         </div>
       </div>
     </div>
+  );
+}
+
+type RewardType = "nave" | "vip" | "objeto" | "obs" | "cr";
+const REWARD_TYPES: { id: RewardType; label: string }[] = [
+  { id: "nave", label: "Nave" },
+  { id: "vip", label: "VIP" },
+  { id: "objeto", label: "Objeto" },
+  { id: "obs", label: "OBS" },
+  { id: "cr", label: "CR" },
+];
+// Catálogo sin alias duplicados (p. ej. "magnet" e "iman").
+const REWARD_ITEMS = INVENTORY_CATALOG.filter(
+  (item, i, all) => all.findIndex((o) => o.label === item.label) === i,
+);
+
+const inputCls =
+  "mt-1 h-10 w-full rounded border border-white/10 bg-black/40 px-2 text-sm text-white outline-none focus:border-cyan-400/40";
+
+function RewardForm({ onAction }: { onAction: (l: string) => void }) {
+  const [recipient, setRecipient] = useState("");
+  const [type, setType] = useState<RewardType>("nave");
+  const [shipId, setShipId] = useState(SHIPS[0]?.id ?? "");
+  const [vipDays, setVipDays] = useState("30");
+  const [itemId, setItemId] = useState(REWARD_ITEMS[0]?.itemId ?? "");
+  const [qty, setQty] = useState("1");
+  const [amount, setAmount] = useState("");
+
+  const summary = (() => {
+    if (type === "nave") return `nave ${SHIPS.find((s) => s.id === shipId)?.name ?? ""}`;
+    if (type === "vip") return `${vipDays} días de VIP`;
+    if (type === "objeto")
+      return `${qty} × ${REWARD_ITEMS.find((i) => i.itemId === itemId)?.label ?? ""}`;
+    return `${amount || 0} ${type.toUpperCase()}`;
+  })();
+
+  const valid =
+    recipient.trim().length > 0 &&
+    (type === "vip" ? Number(vipDays) > 0 : true) &&
+    (type === "objeto" ? Number(qty) > 0 : true) &&
+    (type === "obs" || type === "cr" ? Number(amount) > 0 : true);
+
+  return (
+    <form
+      className="space-y-4 rounded border border-white/10 bg-white/[0.03] p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) onAction(`Entregar ${summary} a ${recipient.trim()}`);
+      }}
+    >
+      <div className="text-xs uppercase tracking-wider text-cyan-200">Entregar premio</div>
+
+      <label className="block text-xs text-white/70">
+        Jugador (ID, correo o nombre de usuario)
+        <input
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          placeholder="plt_xxxx · correo@ejemplo.com · Piloto"
+          className={`${inputCls} placeholder:text-white/40`}
+        />
+      </label>
+
+      <div>
+        <div className="text-xs text-white/70">Tipo de premio</div>
+        <div className="mt-1 grid grid-cols-5 gap-1">
+          {REWARD_TYPES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setType(t.id)}
+              className={`rounded border py-2 text-xs ${type === t.id ? "border-cyan-400/50 bg-cyan-400/20 text-cyan-100" : "border-white/10 text-white/70 hover:bg-white/5"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {type === "nave" ? (
+        <label className="block text-xs text-white/70">
+          Nave
+          <select value={shipId} onChange={(e) => setShipId(e.target.value)} className={inputCls}>
+            {SHIPS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} · {s.role}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {type === "vip" ? (
+        <label className="block text-xs text-white/70">
+          Días de VIP a regalar
+          <input
+            type="number"
+            min={1}
+            value={vipDays}
+            onChange={(e) => setVipDays(e.target.value)}
+            className={inputCls}
+          />
+          <div className="mt-2 flex flex-wrap gap-1">
+            {[1, 7, 15, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setVipDays(String(d))}
+                className={`rounded px-2.5 py-1 text-xs ${vipDays === String(d) ? "bg-amber-400/20 text-amber-200" : "text-white/70 hover:bg-white/5"}`}
+              >
+                {d} días
+              </button>
+            ))}
+          </div>
+        </label>
+      ) : null}
+
+      {type === "objeto" ? (
+        <div className="grid grid-cols-[1fr_90px] gap-2">
+          <label className="block text-xs text-white/70">
+            Objeto
+            <select value={itemId} onChange={(e) => setItemId(e.target.value)} className={inputCls}>
+              {REWARD_ITEMS.map((i) => (
+                <option key={i.itemId} value={i.itemId}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-white/70">
+            Cantidad
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {type === "obs" || type === "cr" ? (
+        <label className="block text-xs text-white/70">
+          Cantidad de {type.toUpperCase()}
+          <input
+            type="number"
+            min={1}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0"
+            className={`${inputCls} placeholder:text-white/40`}
+          />
+        </label>
+      ) : null}
+
+      <div className="rounded border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/75">
+        Resumen: <span className="text-white">{summary}</span>
+        {recipient.trim() ? (
+          <>
+            {" "}→ <span className="text-cyan-200">{recipient.trim()}</span>
+          </>
+        ) : null}
+      </div>
+
+      <button
+        type="submit"
+        disabled={!valid}
+        className="w-full rounded bg-amber-400/90 py-2.5 text-sm font-bold uppercase tracking-wider text-black hover:bg-amber-300 disabled:opacity-40"
+      >
+        Entregar premio
+      </button>
+    </form>
   );
 }
