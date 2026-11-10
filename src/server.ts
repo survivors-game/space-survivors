@@ -2492,9 +2492,11 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
       if (!(orderColumns.results ?? []).some((column) => column.name === "buyer_paid_at")) {
         await db.prepare("ALTER TABLE p2p_orders ADD COLUMN buyer_paid_at INTEGER").run();
       }
-      await db.prepare(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')",
-      ).run();
+      await db
+        .prepare(
+          "CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')",
+        )
+        .run();
       await db
         .prepare(
           `UPDATE p2p_ads
@@ -3848,26 +3850,34 @@ async function handleMarketRequest(
 
     if (request.method === "GET") {
       const [stats, ads, orders, disputes, messages, logs] = await Promise.all([
-        db.prepare(
-          `SELECT
+        db
+          .prepare(
+            `SELECT
             (SELECT COUNT(*) FROM p2p_ads WHERE status IN ('ACTIVO', 'PAUSADO')) AS active_ads,
             (SELECT COUNT(*) FROM p2p_orders WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO')) AS pending_orders,
             (SELECT COUNT(*) FROM p2p_disputes WHERE status = 'OPEN') AS open_disputes,
             (SELECT COUNT(*) FROM p2p_orders WHERE status = 'COMPLETADA') AS completed_orders`,
-        ).first<{
-          active_ads: number; pending_orders: number; open_disputes: number; completed_orders: number;
-        }>(),
-        db.prepare(
-          `SELECT ad.id, ad.seller_pilot_id, ad.item_name, ad.item_type, ad.price_minor,
+          )
+          .first<{
+            active_ads: number;
+            pending_orders: number;
+            open_disputes: number;
+            completed_orders: number;
+          }>(),
+        db
+          .prepare(
+            `SELECT ad.id, ad.seller_pilot_id, ad.item_name, ad.item_type, ad.price_minor,
             ad.currency_code, ad.country_code, ad.status, ad.created_at,
             COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS seller_name
            FROM p2p_ads ad
            JOIN pilots p ON p.pilot_id = ad.seller_pilot_id
            LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
            ORDER BY ad.created_at DESC LIMIT 100`,
-        ).all(),
-        db.prepare(
-          `SELECT o.id, o.status, o.created_at, o.updated_at, o.payment_method,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT o.id, o.status, o.created_at, o.updated_at, o.payment_method,
             o.buyer_pilot_id, ad.id AS ad_id, ad.seller_pilot_id, ad.item_name,
             ad.item_type, ad.price_minor, ad.currency_code, ad.country_code,
             COALESCE(NULLIF(bp.display_name, ''), buyer.callsign, 'PILOTO') AS buyer_name,
@@ -3880,9 +3890,11 @@ async function handleMarketRequest(
            LEFT JOIN player_profiles sp ON sp.pilot_id = seller.pilot_id
            ORDER BY CASE WHEN o.status IN ('DISPUTA', 'PENDIENTE', 'PAGO_REPORTADO') THEN 0 ELSE 1 END,
              o.created_at DESC LIMIT 100`,
-        ).all(),
-        db.prepare(
-          `SELECT d.id, d.order_id, d.opened_by_pilot_id, d.reason, d.evidence_url,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT d.id, d.order_id, d.opened_by_pilot_id, d.reason, d.evidence_url,
             d.status, d.created_at, d.resolved_at, d.resolved_by, d.resolution_note,
             o.status AS order_status, o.buyer_pilot_id, ad.seller_pilot_id,
             ad.item_name, ad.price_minor, ad.currency_code, ad.country_code,
@@ -3899,19 +3911,24 @@ async function handleMarketRequest(
            LEFT JOIN player_profiles bp ON bp.pilot_id = buyer.pilot_id
            LEFT JOIN player_profiles sp ON sp.pilot_id = seller.pilot_id
            ORDER BY CASE WHEN d.status = 'OPEN' THEN 0 ELSE 1 END, d.created_at DESC LIMIT 100`,
-        ).all(),
-        db.prepare(
-          `SELECT m.id, m.dispute_id, m.author_pilot_id, m.message, m.evidence_url,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT m.id, m.dispute_id, m.author_pilot_id, m.message, m.evidence_url,
             m.created_at, COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS author_name
            FROM p2p_dispute_messages m
            JOIN pilots p ON p.pilot_id = m.author_pilot_id
            LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
            JOIN p2p_disputes d ON d.id = m.dispute_id
            ORDER BY m.created_at ASC LIMIT 300`,
-        ).all(),
-        db.prepare(
-          "SELECT id, order_id, ad_id, action, resolution_note, admin_email, created_at FROM admin_market_logs ORDER BY created_at DESC LIMIT 100",
-        ).all(),
+          )
+          .all(),
+        db
+          .prepare(
+            "SELECT id, order_id, ad_id, action, resolution_note, admin_email, created_at FROM admin_market_logs ORDER BY created_at DESC LIMIT 100",
+          )
+          .all(),
       ]);
       return json({
         stats: stats ?? { active_ads: 0, pending_orders: 0, open_disputes: 0, completed_orders: 0 },
@@ -3936,32 +3953,54 @@ async function handleMarketRequest(
       if (!/^dsp_[a-f0-9]{24}$/.test(disputeId)) {
         return json({ error: "Identificador de disputa no válido." }, 400);
       }
-      const dispute = await db.prepare(
-        `SELECT d.id, d.order_id, d.status, o.ad_id
+      const dispute = await db
+        .prepare(
+          `SELECT d.id, d.order_id, d.status, o.ad_id
          FROM p2p_disputes d JOIN p2p_orders o ON o.id = d.order_id
          WHERE d.id = ?`,
-      ).bind(disputeId).first<{ id: string; order_id: string; status: string; ad_id: string }>();
+        )
+        .bind(disputeId)
+        .first<{ id: string; order_id: string; status: string; ad_id: string }>();
       if (!dispute) return json({ error: "No se encontró la disputa." }, 404);
       if (dispute.status !== "OPEN") return json({ error: "Esta disputa ya fue resuelta." }, 409);
       const finalStatus = action === "resolve-buyer" ? "COMPLETADA" : "CANCELADA";
       const disputeStatus = action === "resolve-buyer" ? "RESOLVED_BUYER" : "RESOLVED_SELLER";
       try {
         const results = await db.batch([
-          db.prepare(
-            "UPDATE p2p_orders SET status = 'PENDIENTE', updated_at = ? WHERE id = ? AND status = 'DISPUTA'",
-          ).bind(now, dispute.order_id),
-          db.prepare(
-            "UPDATE p2p_orders SET status = ?, updated_at = ? WHERE id = ? AND status = 'PENDIENTE'",
-          ).bind(finalStatus, now, dispute.order_id),
-          db.prepare(
-            "UPDATE p2p_disputes SET status = ?, resolved_at = ?, resolved_by = ?, resolution_note = ? WHERE id = ? AND status = 'OPEN'",
-          ).bind(disputeStatus, now, account.email, reason, disputeId),
-          db.prepare(
-            "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          ).bind("amk_" + randomHex(10), dispute.order_id, dispute.ad_id, action, reason, account.email, now),
+          db
+            .prepare(
+              "UPDATE p2p_orders SET status = 'PENDIENTE', updated_at = ? WHERE id = ? AND status = 'DISPUTA'",
+            )
+            .bind(now, dispute.order_id),
+          db
+            .prepare(
+              "UPDATE p2p_orders SET status = ?, updated_at = ? WHERE id = ? AND status = 'PENDIENTE'",
+            )
+            .bind(finalStatus, now, dispute.order_id),
+          db
+            .prepare(
+              "UPDATE p2p_disputes SET status = ?, resolved_at = ?, resolved_by = ?, resolution_note = ? WHERE id = ? AND status = 'OPEN'",
+            )
+            .bind(disputeStatus, now, account.email, reason, disputeId),
+          db
+            .prepare(
+              "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(
+              "amk_" + randomHex(10),
+              dispute.order_id,
+              dispute.ad_id,
+              action,
+              reason,
+              account.email,
+              now,
+            ),
         ]);
         if (results.slice(0, 3).some((result) => result.meta?.changes !== 1)) {
-          return json({ error: "No se pudo resolver la disputa. No se modificó la operación." }, 409);
+          return json(
+            { error: "No se pudo resolver la disputa. No se modificó la operación." },
+            409,
+          );
         }
       } catch (error) {
         console.error("No se pudo resolver la disputa P2P:", error);
@@ -3977,31 +4016,43 @@ async function handleMarketRequest(
       }
       try {
         const results = await db.batch([
-          db.prepare(
-            `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
+          db
+            .prepare(
+              `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
              WHERE id = ? AND status IN ('ACTIVO', 'PAUSADO')
                AND NOT EXISTS (
                  SELECT 1 FROM p2p_orders o WHERE o.ad_id = p2p_ads.id
                    AND o.status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')
                )`,
-          ).bind(now, adId),
-          db.prepare(
-            `UPDATE pilot_inventory SET is_locked = 0, updated_at = ?
+            )
+            .bind(now, adId),
+          db
+            .prepare(
+              `UPDATE pilot_inventory SET is_locked = 0, updated_at = ?
              WHERE id = (
                SELECT inventory_id FROM p2p_ads
                WHERE id = ? AND status = 'CANCELADO' AND updated_at = ?
              ) AND is_locked = 1`,
-          ).bind(now, adId, now),
-          db.prepare(
-            "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, NULL, ?, 'remove-listing', ?, ?, ?)",
-          ).bind("amk_" + randomHex(10), adId, reason, account.email, now),
+            )
+            .bind(now, adId, now),
+          db
+            .prepare(
+              "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, NULL, ?, 'remove-listing', ?, ?, ?)",
+            )
+            .bind("amk_" + randomHex(10), adId, reason, account.email, now),
         ]);
         if (results.some((result) => result.meta?.changes !== 1)) {
-          return json({ error: "No se pudo retirar la publicación. No se modificó el artículo." }, 409);
+          return json(
+            { error: "No se pudo retirar la publicación. No se modificó el artículo." },
+            409,
+          );
         }
       } catch (error) {
         console.error("No se pudo retirar la publicación P2P:", error);
-        return json({ error: "No se pudo retirar la publicación. No se modificó el artículo." }, 409);
+        return json(
+          { error: "No se pudo retirar la publicación. No se modificó el artículo." },
+          409,
+        );
       }
       return json({ success: true, status: "CANCELADO" });
     }
@@ -4897,33 +4948,66 @@ async function handleMarketRequest(
     const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
     const evidenceUrl = typeof body?.evidence_url === "string" ? body.evidence_url.trim() : "";
     if (!orderId || orderId.length > 64 || reason.length < 10) {
-      return pilotJson(request, pilotId, { error: "Indica la orden y explica el problema (mínimo 10 caracteres)." }, 400);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "Indica la orden y explica el problema (mínimo 10 caracteres)." },
+        400,
+      );
     }
     if (evidenceUrl && (evidenceUrl.length > 2048 || !/^https:\/\//i.test(evidenceUrl))) {
       return pilotJson(request, pilotId, { error: "El enlace de la prueba debe ser HTTPS." }, 400);
     }
-    const order = await db.prepare(
-      `SELECT o.id, o.status, o.buyer_pilot_id, ad.seller_pilot_id
+    const order = await db
+      .prepare(
+        `SELECT o.id, o.status, o.buyer_pilot_id, ad.seller_pilot_id
        FROM p2p_orders o JOIN p2p_ads ad ON ad.id = o.ad_id WHERE o.id = ?`,
-    ).bind(orderId).first<{ id: string; status: string; buyer_pilot_id: string; seller_pilot_id: string }>();
+      )
+      .bind(orderId)
+      .first<{ id: string; status: string; buyer_pilot_id: string; seller_pilot_id: string }>();
     if (!order || (order.buyer_pilot_id !== pilotId && order.seller_pilot_id !== pilotId)) {
-      return pilotJson(request, pilotId, { error: "La orden no existe o no participas en ella." }, 404);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "La orden no existe o no participas en ella." },
+        404,
+      );
     }
     if (order.status !== "PENDIENTE" && order.status !== "PAGO_REPORTADO") {
-      return pilotJson(request, pilotId, { error: "Solo se puede disputar una orden en curso." }, 409);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "Solo se puede disputar una orden en curso." },
+        409,
+      );
     }
     const now = Date.now();
     const disputeId = "dsp_" + randomHex(12);
     try {
       const results = await db.batch([
-        db.prepare("UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status IN ('PENDIENTE', 'PAGO_REPORTADO')")
+        db
+          .prepare(
+            "UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status IN ('PENDIENTE', 'PAGO_REPORTADO')",
+          )
           .bind(now, orderId),
-        db.prepare(
-          "INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, evidence_url, status, created_at) SELECT ?, ?, ?, ?, ?, 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA')",
-        ).bind(disputeId, orderId, pilotId, reason, evidenceUrl || null, now, orderId),
-        db.prepare(
-          "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, evidence_url, created_at) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM p2p_disputes WHERE id = ?)",
-        ).bind("dmsg_" + randomHex(12), disputeId, pilotId, reason, evidenceUrl || null, now, disputeId),
+        db
+          .prepare(
+            "INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, evidence_url, status, created_at) SELECT ?, ?, ?, ?, ?, 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA')",
+          )
+          .bind(disputeId, orderId, pilotId, reason, evidenceUrl || null, now, orderId),
+        db
+          .prepare(
+            "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, evidence_url, created_at) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM p2p_disputes WHERE id = ?)",
+          )
+          .bind(
+            "dmsg_" + randomHex(12),
+            disputeId,
+            pilotId,
+            reason,
+            evidenceUrl || null,
+            now,
+            disputeId,
+          ),
       ]);
       if (results.some((result) => result.meta?.changes !== 1)) {
         return pilotJson(request, pilotId, { error: "No se pudo abrir la disputa." }, 409);
@@ -4946,38 +5030,57 @@ async function handleMarketRequest(
     if (evidenceUrl && (evidenceUrl.length > 2048 || !/^https:\/\//i.test(evidenceUrl))) {
       return pilotJson(request, pilotId, { error: "El enlace de la prueba debe ser HTTPS." }, 400);
     }
-    const dispute = await db.prepare(
-      `SELECT d.id FROM p2p_disputes d
+    const dispute = await db
+      .prepare(
+        `SELECT d.id FROM p2p_disputes d
        JOIN p2p_orders o ON o.id = d.order_id
        JOIN p2p_ads ad ON ad.id = o.ad_id
        WHERE o.id = ? AND o.status = 'DISPUTA' AND d.status = 'OPEN'
          AND (o.buyer_pilot_id = ? OR ad.seller_pilot_id = ?)`,
-    ).bind(orderId, pilotId, pilotId).first<{ id: string }>();
-    if (!dispute) return pilotJson(request, pilotId, { error: "No existe una disputa abierta para esta orden." }, 404);
+      )
+      .bind(orderId, pilotId, pilotId)
+      .first<{ id: string }>();
+    if (!dispute)
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "No existe una disputa abierta para esta orden." },
+        404,
+      );
     const now = Date.now();
-    await db.prepare(
-      "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, evidence_url, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-    ).bind("dmsg_" + randomHex(12), dispute.id, pilotId, message, evidenceUrl || null, now).run();
+    await db
+      .prepare(
+        "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, evidence_url, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .bind("dmsg_" + randomHex(12), dispute.id, pilotId, message, evidenceUrl || null, now)
+      .run();
     return pilotJson(request, pilotId, { success: true });
   }
 
   if (url.pathname === "/api/market/dispute/messages" && request.method === "GET") {
     const orderId = url.searchParams.get("order_id") ?? "";
-    const dispute = await db.prepare(
-      `SELECT d.id FROM p2p_disputes d
+    const dispute = await db
+      .prepare(
+        `SELECT d.id FROM p2p_disputes d
        JOIN p2p_orders o ON o.id = d.order_id
        JOIN p2p_ads ad ON ad.id = o.ad_id
        WHERE o.id = ? AND (o.buyer_pilot_id = ? OR ad.seller_pilot_id = ?)`,
-    ).bind(orderId, pilotId, pilotId).first<{ id: string }>();
-    if (!dispute) return pilotJson(request, pilotId, { error: "No existe una disputa para esta orden." }, 404);
-    const messages = await db.prepare(
-      `SELECT m.id, m.author_pilot_id, m.message, m.evidence_url, m.created_at,
+      )
+      .bind(orderId, pilotId, pilotId)
+      .first<{ id: string }>();
+    if (!dispute)
+      return pilotJson(request, pilotId, { error: "No existe una disputa para esta orden." }, 404);
+    const messages = await db
+      .prepare(
+        `SELECT m.id, m.author_pilot_id, m.message, m.evidence_url, m.created_at,
         COALESCE(NULLIF(profile.display_name, ''), p.callsign, 'PILOTO') AS author_name
        FROM p2p_dispute_messages m
        JOIN pilots p ON p.pilot_id = m.author_pilot_id
        LEFT JOIN player_profiles profile ON profile.pilot_id = p.pilot_id
        WHERE m.dispute_id = ? ORDER BY m.created_at ASC LIMIT 100`,
-    ).bind(dispute.id).all();
+      )
+      .bind(dispute.id)
+      .all();
     return pilotJson(request, pilotId, { messages: messages.results ?? [] });
   }
 
@@ -5204,13 +5307,26 @@ async function handleMarketRequest(
     if (!orderId || orderId.length > 64) {
       return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
     }
-    const result = await db.prepare(
-      `UPDATE p2p_orders SET status = 'PAGO_REPORTADO', buyer_paid_at = ?, updated_at = ?
+    const result = await db
+      .prepare(
+        `UPDATE p2p_orders SET status = 'PAGO_REPORTADO', buyer_paid_at = ?, updated_at = ?
        WHERE id = ? AND buyer_pilot_id = ? AND status = 'PENDIENTE'
        RETURNING id`,
-    ).bind(Date.now(), Date.now(), orderId, pilotId).first<{ id: string }>();
-    if (!result) return pilotJson(request, pilotId, { error: "La orden no existe, no te pertenece o ya fue procesada." }, 409);
-    return pilotJson(request, pilotId, { success: true, order_id: result.id, status: "PAGO_REPORTADO" });
+      )
+      .bind(Date.now(), Date.now(), orderId, pilotId)
+      .first<{ id: string }>();
+    if (!result)
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "La orden no existe, no te pertenece o ya fue procesada." },
+        409,
+      );
+    return pilotJson(request, pilotId, {
+      success: true,
+      order_id: result.id,
+      status: "PAGO_REPORTADO",
+    });
   }
 
   if (url.pathname === "/api/market/release" && request.method === "POST") {
@@ -5219,22 +5335,48 @@ async function handleMarketRequest(
     if (!orderId || orderId.length > 64) {
       return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
     }
-    const seller = await db.prepare(
-      "SELECT ad.seller_pilot_id FROM p2p_orders o JOIN p2p_ads ad ON ad.id = o.ad_id WHERE o.id = ?",
-    ).bind(orderId).first<{ seller_pilot_id: string }>();
+    const seller = await db
+      .prepare(
+        "SELECT ad.seller_pilot_id FROM p2p_orders o JOIN p2p_ads ad ON ad.id = o.ad_id WHERE o.id = ?",
+      )
+      .bind(orderId)
+      .first<{ seller_pilot_id: string }>();
     if (!seller || seller.seller_pilot_id !== pilotId) {
-      return pilotJson(request, pilotId, { error: "Solo el vendedor de esta orden puede liberar el artículo." }, 403);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "Solo el vendedor de esta orden puede liberar el artículo." },
+        403,
+      );
     }
     try {
-      const result = await db.prepare(
-        `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
+      const result = await db
+        .prepare(
+          `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
          WHERE id = ? AND status = 'PAGO_REPORTADO' RETURNING id`,
-      ).bind(Date.now(), orderId).first<{ id: string }>();
-      if (!result) return pilotJson(request, pilotId, { error: "La orden aún no tiene el pago reportado o ya fue procesada." }, 409);
-      return pilotJson(request, pilotId, { success: true, order_id: result.id, status: "COMPLETADA" });
+        )
+        .bind(Date.now(), orderId)
+        .first<{ id: string }>();
+      if (!result)
+        return pilotJson(
+          request,
+          pilotId,
+          { error: "La orden aún no tiene el pago reportado o ya fue procesada." },
+          409,
+        );
+      return pilotJson(request, pilotId, {
+        success: true,
+        order_id: result.id,
+        status: "COMPLETADA",
+      });
     } catch (error) {
       console.error("No se pudo liberar el artículo del mercado:", error);
-      return pilotJson(request, pilotId, { error: "No se pudo liberar el artículo. La operación fue revertida." }, 409);
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "No se pudo liberar el artículo. La operación fue revertida." },
+        409,
+      );
     }
   }
 
@@ -5242,7 +5384,10 @@ async function handleMarketRequest(
     return pilotJson(
       request,
       pilotId,
-      { error: "El comprador no puede liberar el artículo. Esa acción corresponde al vendedor después de verificar el pago." },
+      {
+        error:
+          "El comprador no puede liberar el artículo. Esa acción corresponde al vendedor después de verificar el pago.",
+      },
       403,
     );
   }
@@ -5335,7 +5480,8 @@ async function handleMarketRequest(
     return pilotJson(request, pilotId, {
       orders: (orders.results ?? []).map((order) => {
         const country = (P2P_COUNTRIES[order.country] ? order.country : "CO") as P2PCountry;
-        const showPayment = order.role === "COMPRADOR" && ["PENDIENTE", "PAGO_REPORTADO"].includes(order.status);
+        const showPayment =
+          order.role === "COMPRADOR" && ["PENDIENTE", "PAGO_REPORTADO"].includes(order.status);
         const details = paymentDataForAd(order);
         const selectedKey =
           order.payment_method ?? (showPayment ? decodeMethods(order.payment_methods)[0] : null);

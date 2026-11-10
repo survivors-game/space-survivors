@@ -184,7 +184,6 @@ describe("P2P purchase flow", () => {
       `INSERT INTO pilots (pilot_id, callsign, obsidian, created_at, updated_at)
       VALUES (?, 'ADMIN', 5, ?, ?)`,
     ).run(ADMIN_ID, now, now);
-
   });
 
   afterAll(() => db.close());
@@ -250,9 +249,14 @@ describe("P2P purchase flow", () => {
       "VENDIDO",
     );
 
-    const repeated = await requestJson("/api/market/release", "POST", {
-      order_id: bought.payload.order_id,
-    }, SELLER_TOKEN);
+    const repeated = await requestJson(
+      "/api/market/release",
+      "POST",
+      {
+        order_id: bought.payload.order_id,
+      },
+      SELLER_TOKEN,
+    );
     expect(repeated.response.status).toBe(409);
   });
 
@@ -274,7 +278,9 @@ describe("P2P purchase flow", () => {
     });
     expect(second.response.status).toBe(409);
     expect(db.prepare("SELECT COUNT(*) AS count FROM p2p_orders").get()?.["count"]).toBe(1);
-    expect(db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"]).toBe(4);
+    expect(
+      db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"],
+    ).toBe(4);
   });
 
   it("opens a dispute, stores the conversation and lets the administrator resolve it", async () => {
@@ -293,11 +299,16 @@ describe("P2P purchase flow", () => {
     expect(opened.response.status).toBe(200);
     expect(opened.payload.status).toBe("DISPUTA");
 
-    const reply = await requestJson("/api/market/dispute/message", "POST", {
-      order_id: bought.payload.order_id,
-      message: "Adjunto la información para revisar el caso.",
-      evidence_url: "https://example.com/proof",
-    }, SELLER_TOKEN);
+    const reply = await requestJson(
+      "/api/market/dispute/message",
+      "POST",
+      {
+        order_id: bought.payload.order_id,
+        message: "Adjunto la información para revisar el caso.",
+        evidence_url: "https://example.com/proof",
+      },
+      SELLER_TOKEN,
+    );
     expect(reply.response.status).toBe(200);
 
     const adminRequest = new Request("https://game.example/api/admin/market", {
@@ -307,7 +318,10 @@ describe("P2P purchase flow", () => {
     });
     const adminList = await server.fetch(adminRequest, { DB: database });
     expect(adminList.status).toBe(200);
-    const adminData = await adminList.json() as { disputes: { id: string }[]; messages: unknown[] };
+    const adminData = (await adminList.json()) as {
+      disputes: { id: string }[];
+      messages: unknown[];
+    };
     expect(adminData.disputes).toHaveLength(1);
     expect(adminData.messages).toHaveLength(2);
 
@@ -328,8 +342,12 @@ describe("P2P purchase flow", () => {
       { DB: database },
     );
     expect(resolve.status).toBe(200);
-    expect((await resolve.json() as { orderStatus: string }).orderStatus).toBe("COMPLETADA");
-    expect(db.prepare("SELECT pilot_id FROM pilot_inventory WHERE item_id = 'boss-ship'").get()?.["pilot_id"]).toBe(BUYER_ID);
+    expect(((await resolve.json()) as { orderStatus: string }).orderStatus).toBe("COMPLETADA");
+    expect(
+      db.prepare("SELECT pilot_id FROM pilot_inventory WHERE item_id = 'boss-ship'").get()?.[
+        "pilot_id"
+      ],
+    ).toBe(BUYER_ID);
   });
 
   it("cancels a pending order without refunding the commission", async () => {

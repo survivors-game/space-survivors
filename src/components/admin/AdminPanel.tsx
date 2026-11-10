@@ -710,38 +710,96 @@ function SectionView({
 }
 
 function MarketAdminSection() {
-  type Stats = { active_ads: number; pending_orders: number; open_disputes: number; completed_orders: number };
+  type Stats = {
+    active_ads: number;
+    pending_orders: number;
+    open_disputes: number;
+    completed_orders: number;
+  };
   type Ad = {
-    id: string; seller_pilot_id: string; seller_name: string; item_name: string;
-    item_type: string; price_minor: number | null; currency_code: string | null;
-    country_code: string; status: string; created_at: number;
+    id: string;
+    seller_pilot_id: string;
+    seller_name: string;
+    item_name: string;
+    item_type: string;
+    price_minor: number | null;
+    currency_code: string | null;
+    country_code: string;
+    status: string;
+    created_at: number;
   };
   type Order = {
-    id: string; status: string; created_at: number; updated_at: number;
-    payment_method: string | null; buyer_pilot_id: string; ad_id: string;
-    seller_pilot_id: string; item_name: string; item_type: string;
-    price_minor: number | null; currency_code: string | null; country_code: string;
-    buyer_name: string; seller_name: string;
+    id: string;
+    status: string;
+    created_at: number;
+    updated_at: number;
+    payment_method: string | null;
+    buyer_pilot_id: string;
+    ad_id: string;
+    seller_pilot_id: string;
+    item_name: string;
+    item_type: string;
+    price_minor: number | null;
+    currency_code: string | null;
+    country_code: string;
+    buyer_name: string;
+    seller_name: string;
   };
   type Dispute = {
-    id: string; order_id: string; opened_by_pilot_id: string; reason: string;
-    evidence_url: string | null; status: string; created_at: number;
-    resolved_at: number | null; resolved_by: string | null; resolution_note: string | null;
-    order_status: string; buyer_pilot_id: string; seller_pilot_id: string;
-    item_name: string; price_minor: number | null; currency_code: string | null;
-    country_code: string; opened_by_name: string; buyer_name: string; seller_name: string;
+    id: string;
+    order_id: string;
+    opened_by_pilot_id: string;
+    reason: string;
+    evidence_url: string | null;
+    status: string;
+    created_at: number;
+    resolved_at: number | null;
+    resolved_by: string | null;
+    resolution_note: string | null;
+    order_status: string;
+    buyer_pilot_id: string;
+    seller_pilot_id: string;
+    item_name: string;
+    price_minor: number | null;
+    currency_code: string | null;
+    country_code: string;
+    opened_by_name: string;
+    buyer_name: string;
+    seller_name: string;
   };
   type Message = {
-    id: string; dispute_id: string; author_pilot_id: string; message: string;
-    evidence_url: string | null; created_at: number; author_name: string;
+    id: string;
+    dispute_id: string;
+    author_pilot_id: string;
+    message: string;
+    evidence_url: string | null;
+    created_at: number;
+    author_name: string;
   };
-  const [view, setView] = useState<"Disputas" | "Pedidos" | "Publicaciones" | "Historial">("Disputas");
-  const [stats, setStats] = useState<Stats>({ active_ads: 0, pending_orders: 0, open_disputes: 0, completed_orders: 0 });
+  const [view, setView] = useState<"Disputas" | "Pedidos" | "Publicaciones" | "Historial">(
+    "Disputas",
+  );
+  const [stats, setStats] = useState<Stats>({
+    active_ads: 0,
+    pending_orders: 0,
+    open_disputes: 0,
+    completed_orders: 0,
+  });
   const [ads, setAds] = useState<Ad[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [logs, setLogs] = useState<Array<{id:string;order_id:string|null;ad_id:string|null;action:string;resolution_note:string;admin_email:string;created_at:number}>>([]);
+  const [logs, setLogs] = useState<
+    Array<{
+      id: string;
+      order_id: string | null;
+      ad_id: string | null;
+      action: string;
+      resolution_note: string;
+      admin_email: string;
+      created_at: number;
+    }>
+  >([]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -754,12 +812,19 @@ function MarketAdminSection() {
     setError("");
     try {
       const response = await fetch("/api/admin/market", { credentials: "same-origin" });
-      const data = await response.json() as {
-        stats?: Stats; ads?: Ad[]; orders?: Order[]; disputes?: Dispute[];
-        messages?: Message[]; logs?: typeof logs; error?: string;
+      const data = (await response.json()) as {
+        stats?: Stats;
+        ads?: Ad[];
+        orders?: Order[];
+        disputes?: Dispute[];
+        messages?: Message[];
+        logs?: typeof logs;
+        error?: string;
       };
       if (!response.ok) throw new Error(data.error || "No se pudo cargar el mercado.");
-      setStats(data.stats ?? { active_ads: 0, pending_orders: 0, open_disputes: 0, completed_orders: 0 });
+      setStats(
+        data.stats ?? { active_ads: 0, pending_orders: 0, open_disputes: 0, completed_orders: 0 },
+      );
       setAds(data.ads ?? []);
       setOrders(data.orders ?? []);
       setDisputes(data.disputes ?? []);
@@ -772,7 +837,9 @@ function MarketAdminSection() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const act = async (data: Record<string, unknown>, key: string) => {
     const reason = reasons[key]?.trim() ?? "";
@@ -786,11 +853,12 @@ function MarketAdminSection() {
     setNotice("");
     try {
       const response = await fetch("/api/admin/market", {
-        method: "POST", credentials: "same-origin",
+        method: "POST",
+        credentials: "same-origin",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...data, reason }),
       });
-      const result = await response.json() as { error?: string; status?: string };
+      const result = (await response.json()) as { error?: string; status?: string };
       if (!response.ok) throw new Error(result.error || "No se pudo completar la operación.");
       setNotice("Operación administrativa completada.");
       setReasons((current) => ({ ...current, [key]: "" }));
@@ -803,19 +871,63 @@ function MarketAdminSection() {
   };
 
   const money = (minor: number | null, currency: string | null) =>
-    minor === null ? "—" : new Intl.NumberFormat("es", { style: "currency", currency: currency || "USD" }).format(minor / 100);
+    minor === null
+      ? "—"
+      : new Intl.NumberFormat("es", { style: "currency", currency: currency || "USD" }).format(
+          minor / 100,
+        );
   const date = (value: number) => new Date(value).toLocaleString();
   const query = search.trim().toLowerCase();
-  const filteredAds = ads.filter((x) => [x.id,x.seller_name,x.seller_pilot_id,x.item_name,x.status].join(" ").toLowerCase().includes(query));
-  const filteredOrders = orders.filter((x) => [x.id,x.buyer_name,x.seller_name,x.buyer_pilot_id,x.seller_pilot_id,x.item_name,x.status].join(" ").toLowerCase().includes(query));
-  const filteredDisputes = disputes.filter((x) => [x.id,x.order_id,x.buyer_name,x.seller_name,x.opened_by_name,x.item_name,x.reason,x.status].join(" ").toLowerCase().includes(query));
+  const filteredAds = ads.filter((x) =>
+    [x.id, x.seller_name, x.seller_pilot_id, x.item_name, x.status]
+      .join(" ")
+      .toLowerCase()
+      .includes(query),
+  );
+  const filteredOrders = orders.filter((x) =>
+    [x.id, x.buyer_name, x.seller_name, x.buyer_pilot_id, x.seller_pilot_id, x.item_name, x.status]
+      .join(" ")
+      .toLowerCase()
+      .includes(query),
+  );
+  const filteredDisputes = disputes.filter((x) =>
+    [
+      x.id,
+      x.order_id,
+      x.buyer_name,
+      x.seller_name,
+      x.opened_by_name,
+      x.item_name,
+      x.reason,
+      x.status,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(query),
+  );
 
   return (
     <section className="space-y-5">
-      {notice ? <p role="status" className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
-      {error ? <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+      {notice ? (
+        <p
+          role="status"
+          className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200"
+        >
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p
+          role="alert"
+          className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200"
+        >
+          {error}
+        </p>
+      ) : null}
       <p className="rounded border border-white/10 bg-white/[0.03] p-3 text-xs text-white/55">
-        La administración decide únicamente la entrega o devolución del artículo dentro del juego. Los pagos entre jugadores son directos y el juego no puede comprobar ni revertir transferencias externas.
+        La administración decide únicamente la entrega o devolución del artículo dentro del juego.
+        Los pagos entre jugadores son directos y el juego no puede comprobar ni revertir
+        transferencias externas.
       </p>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
@@ -823,68 +935,269 @@ function MarketAdminSection() {
           ["Pedidos pendientes", stats.pending_orders],
           ["Disputas abiertas", stats.open_disputes],
           ["Operaciones completadas", stats.completed_orders],
-        ].map(([label,value]) => <div key={label} className="rounded border border-white/10 bg-white/[0.03] p-3"><p className="text-[10px] uppercase text-white/50">{label}</p><p className="mt-2 font-arcade text-lg text-cyan-200">{Number(value).toLocaleString()}</p></div>)}
+        ].map(([label, value]) => (
+          <div key={label} className="rounded border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase text-white/50">{label}</p>
+            <p className="mt-2 font-arcade text-lg text-cyan-200">
+              {Number(value).toLocaleString()}
+            </p>
+          </div>
+        ))}
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por ID, jugador o artículo..." className={inputCls} />
-        <button type="button" onClick={() => void load()} className="rounded border border-cyan-400/30 px-3 py-2 text-xs text-cyan-200">Actualizar</button>
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar por ID, jugador o artículo..."
+          className={inputCls}
+        />
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="rounded border border-cyan-400/30 px-3 py-2 text-xs text-cyan-200"
+        >
+          Actualizar
+        </button>
       </div>
       <div className="flex flex-wrap gap-2">
-        {(["Disputas","Pedidos","Publicaciones","Historial"] as const).map((tab) => <button key={tab} type="button" onClick={() => setView(tab)} className={view === tab ? "rounded bg-cyan-400/20 px-3 py-2 text-xs text-cyan-100" : "rounded border border-white/10 px-3 py-2 text-xs text-white/60"}>{tab}</button>)}
+        {(["Disputas", "Pedidos", "Publicaciones", "Historial"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setView(tab)}
+            className={
+              view === tab
+                ? "rounded bg-cyan-400/20 px-3 py-2 text-xs text-cyan-100"
+                : "rounded border border-white/10 px-3 py-2 text-xs text-white/60"
+            }
+          >
+            {tab}
+          </button>
+        ))}
       </div>
       {loading ? <p className="p-4 text-sm text-white/50">Cargando mercado...</p> : null}
 
       {view === "Disputas" ? (
         <div className="space-y-3">
-          {filteredDisputes.length === 0 && !loading ? <p className="rounded border border-white/10 p-4 text-sm text-white/50">No hay disputas que mostrar.</p> : null}
+          {filteredDisputes.length === 0 && !loading ? (
+            <p className="rounded border border-white/10 p-4 text-sm text-white/50">
+              No hay disputas que mostrar.
+            </p>
+          ) : null}
           {filteredDisputes.map((dispute) => {
             const thread = messages.filter((message) => message.dispute_id === dispute.id);
             const key = dispute.id;
-            return <article key={key} className="space-y-3 rounded border border-amber-400/20 bg-white/[0.03] p-4">
-              <div className="flex flex-wrap justify-between gap-2">
-                <div><p className="text-sm font-semibold text-white">{dispute.item_name} · Orden {dispute.order_id}</p><p className="mt-1 text-xs text-white/50">Comprador: {dispute.buyer_name} · Vendedor: {dispute.seller_name}</p><p className="text-xs text-white/40">Abierta por {dispute.opened_by_name} · {date(dispute.created_at)}</p></div>
-                <span className={dispute.status === "OPEN" ? "text-amber-200" : "text-emerald-200"}>{dispute.status === "OPEN" ? "Abierta" : dispute.status === "RESOLVED_BUYER" ? "A favor del comprador" : "A favor del vendedor"}</span>
-              </div>
-              <div className="rounded bg-black/20 p-3 text-sm text-white/75"><b>Motivo:</b> {dispute.reason}</div>
-              {dispute.evidence_url ? <p className="break-all text-xs"><a href={dispute.evidence_url} target="_blank" rel="noreferrer" className="text-cyan-200 underline">Abrir prueba adjunta</a></p> : null}
-              <div className="space-y-2 rounded border border-white/10 p-3">
-                <p className="text-[10px] uppercase tracking-wider text-white/45">Conversación y pruebas</p>
-                {thread.map((message) => <div key={message.id} className="border-b border-white/5 pb-2 last:border-0"><p className="text-xs text-cyan-100">{message.author_name} · {date(message.created_at)}</p><p className="mt-1 whitespace-pre-wrap text-sm text-white/75">{message.message}</p>{message.evidence_url ? <a href={message.evidence_url} target="_blank" rel="noreferrer" className="text-xs text-cyan-200 underline">Ver prueba</a> : null}</div>)}
-                {!thread.length ? <p className="text-xs text-white/40">Sin mensajes adicionales.</p> : null}
-              </div>
-              {dispute.status === "OPEN" ? <>
-                <label className="block text-xs text-white/55">Motivo de la resolución<input value={reasons[key] ?? ""} onChange={(event) => setReasons((current) => ({...current,[key]:event.target.value}))} maxLength={240} className={inputCls} placeholder="Explica brevemente la decisión..." /></label>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={Boolean(busy)} onClick={() => void act({action:"resolve-buyer",disputeId:dispute.id},key)} className="rounded bg-emerald-400/90 px-3 py-2 text-xs font-bold text-black disabled:opacity-40">{busy === key ? "Procesando..." : "Resolver a favor del comprador"}</button>
-                  <button type="button" disabled={Boolean(busy)} onClick={() => void act({action:"resolve-seller",disputeId:dispute.id},key)} className="rounded border border-amber-400/40 px-3 py-2 text-xs text-amber-100 disabled:opacity-40">Resolver a favor del vendedor</button>
+            return (
+              <article
+                key={key}
+                className="space-y-3 rounded border border-amber-400/20 bg-white/[0.03] p-4"
+              >
+                <div className="flex flex-wrap justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      {dispute.item_name} · Orden {dispute.order_id}
+                    </p>
+                    <p className="mt-1 text-xs text-white/50">
+                      Comprador: {dispute.buyer_name} · Vendedor: {dispute.seller_name}
+                    </p>
+                    <p className="text-xs text-white/40">
+                      Abierta por {dispute.opened_by_name} · {date(dispute.created_at)}
+                    </p>
+                  </div>
+                  <span
+                    className={dispute.status === "OPEN" ? "text-amber-200" : "text-emerald-200"}
+                  >
+                    {dispute.status === "OPEN"
+                      ? "Abierta"
+                      : dispute.status === "RESOLVED_BUYER"
+                        ? "A favor del comprador"
+                        : "A favor del vendedor"}
+                  </span>
                 </div>
-              </> : <p className="text-xs text-white/45">Resolución: {dispute.resolution_note || "Sin nota"} · {dispute.resolved_by || ""}</p>}
-            </article>;
+                <div className="rounded bg-black/20 p-3 text-sm text-white/75">
+                  <b>Motivo:</b> {dispute.reason}
+                </div>
+                {dispute.evidence_url ? (
+                  <p className="break-all text-xs">
+                    <a
+                      href={dispute.evidence_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-cyan-200 underline"
+                    >
+                      Abrir prueba adjunta
+                    </a>
+                  </p>
+                ) : null}
+                <div className="space-y-2 rounded border border-white/10 p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-white/45">
+                    Conversación y pruebas
+                  </p>
+                  {thread.map((message) => (
+                    <div key={message.id} className="border-b border-white/5 pb-2 last:border-0">
+                      <p className="text-xs text-cyan-100">
+                        {message.author_name} · {date(message.created_at)}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-white/75">
+                        {message.message}
+                      </p>
+                      {message.evidence_url ? (
+                        <a
+                          href={message.evidence_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-cyan-200 underline"
+                        >
+                          Ver prueba
+                        </a>
+                      ) : null}
+                    </div>
+                  ))}
+                  {!thread.length ? (
+                    <p className="text-xs text-white/40">Sin mensajes adicionales.</p>
+                  ) : null}
+                </div>
+                {dispute.status === "OPEN" ? (
+                  <>
+                    <label className="block text-xs text-white/55">
+                      Motivo de la resolución
+                      <input
+                        value={reasons[key] ?? ""}
+                        onChange={(event) =>
+                          setReasons((current) => ({ ...current, [key]: event.target.value }))
+                        }
+                        maxLength={240}
+                        className={inputCls}
+                        placeholder="Explica brevemente la decisión..."
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() =>
+                          void act({ action: "resolve-buyer", disputeId: dispute.id }, key)
+                        }
+                        className="rounded bg-emerald-400/90 px-3 py-2 text-xs font-bold text-black disabled:opacity-40"
+                      >
+                        {busy === key ? "Procesando..." : "Resolver a favor del comprador"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(busy)}
+                        onClick={() =>
+                          void act({ action: "resolve-seller", disputeId: dispute.id }, key)
+                        }
+                        className="rounded border border-amber-400/40 px-3 py-2 text-xs text-amber-100 disabled:opacity-40"
+                      >
+                        Resolver a favor del vendedor
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-white/45">
+                    Resolución: {dispute.resolution_note || "Sin nota"} ·{" "}
+                    {dispute.resolved_by || ""}
+                  </p>
+                )}
+              </article>
+            );
           })}
         </div>
       ) : null}
 
-      {view === "Pedidos" ? <div className="space-y-2">
-        {filteredOrders.map((order) => <article key={order.id} className="rounded border border-white/10 p-3 text-xs">
-          <div className="flex flex-wrap justify-between gap-2"><b className="text-white">{order.item_name} · {order.id}</b><span className="text-cyan-200">{order.status}</span></div>
-          <p className="mt-2 text-white/60">Vendedor: {order.seller_name} ({order.seller_pilot_id})</p><p className="text-white/60">Comprador: {order.buyer_name} ({order.buyer_pilot_id})</p>
-          <p className="mt-1 text-white/45">{money(order.price_minor,order.currency_code)} · {order.payment_method || "Método no registrado"} · {date(order.created_at)}</p>
-        </article>)}
-        {!filteredOrders.length && !loading ? <p className="p-4 text-sm text-white/50">No hay pedidos.</p> : null}
-      </div> : null}
+      {view === "Pedidos" ? (
+        <div className="space-y-2">
+          {filteredOrders.map((order) => (
+            <article key={order.id} className="rounded border border-white/10 p-3 text-xs">
+              <div className="flex flex-wrap justify-between gap-2">
+                <b className="text-white">
+                  {order.item_name} · {order.id}
+                </b>
+                <span className="text-cyan-200">{order.status}</span>
+              </div>
+              <p className="mt-2 text-white/60">
+                Vendedor: {order.seller_name} ({order.seller_pilot_id})
+              </p>
+              <p className="text-white/60">
+                Comprador: {order.buyer_name} ({order.buyer_pilot_id})
+              </p>
+              <p className="mt-1 text-white/45">
+                {money(order.price_minor, order.currency_code)} ·{" "}
+                {order.payment_method || "Método no registrado"} · {date(order.created_at)}
+              </p>
+            </article>
+          ))}
+          {!filteredOrders.length && !loading ? (
+            <p className="p-4 text-sm text-white/50">No hay pedidos.</p>
+          ) : null}
+        </div>
+      ) : null}
 
-      {view === "Publicaciones" ? <div className="space-y-2">
-        {filteredAds.map((ad) => <article key={ad.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 p-3 text-xs">
-          <div><b className="text-white">{ad.item_name} · {ad.id}</b><p className="mt-1 text-white/50">{ad.seller_name} ({ad.seller_pilot_id}) · {money(ad.price_minor,ad.currency_code)} · {ad.status} · {date(ad.created_at)}</p></div>
-          {["ACTIVO","PAUSADO"].includes(ad.status) ? <div className="min-w-48 space-y-2"><input value={reasons[ad.id] ?? ""} onChange={(event) => setReasons((current) => ({...current,[ad.id]:event.target.value}))} placeholder="Motivo para retirar..." className={inputCls} /><button type="button" disabled={Boolean(busy)} onClick={() => void act({action:"remove-listing",adId:ad.id},ad.id)} className="rounded border border-rose-400/40 px-3 py-2 text-xs text-rose-200 disabled:opacity-40">Retirar publicación</button></div> : null}
-        </article>)}
-        {!filteredAds.length && !loading ? <p className="p-4 text-sm text-white/50">No hay publicaciones.</p> : null}
-      </div> : null}
+      {view === "Publicaciones" ? (
+        <div className="space-y-2">
+          {filteredAds.map((ad) => (
+            <article
+              key={ad.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 p-3 text-xs"
+            >
+              <div>
+                <b className="text-white">
+                  {ad.item_name} · {ad.id}
+                </b>
+                <p className="mt-1 text-white/50">
+                  {ad.seller_name} ({ad.seller_pilot_id}) ·{" "}
+                  {money(ad.price_minor, ad.currency_code)} · {ad.status} · {date(ad.created_at)}
+                </p>
+              </div>
+              {["ACTIVO", "PAUSADO"].includes(ad.status) ? (
+                <div className="min-w-48 space-y-2">
+                  <input
+                    value={reasons[ad.id] ?? ""}
+                    onChange={(event) =>
+                      setReasons((current) => ({ ...current, [ad.id]: event.target.value }))
+                    }
+                    placeholder="Motivo para retirar..."
+                    className={inputCls}
+                  />
+                  <button
+                    type="button"
+                    disabled={Boolean(busy)}
+                    onClick={() => void act({ action: "remove-listing", adId: ad.id }, ad.id)}
+                    className="rounded border border-rose-400/40 px-3 py-2 text-xs text-rose-200 disabled:opacity-40"
+                  >
+                    Retirar publicación
+                  </button>
+                </div>
+              ) : null}
+            </article>
+          ))}
+          {!filteredAds.length && !loading ? (
+            <p className="p-4 text-sm text-white/50">No hay publicaciones.</p>
+          ) : null}
+        </div>
+      ) : null}
 
-      {view === "Historial" ? <div className="space-y-2">
-        {logs.map((log) => <article key={log.id} className="rounded border border-white/10 p-3 text-xs"><p className="text-white">{log.action} · {log.order_id || log.ad_id}</p><p className="mt-1 text-white/55">{log.resolution_note}</p><p className="mt-1 text-white/35">{log.admin_email} · {date(log.created_at)}</p></article>)}
-        {!logs.length && !loading ? <p className="p-4 text-sm text-white/50">Todavía no hay intervenciones administrativas.</p> : null}
-      </div> : null}
+      {view === "Historial" ? (
+        <div className="space-y-2">
+          {logs.map((log) => (
+            <article key={log.id} className="rounded border border-white/10 p-3 text-xs">
+              <p className="text-white">
+                {log.action} · {log.order_id || log.ad_id}
+              </p>
+              <p className="mt-1 text-white/55">{log.resolution_note}</p>
+              <p className="mt-1 text-white/35">
+                {log.admin_email} · {date(log.created_at)}
+              </p>
+            </article>
+          ))}
+          {!logs.length && !loading ? (
+            <p className="p-4 text-sm text-white/50">
+              Todavía no hay intervenciones administrativas.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
