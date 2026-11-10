@@ -204,8 +204,7 @@ const SECTIONS: SectionDef[] = [
     id: "premios",
     label: "Premios y recompensas",
     icon: Gift,
-    desc: "Entregadas, pendientes e historial",
-    filters: ["Pendientes", "Entregadas"],
+    desc: "Entrega de premios e historial real de operaciones",
     tables: [
       { title: "Recompensas", cols: c("Fecha", "Piloto", "Recompensa", "Origen", "Estado") },
     ],
