@@ -3723,7 +3723,7 @@ async function handleMarketRequest(
       const [totals, movements] = await Promise.all([
         db.prepare(
           `SELECT
-            COALESCE(SUM(CAST(COALESCE(json_extract(pr.progress_json, '$.credits'), 0) AS INTEGER)), 0) AS cr_total,
+            COALESCE(SUM(CASE WHEN json_valid(pr.progress_json) THEN CAST(COALESCE(json_extract(pr.progress_json, '$.credits'), 0) AS INTEGER) ELSE 0 END), 0) AS cr_total,
             COALESCE((SELECT SUM(obsidian) FROM pilots), 0) AS obs_total
            FROM player_progress pr`,
         ).first<{ cr_total: number; obs_total: number }>(),
@@ -3827,13 +3827,13 @@ async function handleMarketRequest(
           `INSERT INTO admin_economy_logs
            (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-           WHERE EXISTS (SELECT 1 FROM pilots WHERE pilot_id = ? AND obsidian = ?)`,
+           WHERE changes() = 1 AND EXISTS (SELECT 1 FROM pilots WHERE pilot_id = ? AND obsidian = ?)`,
         ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter)
       : db.prepare(
           `INSERT INTO admin_economy_logs
            (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-           WHERE EXISTS (
+           WHERE changes() = 1 AND EXISTS (
              SELECT 1 FROM player_progress
              WHERE pilot_id = ? AND CAST(COALESCE(json_extract(progress_json, '$.credits'), 0) AS INTEGER) = ?
            )`,
