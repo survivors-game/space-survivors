@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
   Flame,
-  Rocket,
-  ShoppingCart,
+  Hexagon,
+  Medal,
   MessageSquare,
+  Radar,
+  Rocket,
+  Satellite,
   Shield,
+  ShoppingCart,
+  Star,
+  Target,
   Trophy,
   TriangleAlert,
   Users,
@@ -42,13 +48,39 @@ export interface PilotHubProps {
 const SEGMENTS = 10;
 const CYAN = "#00f0ff";
 const GOLD = "#ffd700";
+const AMBER = "#fbbf24";
 const MAGENTA = "#ff0055";
 const VIOLET = "#c4a1ff";
 const ORANGE = "#ff8a3d";
 const GREEN = "#4ade80";
 
+/**
+ * Progreso del pase de temporada. Valores de presentación: se sustituirán por
+ * el progreso real cuando el pase exponga sus datos al hub.
+ */
+const SEASON = {
+  number: 1,
+  level: 3,
+  maxLevel: 25,
+  points: 140,
+  pointsGoal: 200,
+  nextReward: "50 CR",
+} as const;
+
+/** Rango táctico derivado de las misiones completadas (de mayor a menor). */
+const RANKS: { min: number; name: string }[] = [
+  { min: 300, name: "AS DEL VACÍO" },
+  { min: 150, name: "COMANDANTE" },
+  { min: 75, name: "CAPITÁN" },
+  { min: 30, name: "TENIENTE" },
+  { min: 10, name: "CADETE" },
+  { min: 0, name: "RECLUTA" },
+];
+
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 const fmt = (n: number) => n.toLocaleString("es-CO");
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const rankFor = (runs: number) => RANKS.find((r) => runs >= r.min)?.name ?? "RECLUTA";
 
 /** Normaliza las estadísticas reales de la nave (src/game/data/ships.ts) a 0..1. */
 function computeShipBars(ship: ShipDef) {
@@ -64,13 +96,13 @@ function computeShipBars(ship: ShipDef) {
 function shipCombatRows(ship: ShipDef): { label: string; value: string }[] {
   return [
     { label: "Daño", value: `x${ship.dmg.toFixed(2)}` },
-    { label: "Vel. ataque", value: `x${(1 / ship.cd).toFixed(2)}` },
+    { label: "Cadencia", value: `x${(1 / ship.cd).toFixed(2)}` },
     { label: "Velocidad", value: `${Math.round(ship.speed)}` },
-    { label: "Vida máx.", value: `${Math.round(ship.hp)}` },
+    { label: "Vida", value: `${Math.round(ship.hp)}` },
     { label: "Armadura", value: `${Math.round(ship.armor)}` },
     { label: "Regeneración", value: `+${ship.regen.toFixed(1)}/s` },
     { label: "Crítico", value: `${Math.round(ship.crit * 100)}%` },
-    { label: "Recogida", value: `${Math.round(ship.pickup)} px` },
+    { label: "Rango de recogida", value: `${Math.round(ship.pickup)} px` },
   ];
 }
 
@@ -84,50 +116,91 @@ interface BarProps {
 function Bar({ label, value, color, Icon }: BarProps) {
   const filled = Math.round(value * SEGMENTS);
   return (
-    <div className="flex items-center gap-2">
+    <div className="grid grid-cols-[104px_1fr_36px] items-center gap-2">
       <div
-        className="flex w-24 shrink-0 items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
         style={{ color }}
       >
-        <Icon className="size-3" />
+        <Icon className="size-3.5 shrink-0" />
         {label}
       </div>
-      <div className="flex flex-1 gap-0.5">
+      <div className="flex gap-[3px]">
         {Array.from({ length: SEGMENTS }, (_, i) => (
           <span
             key={i}
-            className="h-1.5 flex-1"
+            className="h-2.5 flex-1"
             style={
               i < filled
-                ? { background: color, boxShadow: `0 0 4px ${color}99` }
+                ? { background: color, boxShadow: `0 0 6px ${color}88` }
                 : { background: "rgba(255,255,255,0.08)" }
             }
           />
         ))}
       </div>
+      <span className="text-right text-[10px] tabular-nums text-white/70">
+        {filled}/{SEGMENTS}
+      </span>
     </div>
   );
 }
 
-interface MenuRowProps {
+interface ReadoutProps {
   label: string;
-  Icon: LucideIcon;
+  value: string;
   color: string;
+  Icon: LucideIcon;
+}
+
+function Readout({ label, value, color, Icon }: ReadoutProps) {
+  return (
+    <div className="flex flex-col items-end gap-1 leading-none">
+      <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.2em] text-white/55">
+        <Icon className="size-3" style={{ color }} />
+        {label}
+      </span>
+      <span
+        className="font-arcade text-[12px] tabular-nums"
+        style={{ color, textShadow: `0 0 10px ${color}aa` }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+interface NavButtonProps {
+  title: string;
+  subtitle: string;
+  Icon: LucideIcon;
+  accent: string;
   onClick: () => void;
 }
 
-function MenuRow({ label, Icon, color, onClick }: MenuRowProps) {
+function NavButton({ title, subtitle, Icon, accent, onClick }: NavButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex h-8 w-full items-center gap-2.5 border border-cyan-500/20 bg-[#0b0d1c]/80 px-2.5 text-left transition hover:border-cyan-300/60 hover:bg-cyan-400/5"
+      className="group flex min-h-[84px] flex-col justify-between overflow-hidden border p-3 text-left transition hover:brightness-125 active:translate-y-px"
+      style={{
+        borderColor: `${accent}55`,
+        background: `linear-gradient(160deg, ${accent}1f 0%, #0b0d1c 70%)`,
+        boxShadow: `inset 0 1px 0 ${accent}55, inset 0 -2px 0 rgba(0,0,0,0.5)`,
+      }}
     >
-      <Icon className="size-3.5 shrink-0" style={{ color }} />
-      <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-white group-hover:text-cyan-100">
-        {label}
-      </span>
-      <ChevronRight className="size-3 shrink-0 text-white/35 group-hover:text-cyan-200" />
+      <div className="flex items-start justify-between gap-2">
+        <Icon className="size-5 shrink-0" style={{ color: accent }} />
+        <ChevronRight className="size-3.5 shrink-0 text-white/30 transition group-hover:text-white/70" />
+      </div>
+      <div className="mt-2">
+        <p className="font-arcade text-[9px] uppercase leading-relaxed text-white">[ {title} ]</p>
+        <p
+          className="mt-1 text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: accent }}
+        >
+          {subtitle}
+        </p>
+      </div>
     </button>
   );
 }
@@ -157,160 +230,324 @@ export function PilotHub({
   const combatRows = shipCombatRows(selectedShip);
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
-  const shortId =
-    pilotId.length > 8 ? `${pilotId.slice(0, 8).toUpperCase()}…` : pilotId.toUpperCase();
+  const rank = rankFor(runs);
+  const plateId = `PLT-${pilotId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
+  const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-3 text-white">
-      <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
-        {/* Bahía de la nave equipada */}
-        <section className="border border-cyan-500/20 bg-[#0b0d1c]/80 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/15 pb-2">
-            <p className="text-[10px] uppercase tracking-[0.26em] text-cyan-300">
-              Bahía de hangar · equipada
+    <div className="mx-auto w-full max-w-6xl space-y-3 p-2 text-white font-sans sm:p-4">
+      {/* 1. CABECERA MILITAR Y CREDENCIAL */}
+      <header className="flex flex-col gap-3 border border-cyan-500/30 bg-[#0b0d1c]/90 p-3 backdrop-blur-md lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="relative flex size-12 shrink-0 items-center justify-center">
+            <Hexagon
+              className="absolute inset-0 size-full"
+              style={{ color: CYAN, filter: `drop-shadow(0 0 6px ${CYAN}88)` }}
+              strokeWidth={1.5}
+            />
+            <span className="font-arcade text-[11px] text-cyan-100">
+              {pilotName.charAt(0).toUpperCase() || "?"}
+            </span>
+          </div>
+          <div className="min-w-0 space-y-1">
+            <p className="truncate text-sm font-bold uppercase tracking-wider">
+              {allianceTag ? <span className="text-fuchsia-300">[{allianceTag}] </span> : null}
+              {pilotName}
             </p>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-white">
-                {allianceTag ? <span className="text-fuchsia-300">[{allianceTag}] </span> : null}
-                {pilotName}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] uppercase tracking-[0.15em] text-white/55">
+              <span className="tabular-nums">ID {plateId}</span>
+              <span className="text-amber-300">RANGO: {rank}</span>
+              <span className="flex items-center gap-1 text-emerald-300">
+                <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#4ade80]" />
+                EN LÍNEA
               </span>
-              <span className="hidden text-[10px] uppercase tracking-wider text-white/40 sm:inline">
-                ID {shortId}
-              </span>
-              <button
-                type="button"
-                onClick={onOpenVip}
-                disabled={!onOpenVip}
-                className="h-6 border px-2 text-[10px] font-bold uppercase tracking-wider transition enabled:hover:brightness-125 disabled:cursor-default"
-                style={
-                  vipActive
-                    ? { color: GOLD, borderColor: `${GOLD}99`, background: "rgba(255,215,0,0.08)" }
-                    : { color: "rgba(0,240,255,0.6)", borderColor: "rgba(0,240,255,0.25)" }
-                }
-              >
-                {vipActive ? "★ VIP" : "Estándar"}
-              </button>
-              <button
-                type="button"
-                onClick={onOpenProfile}
-                className="h-6 border border-amber-400/50 bg-amber-400/10 px-2 text-[10px] font-bold uppercase tracking-wider text-amber-300 hover:bg-amber-400/20"
-              >
-                Perfil
-              </button>
             </div>
           </div>
+        </div>
 
-          <div className="mt-3 grid gap-3 md:grid-cols-[1fr_200px]">
-            <div className="relative flex h-[200px] items-end justify-center overflow-hidden border border-cyan-500/15 bg-[radial-gradient(ellipse_at_bottom,rgba(0,240,255,0.12),transparent_70%)] lg:h-[240px]">
-              <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(0,240,255,0.3)_1px,transparent_1px),linear-gradient(90deg,rgba(0,240,255,0.3)_1px,transparent_1px)] [background-size:22px_22px]" />
-              <div className="absolute bottom-3 h-1.5 w-2/3 bg-cyan-400/25 shadow-[0_0_12px_rgba(0,240,255,0.4)]" />
-              <img
-                src={shipImage}
-                alt={selectedShip.name}
-                draggable={false}
-                className="relative z-10 mb-5 h-[70%] w-auto max-w-[80%] object-contain drop-shadow-[0_0_8px_rgba(0,240,255,0.5)]"
-                style={{ imageRendering: "pixelated" }}
-              />
+        <div className="flex flex-wrap items-center gap-3 lg:gap-5">
+          <Readout label="CR" value={fmt(credits)} color={CYAN} Icon={Hexagon} />
+          <Readout label="OBS" value={fmt(obsidian)} color={MAGENTA} Icon={Star} />
+          <button
+            type="button"
+            onClick={() => onOpenVip?.()}
+            disabled={!onOpenVip}
+            className="h-9 border px-3 text-[10px] font-bold uppercase tracking-wider transition enabled:hover:brightness-125 disabled:cursor-default"
+            style={
+              vipActive
+                ? {
+                    color: GOLD,
+                    borderColor: `${GOLD}aa`,
+                    background: `linear-gradient(180deg, ${GOLD}22, ${GOLD}08)`,
+                    boxShadow: `0 0 14px ${GOLD}55, inset 0 0 12px ${GOLD}22`,
+                  }
+                : {
+                    color: "rgba(0,240,255,0.6)",
+                    borderColor: "rgba(0,240,255,0.25)",
+                    background: "rgba(255,255,255,0.03)",
+                  }
+            }
+          >
+            [{vipActive ? "★ PILOTO VIP" : "MEMBRESÍA ESTÁNDAR"}]
+          </button>
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            className="h-9 px-4 text-[10px] font-bold uppercase tracking-wider text-amber-200 transition hover:brightness-125"
+            style={{
+              border: `1px solid ${AMBER}`,
+              background: "linear-gradient(180deg, rgba(251,191,36,0.25), rgba(120,53,15,0.35))",
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 0 rgba(0,0,0,0.45), 0 0 10px ${AMBER}44`,
+            }}
+          >
+            [ PERFIL ]
+          </button>
+        </div>
+      </header>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        {/* 2. BAHÍA DE ATRAQUE Y TELEMETRÍA */}
+        <div className="flex flex-col gap-3">
+          <section className="flex flex-col border border-cyan-500/30 bg-[#0b0d1c]/90 backdrop-blur-md">
+            <div className="flex items-center justify-between gap-2 border-b border-cyan-500/20 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em]">
+              <span className="text-cyan-300">[BAY-01 // REJILLA MAGNÉTICA ACTIVA]</span>
+              <span className="text-emerald-300">[SISTEMAS: 100%]</span>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <div>
-                <h2 className="font-arcade text-[10px] uppercase leading-relaxed text-cyan-200">
+            <div
+              className="relative h-[290px] overflow-hidden sm:h-[330px]"
+              style={{
+                background:
+                  "radial-gradient(ellipse at 50% 85%, rgba(0,240,255,0.22) 0%, rgba(124,58,237,0.14) 45%, transparent 75%)",
+              }}
+            >
+              {/* Cuadrícula técnica de fondo */}
+              <div
+                className="absolute inset-0 opacity-25"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(rgba(0,240,255,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(0,240,255,0.35) 1px, transparent 1px)",
+                  backgroundSize: "28px 28px",
+                }}
+              />
+
+              {/* Plataforma de atraque */}
+              <div
+                className="absolute bottom-7 left-1/2 h-4 w-[70%] -translate-x-1/2"
+                style={{
+                  background: "linear-gradient(180deg, #2a3142 0%, #141826 100%)",
+                  border: `1px solid ${CYAN}66`,
+                  boxShadow: `0 0 18px ${CYAN}55, inset 0 1px 0 rgba(255,255,255,0.15)`,
+                }}
+              />
+
+              {/* Clamps hidráulicos de precaución */}
+              {(["left", "right"] as const).map((side) => (
+                <div
+                  key={side}
+                  className="absolute bottom-7 h-16 w-5"
+                  style={{
+                    [side]: "15%",
+                    background:
+                      "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
+                    border: "1px solid rgba(253,224,71,0.6)",
+                    boxShadow: "0 0 10px rgba(253,224,71,0.3)",
+                  }}
+                />
+              ))}
+
+              {/* Nave activa */}
+              <div className="absolute inset-x-0 bottom-0 flex items-end justify-center pb-[38px]">
+                <img
+                  src={shipImage}
+                  alt={selectedShip.name}
+                  draggable={false}
+                  className="relative z-10 h-[190px] w-auto max-w-[70%] object-contain drop-shadow-[0_0_10px_rgba(0,240,255,0.55)] sm:h-[230px]"
+                  style={{ imageRendering: "pixelated" }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 border-t border-cyan-500/20 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="font-arcade text-xs uppercase leading-relaxed text-cyan-100 [text-shadow:0_0_10px_rgba(0,240,255,0.6)]">
                   {selectedShip.name}
                 </h2>
-                <p className="text-[11px] text-white/60">{selectedShip.role}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
+                  {selectedShip.role}
+                </p>
               </div>
-              <div className="space-y-1.5">
+
+              <div className="space-y-2">
                 <Bar label="Ataque" value={bars.attack} color={ORANGE} Icon={Flame} />
                 <Bar label="Blindaje" value={bars.defense} color={CYAN} Icon={Shield} />
                 <Bar label="Velocidad" value={bars.speed} color={VIOLET} Icon={Zap} />
               </div>
-              <div className="mt-auto space-y-1 border border-fuchsia-500/30 bg-fuchsia-500/5 p-2">
-                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-fuchsia-200">
-                  <span>Sector</span>
-                  <span className="flex gap-0.5">
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <span
-                        key={i}
-                        className="size-1.5"
-                        style={{ background: i < pips ? MAGENTA : "rgba(255,255,255,0.15)" }}
-                      />
-                    ))}
-                  </span>
-                </div>
-                <p className="font-arcade text-[9px] leading-relaxed text-white">
-                  {selectedStage.name}
-                </p>
-                <p
-                  className="flex items-center gap-1 text-[10px] font-semibold"
-                  style={{ color: hasHazard ? "#fbbf24" : GREEN }}
-                >
-                  {hasHazard ? (
-                    <TriangleAlert className="size-3 shrink-0" />
-                  ) : (
-                    <Shield className="size-3 shrink-0" />
-                  )}
-                  {selectedStage.hazardName}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Accesos y estadísticas de combate */}
-        <aside className="flex flex-col gap-2">
+              <dl className="grid grid-cols-2 gap-x-5 border-t border-white/10 pt-3">
+                {combatRows.map((row) => (
+                  <div
+                    key={row.label}
+                    className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
+                  >
+                    <dt className="text-[10px] uppercase tracking-wide text-white/55">{row.label}</dt>
+                    <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </section>
+        </div>
+
+        {/* 3. CONSOLA DE ACCIONES Y RADAR */}
+        <div className="flex flex-col gap-3">
           <button
             type="button"
             onClick={onDeploy}
-            className="font-arcade h-9 w-full rounded-none border border-cyan-200 bg-[#00f0ff] text-[9px] uppercase tracking-[0.06em] text-[#070814] shadow-[0_0_20px_#00f0ff40] transition hover:bg-cyan-200"
+            className="flex h-[56px] w-full items-center justify-center gap-3 border-2 border-cyan-100 bg-[#00f0ff] font-arcade text-[11px] uppercase tracking-[0.12em] text-[#05060f] transition hover:brightness-110 active:translate-y-px"
+            style={{
+              boxShadow:
+                "inset 0 -4px 0 rgba(0,0,0,0.35), inset 0 2px 0 rgba(255,255,255,0.6), 0 0 25px rgba(0,240,255,0.4)",
+            }}
           >
-            <span className="inline-flex items-center gap-2">
-              <Rocket className="size-3.5" /> PLAY
-            </span>
+            <Rocket className="size-5" />
+            DESPLEGAR AL COMBATE
           </button>
-          <MenuRow label="Hangar & mejoras" Icon={Wrench} color={CYAN} onClick={onOpenHangar} />
-          <MenuRow label="Misiones & pase" Icon={Trophy} color={GOLD} onClick={onOpenMissions} />
-          <MenuRow
-            label="Centro multijugador"
-            Icon={Users}
-            color={VIOLET}
-            onClick={onOpenAlliance}
-          />
-          <MenuRow label="Mercado P2P" Icon={ShoppingCart} color={MAGENTA} onClick={onOpenMarket} />
-          \n <SupportAccess />
-          <div className="mt-1 border border-cyan-500/20 bg-[#0b0d1c]/80 p-2.5">
-            <p className="mb-1.5 text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">
-              Combate · base
+
+          <section className="space-y-3 border border-fuchsia-500/35 bg-[#0b0d1c]/90 p-3 backdrop-blur-md">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-fuchsia-300">
+              <Radar className="size-3.5" />
+              Radar de inteligencia del sector
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <p className="font-arcade text-[10px] uppercase leading-relaxed text-white">
+                  {selectedStage.name}
+                </p>
+                <p className="text-[11px] text-white/55">{selectedStage.subtitle}</p>
+              </div>
+              <div className="flex shrink-0 gap-0.5" aria-label={`Dificultad ${pips} de 5`}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Star
+                    key={i}
+                    className="size-3.5"
+                    strokeWidth={1.5}
+                    style={{
+                      color: MAGENTA,
+                      fill: i < pips ? MAGENTA : "none",
+                      filter: i < pips ? `drop-shadow(0 0 4px ${MAGENTA})` : "none",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            <p
+              className="flex items-center gap-2 border-t border-white/10 pt-2 text-[11px] font-semibold"
+              style={{ color: hasHazard ? AMBER : GREEN }}
+            >
+              {hasHazard ? (
+                <TriangleAlert className="size-3.5 shrink-0" />
+              ) : (
+                <Shield className="size-3.5 shrink-0" />
+              )}
+              {selectedStage.hazardName}
             </p>
-            <dl className="space-y-0.5">
-              {combatRows.map((row) => (
-                <div key={row.label} className="flex items-center justify-between gap-2">
-                  <dt className="text-[10px] uppercase tracking-wide text-white/65">{row.label}</dt>
-                  <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
-                </div>
-              ))}
-            </dl>
+          </section>
+
+          <div className="grid grid-cols-2 gap-2">
+            <NavButton
+              title="HANGAR"
+              subtitle="Mejoras & Naves"
+              Icon={Wrench}
+              accent={CYAN}
+              onClick={onOpenHangar}
+            />
+            <NavButton
+              title="MISIONES"
+              subtitle="Pase & Desafíos"
+              Icon={Trophy}
+              accent={GOLD}
+              onClick={onOpenMissions}
+            />
+            <NavButton
+              title="ALIANZA"
+              subtitle="Guerras & Escuadrón"
+              Icon={Users}
+              accent={VIOLET}
+              onClick={onOpenAlliance}
+            />
+            <NavButton
+              title="MERCADO"
+              subtitle="Comercio P2P"
+              Icon={ShoppingCart}
+              accent={MAGENTA}
+              onClick={onOpenMarket}
+            />
           </div>
-        </aside>
+
+          <SupportAccess />
+        </div>
       </div>
 
-      {/* Telemetría */}
-      <footer className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {[
-          { label: "Misiones", value: fmt(runs), color: CYAN },
-          { label: "Bajas enemigas", value: fmt(kills), color: ORANGE },
-          { label: "Naves en flota", value: fmt(shipsCount), color: VIOLET },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="flex items-center justify-between border border-cyan-500/20 bg-[#0b0d1c]/80 px-3 py-1.5"
-          >
-            <span className="text-[10px] uppercase tracking-wider text-white/55">{item.label}</span>
-            <span className="font-arcade text-[10px] tabular-nums" style={{ color: item.color }}>
-              {item.value}
+      {/* 4. TIRA DE TEMPORADA Y TELEMETRÍA GLOBAL */}
+      <footer className="space-y-3 border border-cyan-500/20 bg-[#0b0d1c]/90 p-3 backdrop-blur-md">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+          <div className="flex shrink-0 items-center gap-2">
+            <Medal className="size-4" style={{ color: GOLD }} />
+            <span
+              className="font-arcade text-[9px] uppercase tracking-wider"
+              style={{ color: GOLD }}
+            >
+              TEMPORADA {SEASON.number} · NIVEL {pad2(SEASON.level)}/{SEASON.maxLevel}
             </span>
           </div>
-        ))}
+          <div className="relative h-3 flex-1 overflow-hidden border border-amber-400/40 bg-black/50">
+            <div
+              className="h-full"
+              style={{
+                width: `${seasonPct}%`,
+                background: `linear-gradient(90deg, ${GOLD}55, ${GOLD})`,
+                boxShadow: `0 0 12px ${GOLD}88`,
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(90deg, transparent 0 9px, rgba(0,0,0,0.55) 9px 10px)",
+              }}
+            />
+          </div>
+          <span className="shrink-0 whitespace-nowrap text-[10px] tabular-nums text-white/75">
+            {SEASON.points}/{SEASON.pointsGoal} PT ·{" "}
+            <span className="text-amber-300">SIGUIENTE RECOMPENSA: {SEASON.nextReward}</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 border-t border-white/10 pt-3 sm:grid-cols-3">
+          {[
+            { label: "MISIONES JUGADAS", value: fmt(runs), color: CYAN, Icon: Rocket },
+            { label: "BAJAS ENEMIGAS", value: fmt(kills), color: ORANGE, Icon: Target },
+            { label: "FLOTA DISPONIBLE", value: fmt(shipsCount), color: VIOLET, Icon: Satellite },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="flex items-center justify-between border px-3 py-2"
+              style={{ borderColor: `${item.color}33`, background: `${item.color}0d` }}
+            >
+              <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-white/60">
+                <item.Icon className="size-3.5" style={{ color: item.color }} />
+                {item.label}
+              </span>
+              <span
+                className="font-arcade text-[11px] tabular-nums"
+                style={{ color: item.color, textShadow: `0 0 8px ${item.color}aa` }}
+              >
+                {item.value}
+              </span>
+            </div>
+          ))}
+        </div>
       </footer>
     </div>
   );
@@ -387,13 +624,13 @@ function SupportAccess() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group flex h-8 w-full items-center gap-2.5 border border-cyan-500/20 bg-[#0b0d1c]/80 px-2.5 text-left transition hover:border-cyan-300/60 hover:bg-cyan-400/5"
+        className="group flex h-9 w-full items-center gap-2.5 border border-cyan-500/25 bg-[#0b0d1c]/90 px-3 text-left transition hover:border-cyan-300/60 hover:bg-cyan-400/5"
       >
         <MessageSquare className="size-3.5 shrink-0 text-cyan-300" />
         <span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-white">
           Soporte técnico
         </span>
-        <ChevronRight className="size-3 text-white/35" />
+        <ChevronRight className="size-3 text-white/35 group-hover:text-cyan-200" />
       </button>
       {open ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3">
