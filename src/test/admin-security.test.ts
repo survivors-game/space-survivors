@@ -16,7 +16,7 @@ function database(){
           return null;
         },
         async all(){
-          if(query.includes("FROM admin_access_logs"))return {results:[{id:"access-1",event:"login",result:"success",ip_hash:"hashed-ip",admin_email:ADMIN_EMAIL,created_at:Date.now()}]};
+          if(query.includes("FROM admin_access_logs"))return {results:[{id:"access-1",event:"login",result:"success",ip_hash:"hashed-ip",admin_email:ADMIN_EMAIL,created_at:Date.now()},{id:"access-2",event:"login",result:"failed",ip_hash:"hashed-ip",admin_email:ADMIN_EMAIL,created_at:Date.now()},{id:"access-3",event:"login",result:"blocked",ip_hash:"hashed-ip",admin_email:ADMIN_EMAIL,created_at:Date.now()}]};
           if(query.includes("FROM admin_login_attempts"))return {results:[{ip_hash:"hashed-ip",attempts:2,window_started_at:Date.now(),blocked_until:0}]};
           if(query.includes("FROM admin_server_errors"))return {results:[{id:"error-1",route:"/api/test",error_message:"Test error",created_at:Date.now()}]};
           if(query.includes("FROM admin_economy_logs"))return {results:[{id:"op-1",pilot_id:"plt_player",category:"economy",action:"OBS",reason:"Test audit",admin_email:ADMIN_EMAIL,created_at:Date.now()}]};
@@ -48,7 +48,7 @@ describe("administrative security and audit",()=>{
     const response=await server.fetch(request(),{DB:mock.db} as never);
     const payload=await response.json() as {access:unknown[];attempts:unknown[];errors:unknown[];operations:unknown[];summary:{failedLogins:number}};
     expect(response.status).toBe(200);
-    expect(payload.access).toHaveLength(1);
+    expect(payload.access).toHaveLength(3);
     expect(payload.attempts).toHaveLength(1);
     expect(payload.errors).toHaveLength(1);
     expect(payload.operations).toHaveLength(1);
