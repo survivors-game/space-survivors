@@ -3840,14 +3840,15 @@ async function handleAdminChatRequest(
   const reportId = typeof body?.["reportId"] === "string" ? body["reportId"].trim() : "";
   const pilotId = typeof body?.["pilotId"] === "string" ? body["pilotId"].trim() : "";
   const messageId = Number(body?.["messageId"]);
-  if (typeof action !== "string" || !["delete-message", "mute", "ban", "unmute", "close-report"].includes(action)) return json({ error: "Acción de chat no válida." }, 400);
+  const enabled = body?.["enabled"];
+  if (typeof action !== "string" || !["delete-message", "mute", "ban", "unmute", "close-report", "set-chat-enabled"].includes(action)) return json({ error: "Acción de chat no válida." }, 400);
   if (reason.length < 5) return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);
   if (action === "close-report") {
     if (!/^[a-f0-9-]{36}$/i.test(reportId)) return json({ error: "Denuncia no válida." }, 400);
     const result = await db.prepare("UPDATE chat_reports SET status = 'REVIEWED', reviewed_at = ?, reviewed_by = ?, resolution_note = ? WHERE id = ? AND status = 'OPEN'").bind(Date.now(), account.email, reason, reportId).run();
     if (!result.meta?.changes) return json({ error: "La denuncia ya fue revisada o no existe." }, 409);
   } else {
-    const roomResponse = await room.fetch(new Request("https://chat-room/admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, pilotId, messageId, reason }) }));
+    const roomResponse = await room.fetch(new Request("https://chat-room/admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, pilotId, messageId, reason, enabled }) }));
     const result = (await roomResponse.json().catch(() => null)) as { error?: string } | null;
     if (!roomResponse.ok) return json({ error: result?.error ?? "No se pudo aplicar la moderación." }, roomResponse.status);
   }
