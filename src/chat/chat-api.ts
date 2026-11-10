@@ -213,8 +213,8 @@ export async function handleChatRequest(
       isShortText(body["shipName"], 50)
     ) {
       type = "boss_kill";
-      englishText = `defeated boss ${body["bossName"].trim()} with ship ${body["shipName"].trim()}.`;
-      spanishText = `mató al boss ${body["bossName"].trim()} con la nave ${body["shipName"].trim()}.`;
+      englishText = `defeated boss ${body["bossName"].trim()} and received ship ${body["shipName"].trim()}.`;
+      spanishText = `mató al boss ${body["bossName"].trim()} y recibió la nave ${body["shipName"].trim()}.`;
     } else {
       return json({ error: "El evento de chat no es válido." }, 400);
     }
