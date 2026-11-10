@@ -1,4 +1,4 @@
- import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SeasonAdminSection } from "./SeasonAdminSection";
 import { AlliancesAdminSection } from "./AlliancesAdminSection";
 import { VipAdminSection } from "./VipAdminSection";
@@ -1241,7 +1241,9 @@ function AnnouncementsAdminSection() {
             <input
               type="color"
               value={form.color}
-              onChange={(event) => setForm((current) => ({ ...current, color: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, color: event.target.value }))
+              }
               className="h-10 w-14 cursor-pointer border border-white/10 bg-black/40 p-1"
             />
             <span className="font-mono text-xs text-white/70">{form.color.toUpperCase()}</span>
