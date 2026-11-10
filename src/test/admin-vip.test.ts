@@ -9,6 +9,7 @@ function createDatabase(){
   return {
     prepare(query:string){
       return {
+        query,
         bind(..._values:unknown[]){return this;},
         async run(){return {meta:{changes:1}};},
         async first(){
