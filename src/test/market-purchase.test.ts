@@ -6,6 +6,10 @@ import server from "@/server";
 
 const BUYER_ID = "plt_aaaaaaaaaaaaaaaaaaaaaaaa";
 const SELLER_ID = "plt_bbbbbbbbbbbbbbbbbbbbbbbb";
+const ADMIN_ID = "plt_cccccccccccccccccccccccc";
+const ADMIN_TOKEN = "market-admin-session";
+const ADMIN_SESSION_TOKEN = "market-admin-panel";
+const ADMIN_SESSION_HASH = createHash("sha256").update(ADMIN_SESSION_TOKEN).digest("hex");
 const SESSION_TOKEN = "market-test-session";
 const SESSION_HASH = createHash("sha256").update(SESSION_TOKEN).digest("hex");
 const SELLER_TOKEN = "market-seller-session";
@@ -121,6 +125,10 @@ describe("P2P purchase flow", () => {
     );
     expect(initialized.status).toBe(401);
     db.exec(`
+      DELETE FROM p2p_dispute_messages;
+      DELETE FROM p2p_disputes;
+      DELETE FROM admin_market_logs;
+      DELETE FROM admin_sessions;
       DELETE FROM p2p_orders;
       DELETE FROM p2p_ads;
       DELETE FROM market_publish_attempts;
@@ -160,6 +168,23 @@ describe("P2P purchase flow", () => {
       (id, pilot_id, item_id, item_name, item_type, quantity, is_locked, grant_source, created_at, updated_at)
       VALUES (?, ?, 'publish-item', 'PUBLISH ITEM', 'objeto', 1, 0, 'boss', ?, ?)`,
     ).run(PUBLISH_INVENTORY_ID, SELLER_ID, now, now);
+    db.prepare(
+      `INSERT INTO player_accounts (google_sub, email, pilot_id, created_at, updated_at)
+      VALUES ('admin-sub', 'emprendedora.onlinevee@gmail.com', ?, ?, ?)`,
+    ).run(ADMIN_ID, now, now);
+    db.prepare(
+      `INSERT INTO auth_sessions (token_hash, wallet_address, created_at, expires_at)
+      VALUES (?, 'google:admin-sub', ?, ?)`,
+    ).run(createHash("sha256").update(ADMIN_TOKEN).digest("hex"), now, now + 60_000);
+    db.prepare(
+      `INSERT INTO admin_sessions (token_hash, google_sub, created_at, expires_at)
+      VALUES (?, 'admin-sub', ?, ?)`,
+    ).run(ADMIN_SESSION_HASH, now, now + 60_000);
+    db.prepare(
+      `INSERT INTO pilots (pilot_id, callsign, obsidian, created_at, updated_at)
+      VALUES (?, 'ADMIN', 5, ?, ?)`,
+    ).run(ADMIN_ID, now, now);
+
   });
 
   afterAll(() => db.close());
@@ -195,11 +220,23 @@ describe("P2P purchase flow", () => {
       db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"],
     ).toBe(4);
 
-    const confirmed = await requestJson<{ status: string }>("/api/market/confirm", "POST", {
+    const reported = await requestJson<{ status: string }>("/api/market/report-payment", "POST", {
       order_id: bought.payload.order_id,
     });
-    expect(confirmed.response.status).toBe(200);
-    expect(confirmed.payload.status).toBe("COMPLETADA");
+    expect(reported.response.status).toBe(200);
+    expect(reported.payload.status).toBe("PAGO_REPORTADO");
+    const buyerCannotRelease = await requestJson("/api/market/release", "POST", {
+      order_id: bought.payload.order_id,
+    });
+    expect(buyerCannotRelease.response.status).toBe(403);
+    const released = await requestJson<{ status: string }>(
+      "/api/market/release",
+      "POST",
+      { order_id: bought.payload.order_id },
+      SELLER_TOKEN,
+    );
+    expect(released.response.status).toBe(200);
+    expect(released.payload.status).toBe("COMPLETADA");
     expect(
       db
         .prepare("SELECT pilot_id, grant_source, quantity FROM pilot_inventory WHERE item_id = ?")
@@ -209,10 +246,65 @@ describe("P2P purchase flow", () => {
       "VENDIDO",
     );
 
-    const repeated = await requestJson("/api/market/confirm", "POST", {
+    const repeated = await requestJson("/api/market/release", "POST", {
       order_id: bought.payload.order_id,
-    });
+    }, SELLER_TOKEN);
     expect(repeated.response.status).toBe(409);
+  });
+
+  it("opens a dispute, stores the conversation and lets the administrator resolve it", async () => {
+    const listingId = await createListing();
+    const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
+    expect(bought.response.status).toBe(200);
+
+    const opened = await requestJson<{ dispute_id: string; status: string }>(
+      "/api/market/dispute",
+      "POST",
+      { order_id: bought.payload.order_id, reason: "El vendedor no reconoce el pago realizado." },
+    );
+    expect(opened.response.status).toBe(200);
+    expect(opened.payload.status).toBe("DISPUTA");
+
+    const reply = await requestJson("/api/market/dispute/message", "POST", {
+      order_id: bought.payload.order_id,
+      message: "Adjunto la información para revisar el caso.",
+      evidence_url: "https://example.com/proof",
+    }, SELLER_TOKEN);
+    expect(reply.response.status).toBe(200);
+
+    const adminRequest = new Request("https://game.example/api/admin/market", {
+      headers: {
+        cookie: `__Host-ss_session=${ADMIN_TOKEN}; __Host-ss_admin=${ADMIN_SESSION_TOKEN}`,
+      },
+    });
+    const adminList = await server.fetch(adminRequest, { DB: database });
+    expect(adminList.status).toBe(200);
+    const adminData = await adminList.json() as { disputes: { id: string }[]; messages: unknown[] };
+    expect(adminData.disputes).toHaveLength(1);
+    expect(adminData.messages).toHaveLength(2);
+
+    const resolve = await server.fetch(
+      new Request("https://game.example/api/admin/market", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://game.example",
+          cookie: `__Host-ss_session=${ADMIN_TOKEN}; __Host-ss_admin=${ADMIN_SESSION_TOKEN}`,
+        },
+        body: JSON.stringify({
+          action: "resolve-buyer",
+          disputeId: opened.payload.dispute_id,
+          reason: "La prueba presentada respalda al comprador.",
+        }),
+      }),
+      { DB: database },
+    );
+    expect(resolve.status).toBe(200);
+    expect((await resolve.json() as { orderStatus: string }).orderStatus).toBe("COMPLETADA");
+    expect(db.prepare("SELECT pilot_id FROM pilot_inventory WHERE item_id = 'boss-ship'").get()?.["pilot_id"]).toBe(BUYER_ID);
   });
 
   it("cancels a pending order without refunding the commission", async () => {
