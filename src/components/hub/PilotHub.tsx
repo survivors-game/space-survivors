@@ -319,7 +319,8 @@ export function PilotHub({
 
 
 function SupportAccess() {
-  type Ticket={id:string;subject:string;category:string;status:string;updated_at:number};\n  type SupportMessage={id:string;ticket_id:string;sender_role:string;message:string;created_at:number};
+  type Ticket={id:string;subject:string;category:string;status:string;updated_at:number};
+  type SupportMessage={id:string;ticket_id:string;sender_role:string;message:string;created_at:number};
   const [open,setOpen]=useState(false),[tickets,setTickets]=useState<Ticket[]>([]),[messages,setMessages]=useState<SupportMessage[]>([]),[subject,setSubject]=useState(""),[category,setCategory]=useState("TECNICO"),[description,setDescription]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const load=async()=>{try{const r=await fetch("/api/support/tickets",{credentials:"same-origin"});const d=await r.json() as {tickets?:Ticket[];messages?:SupportMessage[];error?:string};if(!r.ok)throw new Error(d.error||"No se pudieron cargar tus solicitudes.");setTickets(d.tickets??[]);setMessages(d.messages??[]);}catch(e){setError(e instanceof Error?e.message:"No se pudieron cargar tus solicitudes.");}};
   useEffect(()=>{if(open)void load();},[open]);
