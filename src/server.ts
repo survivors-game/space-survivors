@@ -3975,20 +3975,34 @@ async function handleMarketRequest(
       if (!/^ad_[a-f0-9]{16}$/.test(adId)) {
         return json({ error: "Identificador de publicación no válido." }, 400);
       }
-      const result = await db.prepare(
-        `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
-         WHERE id = ? AND status IN ('ACTIVO', 'PAUSADO')
-           AND NOT EXISTS (
-             SELECT 1 FROM p2p_orders o WHERE o.ad_id = p2p_ads.id
-               AND o.status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')
-           )`,
-      ).bind(now, adId).run();
-      if (result.meta?.changes !== 1) {
-        return json({ error: "No se pudo retirar la publicación: puede tener una operación pendiente." }, 409);
+      try {
+        const results = await db.batch([
+          db.prepare(
+            `UPDATE p2p_ads SET status = 'CANCELADO', updated_at = ?
+             WHERE id = ? AND status IN ('ACTIVO', 'PAUSADO')
+               AND NOT EXISTS (
+                 SELECT 1 FROM p2p_orders o WHERE o.ad_id = p2p_ads.id
+                   AND o.status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')
+               )`,
+          ).bind(now, adId),
+          db.prepare(
+            `UPDATE pilot_inventory SET is_locked = 0, updated_at = ?
+             WHERE id = (
+               SELECT inventory_id FROM p2p_ads
+               WHERE id = ? AND status = 'CANCELADO' AND updated_at = ?
+             ) AND is_locked = 1`,
+          ).bind(now, adId, now),
+          db.prepare(
+            "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, NULL, ?, 'remove-listing', ?, ?, ?)",
+          ).bind("amk_" + randomHex(10), adId, reason, account.email, now),
+        ]);
+        if (results.some((result) => result.meta?.changes !== 1)) {
+          return json({ error: "No se pudo retirar la publicación. No se modificó el artículo." }, 409);
+        }
+      } catch (error) {
+        console.error("No se pudo retirar la publicación P2P:", error);
+        return json({ error: "No se pudo retirar la publicación. No se modificó el artículo." }, 409);
       }
-      await db.prepare(
-        "INSERT INTO admin_market_logs (id, order_id, ad_id, action, resolution_note, admin_email, created_at) VALUES (?, NULL, ?, 'remove-listing', ?, ?, ?)",
-      ).bind("amk_" + randomHex(10), adId, reason, account.email, now).run();
       return json({ success: true, status: "CANCELADO" });
     }
 
