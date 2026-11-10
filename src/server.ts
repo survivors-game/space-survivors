@@ -3649,7 +3649,7 @@ async function handleMarketRequest(
   if (isAdminPath && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
     if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-    if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request))) {
+    if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) {
       return json({ error: "Acceso administrativo requerido." }, 403);
     }
     const body = await readJson(request);
