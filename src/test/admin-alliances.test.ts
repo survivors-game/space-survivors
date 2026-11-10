@@ -113,8 +113,8 @@ describe("administrative alliance and war management", () => {
     );
     expect(response.status).toBe(200);
     expect(batches).toHaveLength(1);
-    expect(batches[0].some((sql) => sql.includes("UPDATE alliance_members SET role=?"))).toBe(true);
-    expect(batches[0].some((sql) => sql.includes("INSERT INTO admin_alliance_logs"))).toBe(true);
+    expect(batches[0]!.some((sql) => sql.includes("UPDATE alliance_members SET role=?"))).toBe(true);
+    expect(batches[0]!.some((sql) => sql.includes("INSERT INTO admin_alliance_logs"))).toBe(true);
   });
   it("does not allow removing a member while the alliance is at war", async () => {
     allianceLocked = true;
