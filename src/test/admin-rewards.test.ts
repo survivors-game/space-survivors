@@ -12,6 +12,7 @@ function createDatabase() {
     prepare(query: string) {
       let values: unknown[] = [];
       return {
+        query,
         bind(...args: unknown[]) { values = args; return this; },
         async run() { return { meta: { changes: 1 } }; },
         async first() {
