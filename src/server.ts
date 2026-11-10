@@ -3756,13 +3756,13 @@ async function handleMarketRequest(
     }
 
     const body = await readJson(request, 4096);
-    const pilotId = typeof body?.pilotId === "string" ? body.pilotId.trim() : "";
+    const playerQuery = typeof body?.player === "string" ? body.player.trim().slice(0, 100) : "";
     const currency = body?.currency;
     const operation = body?.operation;
     const amount = body?.amount;
     const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
     if (
-      !validPilotId(pilotId) ||
+      !playerQuery ||
       (currency !== "CR" && currency !== "OBS") ||
       (operation !== "credit" && operation !== "debit") ||
       typeof amount !== "number" ||
@@ -3773,10 +3773,20 @@ async function handleMarketRequest(
     ) {
       return json({ error: "Datos no válidos. Revisa jugador, moneda, cantidad y motivo." }, 400);
     }
-    const pilot = await db.prepare(
-      "SELECT pilot_id, obsidian FROM pilots WHERE pilot_id = ?",
-    ).bind(pilotId).first<{ pilot_id: string; obsidian: number }>();
-    if (!pilot) return json({ error: "No se encontró el jugador." }, 404);
+    const matches = await db.prepare(
+      `SELECT p.pilot_id, p.obsidian
+       FROM pilots p
+       LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id
+       LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id
+       WHERE p.pilot_id = ? OR LOWER(pa.email) = LOWER(?)
+         OR LOWER(p.callsign) = LOWER(?) OR LOWER(pp.display_name) = LOWER(?)
+       LIMIT 2`,
+    ).bind(playerQuery, playerQuery, playerQuery, playerQuery)
+      .all<{ pilot_id: string; obsidian: number }>();
+    if (!matches.results?.length) return json({ error: "No se encontró el jugador." }, 404);
+    if (matches.results.length > 1) return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
+    const pilot = matches.results[0]!;
+    const pilotId = pilot.pilot_id;
 
     let balanceBefore = 0;
     if (currency === "CR") {
