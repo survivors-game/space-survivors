@@ -26,11 +26,7 @@ import { ENEMIES } from "@/game/data/enemies";
 import { BOSSES } from "@/game/data/bosses";
 import { STAGES } from "@/game/data/stages";
 import { CONFIG } from "@/game/config";
-import {
-  WORLD1_PICKUP_CHANCE,
-  WORLD1_PICKUP_CHANCE_INCREMENT,
-  xpForLevel,
-} from "@/game/timeline";
+import { WORLD1_PICKUP_CHANCE, WORLD1_PICKUP_CHANCE_INCREMENT, xpForLevel } from "@/game/timeline";
 import {
   DAILY_CHEST,
   DAILY_MISSION_TEMPLATES,
