@@ -68,7 +68,7 @@ import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
 import { MenuHeroShip } from "@/components/game/MenuHeroShip";
 import { PilotHub } from "@/components/hub/PilotHub";
 import { VipModal } from "@/components/hub/VipModal";
-import { AdminPanel } from "@/components/admin/AdminPanel";
+import { AdminPanel, AnnouncementsFeed } from "@/components/admin/AdminPanel";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import type {
   P2PHistoryOrder,
@@ -1933,6 +1933,7 @@ function Index() {
             </Button>
           </div>
         </header>
+        {screen === "MENU" || screen === "HANGAR" ? <AnnouncementsFeed /> : null}
         {screen === "WIKI" || screen === "ROADMAP" ? (
           <>
             {screen === "WIKI" ? (
