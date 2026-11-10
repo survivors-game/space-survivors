@@ -715,20 +715,206 @@ function SectionView({
   );
 }
 
-
 function SupportAdminSection() {
- const [tickets,setTickets]=useState<Array<{id:string;pilot_id:string;subject:string;category:string;status:string;created_at:number;updated_at:number;callsign:string;email:string|null}>>([]);
- const [messages,setMessages]=useState<Array<{id:string;ticket_id:string;sender_role:string;message:string;created_at:number}>>([]);
- const [selected,setSelected]=useState(""),[reply,setReply]=useState(""),[reason,setReason]=useState(""),[filter,setFilter]=useState("TODOS"),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const load=async()=>{try{const r=await fetch("/api/admin/support",{credentials:"same-origin"});const d=await r.json() as {tickets?:typeof tickets;messages?:typeof messages;error?:string};if(!r.ok)throw new Error(d.error||"No se pudieron cargar los tickets.");setTickets(d.tickets??[]);setMessages(d.messages??[]);setSelected(v=>v&&(d.tickets??[]).some(t=>t.id===v)?v:(d.tickets?.[0]?.id??""));}catch(e){setError(e instanceof Error?e.message:"Error al cargar soporte.");}};
- useEffect(()=>{void load();},[]);
- const act=async(payload:Record<string,string>)=>{setBusy(true);setError("");try{const r=await fetch("/api/admin/support",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error||"No se pudo guardar.");setReply("");setReason("");await load();}catch(e){setError(e instanceof Error?e.message:"No se pudo guardar.");}finally{setBusy(false);}};
- const visible=tickets.filter(t=>filter==="TODOS"||t.status===filter),current=tickets.find(t=>t.id===selected),thread=messages.filter(m=>m.ticket_id===selected),date=(v:number)=>new Date(v).toLocaleString("es-CO"),input="w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white";
- return <section className="space-y-4"><div className="flex flex-wrap gap-2">{["TODOS","OPEN","IN_PROGRESS","CLOSED"].map(v=><button key={v} onClick={()=>setFilter(v)} className="rounded border border-white/20 px-3 py-1.5 text-xs">{v==="TODOS"?"Todos":v==="OPEN"?"Abiertos":v==="IN_PROGRESS"?"En proceso":"Resueltos"}</button>)}<button onClick={()=>void load()} className="ml-auto rounded border border-white/20 px-3 py-1.5 text-xs">Actualizar</button></div>{error?<p role="alert" className="text-sm text-rose-300">{error}</p>:null}
- <div className="grid gap-4 lg:grid-cols-[minmax(240px,.8fr)_minmax(0,1.5fr)]"><div className="space-y-2">{visible.map(t=><button key={t.id} onClick={()=>setSelected(t.id)} className={`w-full rounded border p-3 text-left ${selected===t.id?"border-cyan-300/50 bg-cyan-300/5":"border-white/10"}`}><b className="text-sm">{t.subject}</b><p className="mt-1 text-xs text-white/50">{t.callsign} · {t.category} · {t.status} · {date(t.updated_at)}</p></button>)}{!visible.length?<p className="p-4 text-sm text-white/50">No hay tickets.</p>:null}</div>
- {current?<div className="space-y-3 rounded border border-white/10 p-3"><h3 className="text-sm font-bold text-cyan-200">{current.subject}</h3><p className="text-xs text-white/50">{current.callsign} · {current.email??current.pilot_id} · {date(current.created_at)}</p><div className="max-h-80 space-y-2 overflow-y-auto bg-black/20 p-3">{thread.map(m=><article key={m.id} className="rounded bg-white/5 p-2"><p className="text-[10px] text-cyan-200">{m.sender_role==="ADMIN"?"ADMINISTRACIÓN":"JUGADOR"} · {date(m.created_at)}</p><p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{m.message}</p></article>)}</div>
- <form onSubmit={e=>{e.preventDefault();if(reply.trim())void act({action:"reply",ticketId:current.id,note:reply.trim()});}} className="space-y-2"><textarea className={input} rows={3} value={reply} onChange={e=>setReply(e.target.value)} placeholder="Responder al jugador..."/><button disabled={busy||reply.trim().length<2} className="rounded bg-cyan-300 px-3 py-2 text-xs font-bold text-black disabled:opacity-40">Enviar respuesta</button></form>
- <div className="flex flex-wrap items-end gap-2 border-t border-white/10 pt-3"><label className="min-w-0 flex-1 text-xs text-white/60">Motivo<input className={`${input} mt-1`} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Motivo del cambio"/></label>{["IN_PROGRESS","CLOSED","OPEN"].map(status=><button key={status} disabled={busy||reason.trim().length<3} onClick={()=>void act({action:"set-status",ticketId:current.id,status,note:reason.trim()})} className="rounded border border-white/20 px-3 py-2 text-xs disabled:opacity-40">{status==="IN_PROGRESS"?"En proceso":status==="CLOSED"?"Resolver":"Reabrir"}</button>)}</div></div>:<p className="p-5 text-sm text-white/50">Selecciona un ticket.</p>}</div></section>;
+  const [tickets, setTickets] = useState<
+    Array<{
+      id: string;
+      pilot_id: string;
+      subject: string;
+      category: string;
+      status: string;
+      created_at: number;
+      updated_at: number;
+      callsign: string;
+      email: string | null;
+    }>
+  >([]);
+  const [messages, setMessages] = useState<
+    Array<{
+      id: string;
+      ticket_id: string;
+      sender_role: string;
+      message: string;
+      created_at: number;
+    }>
+  >([]);
+  const [selected, setSelected] = useState(""),
+    [reply, setReply] = useState(""),
+    [reason, setReason] = useState(""),
+    [filter, setFilter] = useState("TODOS"),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const load = async () => {
+    try {
+      const r = await fetch("/api/admin/support", { credentials: "same-origin" });
+      const d = (await r.json()) as {
+        tickets?: typeof tickets;
+        messages?: typeof messages;
+        error?: string;
+      };
+      if (!r.ok) throw new Error(d.error || "No se pudieron cargar los tickets.");
+      setTickets(d.tickets ?? []);
+      setMessages(d.messages ?? []);
+      setSelected((v) =>
+        v && (d.tickets ?? []).some((t) => t.id === v) ? v : (d.tickets?.[0]?.id ?? ""),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar soporte.");
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const act = async (payload: Record<string, string>) => {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await fetch("/api/admin/support", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = (await r.json()) as { error?: string };
+      if (!r.ok) throw new Error(d.error || "No se pudo guardar.");
+      setReply("");
+      setReason("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const visible = tickets.filter((t) => filter === "TODOS" || t.status === filter),
+    current = tickets.find((t) => t.id === selected),
+    thread = messages.filter((m) => m.ticket_id === selected),
+    date = (v: number) => new Date(v).toLocaleString("es-CO"),
+    input = "w-full rounded border border-white/15 bg-black/30 px-3 py-2 text-sm text-white";
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {["TODOS", "OPEN", "IN_PROGRESS", "CLOSED"].map((v) => (
+          <button
+            key={v}
+            onClick={() => setFilter(v)}
+            className="rounded border border-white/20 px-3 py-1.5 text-xs"
+          >
+            {v === "TODOS"
+              ? "Todos"
+              : v === "OPEN"
+                ? "Abiertos"
+                : v === "IN_PROGRESS"
+                  ? "En proceso"
+                  : "Resueltos"}
+          </button>
+        ))}
+        <button
+          onClick={() => void load()}
+          className="ml-auto rounded border border-white/20 px-3 py-1.5 text-xs"
+        >
+          Actualizar
+        </button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-sm text-rose-300">
+          {error}
+        </p>
+      ) : null}
+      <div className="grid gap-4 lg:grid-cols-[minmax(240px,.8fr)_minmax(0,1.5fr)]">
+        <div className="space-y-2">
+          {visible.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setSelected(t.id)}
+              className={`w-full rounded border p-3 text-left ${selected === t.id ? "border-cyan-300/50 bg-cyan-300/5" : "border-white/10"}`}
+            >
+              <b className="text-sm">{t.subject}</b>
+              <p className="mt-1 text-xs text-white/50">
+                {t.callsign} · {t.category} · {t.status} · {date(t.updated_at)}
+              </p>
+            </button>
+          ))}
+          {!visible.length ? <p className="p-4 text-sm text-white/50">No hay tickets.</p> : null}
+        </div>
+        {current ? (
+          <div className="space-y-3 rounded border border-white/10 p-3">
+            <h3 className="text-sm font-bold text-cyan-200">{current.subject}</h3>
+            <p className="text-xs text-white/50">
+              {current.callsign} · {current.email ?? current.pilot_id} · {date(current.created_at)}
+            </p>
+            <div className="max-h-80 space-y-2 overflow-y-auto bg-black/20 p-3">
+              {thread.map((m) => (
+                <article key={m.id} className="rounded bg-white/5 p-2">
+                  <p className="text-[10px] text-cyan-200">
+                    {m.sender_role === "ADMIN" ? "ADMINISTRACIÓN" : "JUGADOR"} ·{" "}
+                    {date(m.created_at)}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{m.message}</p>
+                </article>
+              ))}
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (reply.trim())
+                  void act({ action: "reply", ticketId: current.id, note: reply.trim() });
+              }}
+              className="space-y-2"
+            >
+              <textarea
+                className={input}
+                rows={3}
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder="Responder al jugador..."
+              />
+              <button
+                disabled={busy || reply.trim().length < 2}
+                className="rounded bg-cyan-300 px-3 py-2 text-xs font-bold text-black disabled:opacity-40"
+              >
+                Enviar respuesta
+              </button>
+            </form>
+            <div className="flex flex-wrap items-end gap-2 border-t border-white/10 pt-3">
+              <label className="min-w-0 flex-1 text-xs text-white/60">
+                Motivo
+                <input
+                  className={`${input} mt-1`}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Motivo del cambio"
+                />
+              </label>
+              {["IN_PROGRESS", "CLOSED", "OPEN"].map((status) => (
+                <button
+                  key={status}
+                  disabled={busy || reason.trim().length < 3}
+                  onClick={() =>
+                    void act({
+                      action: "set-status",
+                      ticketId: current.id,
+                      status,
+                      note: reason.trim(),
+                    })
+                  }
+                  className="rounded border border-white/20 px-3 py-2 text-xs disabled:opacity-40"
+                >
+                  {status === "IN_PROGRESS"
+                    ? "En proceso"
+                    : status === "CLOSED"
+                      ? "Resolver"
+                      : "Reabrir"}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="p-5 text-sm text-white/50">Selecciona un ticket.</p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function AnnouncementsAdminSection() {
