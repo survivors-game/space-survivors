@@ -351,7 +351,7 @@ describe("alliance system", () => {
       headers: {
         "content-type": "application/json",
         origin: "https://game.example",
-        cookie: `__Host-ss_session=${tokenFor(0)}`,
+        cookie: `__Host-ss_session=${tokenFor(0)}; __Host-ss_admin=alliance-admin-session`,
       },
       body: JSON.stringify({ pilot_id: pilotId(1), days: 30 }),
     });
