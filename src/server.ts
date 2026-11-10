@@ -3861,7 +3861,10 @@ async function handleMarketRequest(
             }
           })())
       ) {
-        return json({ error: "La dirección de la imagen QR debe ser un enlace HTTPS válido." }, 400);
+        return json(
+          { error: "La dirección de la imagen QR debe ser un enlace HTTPS válido." },
+          400,
+        );
       }
       const now = Date.now();
       await db
@@ -3874,7 +3877,10 @@ async function handleMarketRequest(
         )
         .bind(walletAddress, qrUrl || null, account.email, now)
         .run();
-      return json({ success: true, settings: { wallet_address: walletAddress, qr_url: qrUrl || null } });
+      return json({
+        success: true,
+        settings: { wallet_address: walletAddress, qr_url: qrUrl || null },
+      });
     }
 
     if (action !== "approve" && action !== "reject") {
@@ -3905,8 +3911,7 @@ async function handleMarketRequest(
 
     const now = Date.now();
     if (action === "reject") {
-      const reason =
-        typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+      const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
       if (reason.length < 5) {
         return json({ error: "Escribe un motivo de rechazo de al menos 5 caracteres." }, 400);
       }

@@ -834,19 +834,30 @@ function PaymentsSection() {
   return (
     <section className="space-y-5">
       {notice ? (
-        <p role="status" className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">
+        <p
+          role="status"
+          className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200"
+        >
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">
+        <p
+          role="alert"
+          className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200"
+        >
           {error}
         </p>
       ) : null}
 
-      <form onSubmit={(event) => void saveWallet(event)} className="grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2">
+      <form
+        onSubmit={(event) => void saveWallet(event)}
+        className="grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2"
+      >
         <div className="md:col-span-2">
-          <h2 className="text-xs uppercase tracking-wider text-cyan-200">Wallet para recibir pagos</h2>
+          <h2 className="text-xs uppercase tracking-wider text-cyan-200">
+            Wallet para recibir pagos
+          </h2>
           <p className="mt-1 text-xs text-white/50">Red fija: Polygon · Monedas: USDT y USDC</p>
         </div>
         <label className="block text-xs text-white/65 md:col-span-2">
@@ -872,10 +883,18 @@ function PaymentsSection() {
         </label>
         {qrUrl ? (
           <div className="md:col-span-2">
-            <img src={qrUrl} alt="Vista previa del QR de pagos" className="max-h-40 rounded border border-white/10 bg-white p-2" />
+            <img
+              src={qrUrl}
+              alt="Vista previa del QR de pagos"
+              className="max-h-40 rounded border border-white/10 bg-white p-2"
+            />
           </div>
         ) : null}
-        <button type="submit" disabled={saving || loading} className="rounded bg-cyan-400/90 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-black hover:bg-cyan-300 disabled:opacity-40 md:col-span-2">
+        <button
+          type="submit"
+          disabled={saving || loading}
+          className="rounded bg-cyan-400/90 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-black hover:bg-cyan-300 disabled:opacity-40 md:col-span-2"
+        >
           {saving ? "Guardando..." : "Guardar wallet y QR"}
         </button>
       </form>
@@ -883,55 +902,123 @@ function PaymentsSection() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs uppercase tracking-wider text-amber-200">Pagos pendientes</h2>
-          <button type="button" onClick={() => void loadPayments()} className="text-xs text-cyan-200 hover:text-white">Actualizar</button>
+          <button
+            type="button"
+            onClick={() => void loadPayments()}
+            className="text-xs text-cyan-200 hover:text-white"
+          >
+            Actualizar
+          </button>
         </div>
         {loading ? <p className="p-4 text-sm text-white/50">Cargando pagos...</p> : null}
         {!loading && pending.length === 0 ? (
-          <p className="rounded border border-white/10 p-4 text-sm text-white/50">No hay pagos pendientes.</p>
+          <p className="rounded border border-white/10 p-4 text-sm text-white/50">
+            No hay pagos pendientes.
+          </p>
         ) : null}
         {pending.map((payment) => (
-          <article key={payment.id} className="space-y-3 rounded border border-amber-400/20 bg-white/[0.03] p-4">
+          <article
+            key={payment.id}
+            className="space-y-3 rounded border border-amber-400/20 bg-white/[0.03] p-4"
+          >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-white">{payment.callsign} · {payment.pilot_id}</p>
-                <p className="text-xs text-white/50">{payment.email ?? "Sin correo"} · {dateLabel(payment.created_at)}</p>
+                <p className="text-sm font-semibold text-white">
+                  {payment.callsign} · {payment.pilot_id}
+                </p>
+                <p className="text-xs text-white/50">
+                  {payment.email ?? "Sin correo"} · {dateLabel(payment.created_at)}
+                </p>
               </div>
-              <span className="rounded bg-amber-400/10 px-2 py-1 text-xs text-amber-200">Pendiente</span>
+              <span className="rounded bg-amber-400/10 px-2 py-1 text-xs text-amber-200">
+                Pendiente
+              </span>
             </div>
             <div className="grid gap-2 text-sm sm:grid-cols-3">
-              <p>Recibe: <b className="text-cyan-200">{payment.obsidian_amount.toLocaleString()} OBS</b></p>
-              <p>Envió: <b>{payment.crypto_amount} {payment.currency}</b></p>
-              <p>Red: <b>Polygon</b></p>
+              <p>
+                Recibe:{" "}
+                <b className="text-cyan-200">{payment.obsidian_amount.toLocaleString()} OBS</b>
+              </p>
+              <p>
+                Envió:{" "}
+                <b>
+                  {payment.crypto_amount} {payment.currency}
+                </b>
+              </p>
+              <p>
+                Red: <b>Polygon</b>
+              </p>
             </div>
-            <p className="break-all text-xs text-white/65">TX: <a href={`https://polygonscan.com/tx/${payment.tx_hash}`} target="_blank" rel="noreferrer" className="text-cyan-200 underline">{payment.tx_hash}</a></p>
-            <p className="break-all text-xs text-white/40">Wallet receptora: {payment.wallet_address}</p>
+            <p className="break-all text-xs text-white/65">
+              TX:{" "}
+              <a
+                href={`https://polygonscan.com/tx/${payment.tx_hash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-cyan-200 underline"
+              >
+                {payment.tx_hash}
+              </a>
+            </p>
+            <p className="break-all text-xs text-white/40">
+              Wallet receptora: {payment.wallet_address}
+            </p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={Boolean(busyId)} onClick={() => void reviewPayment(payment, "approve")} className="rounded bg-emerald-400/90 px-3 py-2 text-xs font-bold text-black hover:bg-emerald-300 disabled:opacity-40">
+              <button
+                type="button"
+                disabled={Boolean(busyId)}
+                onClick={() => void reviewPayment(payment, "approve")}
+                className="rounded bg-emerald-400/90 px-3 py-2 text-xs font-bold text-black hover:bg-emerald-300 disabled:opacity-40"
+              >
                 {busyId === payment.id ? "Procesando..." : "Aprobar y acreditar OBS"}
               </button>
-              <button type="button" disabled={Boolean(busyId)} onClick={() => void reviewPayment(payment, "reject")} className="rounded border border-rose-400/40 px-3 py-2 text-xs text-rose-200 hover:bg-rose-400/10 disabled:opacity-40">
+              <button
+                type="button"
+                disabled={Boolean(busyId)}
+                onClick={() => void reviewPayment(payment, "reject")}
+                className="rounded border border-rose-400/40 px-3 py-2 text-xs text-rose-200 hover:bg-rose-400/10 disabled:opacity-40"
+              >
                 Rechazar pago
               </button>
             </div>
             <label className="block text-xs text-white/55">
               Motivo obligatorio si rechazas
-              <input value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} maxLength={240} placeholder="TX incorrecto, monto no recibido..." className={inputCls} />
+              <input
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                maxLength={240}
+                placeholder="TX incorrecto, monto no recibido..."
+                className={inputCls}
+              />
             </label>
           </article>
         ))}
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-xs uppercase tracking-wider text-white/65">Historial de pagos revisados</h2>
+        <h2 className="text-xs uppercase tracking-wider text-white/65">
+          Historial de pagos revisados
+        </h2>
         {history.length === 0 && !loading ? (
-          <p className="rounded border border-white/10 p-4 text-sm text-white/45">Todavía no hay pagos revisados.</p>
+          <p className="rounded border border-white/10 p-4 text-sm text-white/45">
+            Todavía no hay pagos revisados.
+          </p>
         ) : null}
         {history.map((payment) => (
-          <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/10 p-3 text-xs">
+          <div
+            key={payment.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/10 p-3 text-xs"
+          >
             <div>
-              <p className="text-white">{payment.callsign} · {payment.obsidian_amount.toLocaleString()} OBS</p>
-              <p className="mt-1 text-white/45">{payment.crypto_amount} {payment.currency} · {dateLabel(payment.created_at)}</p>
-              {payment.rejection_reason ? <p className="mt-1 text-rose-200">Motivo: {payment.rejection_reason}</p> : null}
+              <p className="text-white">
+                {payment.callsign} · {payment.obsidian_amount.toLocaleString()} OBS
+              </p>
+              <p className="mt-1 text-white/45">
+                {payment.crypto_amount} {payment.currency} · {dateLabel(payment.created_at)}
+              </p>
+              {payment.rejection_reason ? (
+                <p className="mt-1 text-rose-200">Motivo: {payment.rejection_reason}</p>
+              ) : null}
             </div>
             <span className={payment.status === "APPROVED" ? "text-emerald-200" : "text-rose-200"}>
               {payment.status === "APPROVED" ? "Aprobado" : "Rechazado"}

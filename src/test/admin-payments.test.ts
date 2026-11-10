@@ -6,7 +6,11 @@ const PAYMENT_ID = "pay_0123456789abcdef0123";
 const TX_HASH = "0x" + "a".repeat(64);
 const ADMIN_EMAIL = "emprendedora.onlinevee@gmail.com";
 
-function createDatabase(options?: { email?: string; adminSession?: boolean; paymentStatus?: string }) {
+function createDatabase(options?: {
+  email?: string;
+  adminSession?: boolean;
+  paymentStatus?: string;
+}) {
   let status = options?.paymentStatus ?? "PENDING";
   let batchCalls = 0;
   const runQueries: string[] = [];
@@ -69,11 +73,18 @@ function createDatabase(options?: { email?: string; adminSession?: boolean; paym
   return { db, getBatchCalls: () => batchCalls, getRunQueries: () => runQueries };
 }
 
-function adminRequest(path: string, method = "GET", body?: Record<string, unknown>, authorized = true) {
+function adminRequest(
+  path: string,
+  method = "GET",
+  body?: Record<string, unknown>,
+  authorized = true,
+) {
   return new Request(`https://game.example${path}`, {
     method,
     headers: {
-      ...(method === "POST" ? { "content-type": "application/json", origin: "https://game.example" } : {}),
+      ...(method === "POST"
+        ? { "content-type": "application/json", origin: "https://game.example" }
+        : {}),
       ...(authorized ? { cookie: "__Host-ss_session=admin; __Host-ss_admin=admin-panel" } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -114,7 +125,9 @@ describe("administrative OBS payments", () => {
       { DB: mock.db },
     );
     expect(valid.status).toBe(200);
-    expect(mock.getRunQueries().some((query) => query.includes("admin_payment_settings"))).toBe(true);
+    expect(mock.getRunQueries().some((query) => query.includes("admin_payment_settings"))).toBe(
+      true,
+    );
 
     const invalid = await server.fetch(
       adminRequest("/api/admin/payments", "POST", {
