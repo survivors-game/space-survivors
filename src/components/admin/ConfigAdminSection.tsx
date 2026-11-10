@@ -6,6 +6,7 @@ type Settings = {
   maintenanceMessage: string;
   eventsEnabled: boolean;
   rewardsEnabled: boolean;
+  chatEnabled: boolean;
 };
 type Log = {
   setting_key: string;
@@ -30,8 +31,9 @@ export function ConfigAdminSection() {
   const [settings,setSettings] = useState<Settings>({
     maintenanceMode:false, registrationEnabled:true,
     maintenanceMessage:"Estamos realizando tareas de mantenimiento. Vuelve pronto.",
-    eventsEnabled:true, rewardsEnabled:true,
+    eventsEnabled:true, rewardsEnabled:true, chatEnabled:true,
   });
+  const [savedChatEnabled,setSavedChatEnabled] = useState(true);
   const [logs,setLogs] = useState<Log[]>([]);
   const [reason,setReason] = useState("");
   const [loading,setLoading] = useState(true);
@@ -42,10 +44,16 @@ export function ConfigAdminSection() {
   const load = async () => {
     setLoading(true); setError("");
     try {
-      const response = await fetch("/api/admin/config",{credentials:"same-origin"});
+      const [response,chatResponse] = await Promise.all([
+        fetch("/api/admin/config",{credentials:"same-origin"}),
+        fetch("/api/admin/chat",{credentials:"same-origin"}),
+      ]);
       const data = await response.json() as Payload;
+      const chatData = await chatResponse.json() as {chatEnabled?:boolean;error?:string};
       if (!response.ok) throw new Error(data.error || "No se pudo cargar la configuración.");
-      if (data.settings) setSettings(data.settings);
+      if (!chatResponse.ok) throw new Error(chatData.error || "No se pudo consultar el estado del chat.");
+      if (data.settings) setSettings({...data.settings,chatEnabled:chatData.chatEnabled !== false});
+      setSavedChatEnabled(chatData.chatEnabled !== false);
       setLogs(data.logs ?? []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo cargar la configuración.");
@@ -68,7 +76,15 @@ export function ConfigAdminSection() {
       });
       const data = await response.json() as {error?:string;changed?:number};
       if (!response.ok) throw new Error(data.error || "No se pudieron guardar los ajustes.");
-      setNotice(data.changed ? "Configuración guardada. Cambios aplicados en el servidor." : "No había cambios nuevos para guardar.");
+      if (settings.chatEnabled !== savedChatEnabled) {
+        const chatResponse = await fetch("/api/admin/chat",{
+          method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},
+          body:JSON.stringify({action:"set-chat-enabled",enabled:settings.chatEnabled,reason:reason.trim()}),
+        });
+        const chatData = await chatResponse.json() as {error?:string};
+        if (!chatResponse.ok) throw new Error(chatData.error || "La configuración general se guardó, pero no se pudo cambiar el chat.");
+      }
+      setNotice(data.changed || settings.chatEnabled !== savedChatEnabled ? "Configuración guardada. Cambios aplicados en el servidor." : "No había cambios nuevos para guardar.");
       setReason("");
       await load();
     } catch (cause) {
@@ -76,7 +92,7 @@ export function ConfigAdminSection() {
     } finally { setBusy(false); }
   };
 
-  const toggle = (key:keyof Pick<Settings,"maintenanceMode"|"registrationEnabled"|"eventsEnabled"|"rewardsEnabled">,value:boolean) => {
+  const toggle = (key:keyof Pick<Settings,"maintenanceMode"|"registrationEnabled"|"eventsEnabled"|"rewardsEnabled"|"chatEnabled">,value:boolean) => {
     setSettings(current=>({...current,[key]:value}));
   };
   const status = (value:string) => value === "true" ? "Activado" : value === "false" ? "Desactivado" : value;
@@ -90,6 +106,7 @@ export function ConfigAdminSection() {
       {([
         ["maintenanceMode","Modo mantenimiento","Bloquea el acceso de jugadores y mantiene disponible el acceso administrativo."],
         ["registrationEnabled","Registro de nuevos jugadores","Impide crear cuentas nuevas cuando está desactivado. Las cuentas existentes pueden entrar."],
+        ["chatEnabled","Chat global","Permite o suspende el chat de todos los jugadores."],
         ["eventsEnabled","Eventos y temporadas","Permite o bloquea la creación y gestión administrativa de eventos."],
         ["rewardsEnabled","Entrega de recompensas","Permite o bloquea las entregas manuales de CR, OBS, naves, objetos y VIP."],
       ] as const).map(([key,label,help])=><label key={key} className="flex items-start justify-between gap-4 rounded border border-white/10 p-3">
