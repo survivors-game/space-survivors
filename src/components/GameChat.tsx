@@ -126,6 +126,10 @@ export function GameChat() {
             setMessages((current) => current.filter((item) => item.id !== payload["messageId"]));
             return;
           }
+          if (payload["type"] === "history-cleared") {
+            setMessages([]);
+            return;
+          }
           const message = payload as unknown as ChatMessage;
           if (
             typeof message.id !== "number" ||
