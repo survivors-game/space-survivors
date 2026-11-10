@@ -53,7 +53,6 @@ import { STAGES, stageById } from "@/game/data/stages";
 import { WEAPONS } from "@/game/data/weapons";
 import { Engine, type BossAttempt } from "@/game/engine";
 import { createBossCombatProof } from "@/game/meta/boss-combat-proof";
-import { BOSS_REWARDS } from "@/game/data/boss-rewards";
 import { Input } from "@/game/input";
 import { Settings } from "@/game/settings";
 import { spriteUrl } from "@/game/sprites";
@@ -1031,10 +1030,7 @@ function Index() {
         onBossDefeated: async (bossId, token, seed, outcome, evidence) => {
           try {
             const proof = await createBossCombatProof(seed, evidence);
-            const result = await marketRequest<{
-              obsidian: number;
-              rewards: { itemType: "nave" | "objeto"; itemName: string }[];
-            }>("/api/boss/claim", {
+            await marketRequest<{ success: boolean; bossId: string }>("/api/boss/claim", {
               method: "POST",
               body: JSON.stringify({
                 boss_id: bossId,
@@ -1048,11 +1044,10 @@ function Index() {
               }),
             });
             setMarketRefresh((version) => version + 1);
-            const drops = result.rewards.map((reward) => reward.itemName);
             setNotice(
               outcome === "victory"
-                ? `RECOMPENSA DE BOSS: +${result.obsidian} OBS${drops.length ? ` · ${drops.join(" · ")}` : ""}`
-                : "COMBATE REGISTRADO: SIN RECOMPENSA",
+                ? "JEFE DERROTADO. RECOMPENSAS ACREDITADAS."
+                : "COMBATE REGISTRADO.",
             );
           } catch (error: unknown) {
             console.error("No se pudo validar el combate del boss:", error);
@@ -1292,13 +1287,13 @@ function Index() {
 
   const requestBossHelp = async () => {
     const state = engineRef.current?.getBossHelpState();
-    const reward = state && BOSS_REWARDS.find((entry) => entry.bossId === state.bossId);
-    if (!state || !reward || hostHelpSessionRef.current) return;
+    const bossWorld = state ? BOSSES.findIndex((entry) => entry.id === state.bossId) + 1 : 0;
+    if (!state || bossWorld < 1 || hostHelpSessionRef.current) return;
     engineRef.current?.pause();
     try {
       const result = await marketRequest<{ session_id: string }>("/api/boss/help-request", {
         method: "POST",
-        body: JSON.stringify({ boss_id: state.bossId, world: reward.world }),
+        body: JSON.stringify({ boss_id: state.bossId, world: bossWorld }),
       });
       hostHelpSessionRef.current = result.session_id;
       setHostHelpSessionId(result.session_id);
