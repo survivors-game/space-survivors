@@ -3663,7 +3663,10 @@ async function handleBossRequest(
       return json({ error: "El boss está en cooldown." }, 409);
     }
 
-    const vipStatus = await db.prepare("SELECT vip_until FROM pilots WHERE pilot_id = ?").bind(account.pilot_id).first<{ vip_until: number | null }>();
+    const vipStatus = await db
+      .prepare("SELECT vip_until FROM pilots WHERE pilot_id = ?")
+      .bind(account.pilot_id)
+      .first<{ vip_until: number | null }>();
     const vipActive = vipStatus?.vip_until !== null && (vipStatus?.vip_until ?? 0) > now;
     const dropMultiplier = vipActive ? 3 : 1;
     const rewardId = claimId;

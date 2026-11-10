@@ -1055,7 +1055,9 @@ function Index() {
                 `+${claim.obsidian} OBS`,
                 ...claim.rewards.map((reward) => reward.itemName),
                 ...(claim.helperReward
-                  ? [`+${claim.helperReward.credits} CR · +${claim.helperReward.obsidian} OBS por ayuda`]
+                  ? [
+                      `+${claim.helperReward.credits} CR · +${claim.helperReward.obsidian} OBS por ayuda`,
+                    ]
                   : []),
               ];
               engineRef.current?.banner("JEFE DERROTADO", rewardLines.join(" · "), "good");
