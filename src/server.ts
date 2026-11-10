@@ -3663,16 +3663,19 @@ async function handleBossRequest(
       return json({ error: "El boss está en cooldown." }, 409);
     }
 
+    const vipStatus = await db.prepare("SELECT vip_until FROM pilots WHERE pilot_id = ?").bind(account.pilot_id).first<{ vip_until: number | null }>();
+    const vipActive = vipStatus?.vip_until !== null && (vipStatus?.vip_until ?? 0) > now;
+    const dropMultiplier = vipActive ? 3 : 1;
     const rewardId = claimId;
     const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
-    if (rollChance(reward.shipChance)) {
+    if (rollChance(Math.min(1, reward.shipChance * dropMultiplier))) {
       drops.push({
         itemId: `boss_ship_${reward.bossId}_${reward.rank.toLowerCase()}`,
         itemName: `Nave de combate · Rango ${reward.rank}`,
         itemType: "nave",
       });
     }
-    if (rollChance(reward.itemChance)) {
+    if (rollChance(Math.min(1, reward.itemChance * dropMultiplier))) {
       drops.push({
         itemId: `boss_item_${reward.bossId}_${reward.rank.toLowerCase()}`,
         itemName: `Objeto especial · Rango ${reward.rank}`,
@@ -3831,7 +3834,11 @@ async function handleBossRequest(
     }
     return json({
       success: true,
+      result,
       bossId: reward.bossId,
+      obsidian: reward.obsidian,
+      rewards: drops.map(({ itemName, itemType }) => ({ itemName, itemType })),
+      helperReward: helpSession ? { credits: 50, obsidian: 1 } : null,
       cooldownUntil: now + BOSS_COOLDOWN_MS,
     });
   } catch (error) {
