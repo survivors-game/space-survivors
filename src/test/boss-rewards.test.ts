@@ -311,7 +311,8 @@ async function startBoss(db: ReturnType<typeof createDatabase>["db"], bossId: st
       token?: string;
       seed?: string;
       issued_at?: number;
-      boss?: { hp: number; min_combat_ms: number; max_hit_damage: number };
+      expires_at?: number;
+      boss?: { hp: number; damage: number; min_combat_ms: number; max_hit_damage: number };
       error?: string;
     },
   };
@@ -444,6 +445,12 @@ describe("server-validated boss combat", () => {
       expect(attempt.seed).toMatch(/^[0-9a-f]{64}$/);
       expect(attempt.boss?.hp).toBeGreaterThan(0);
       expect(attempt.boss?.min_combat_ms).toBeGreaterThan(0);
+      if (reward.bossId === "leviathan") {
+        expect(attempt.boss?.hp).toBe(180_000);
+        expect(attempt.boss?.damage).toBe(54);
+        expect(attempt.boss?.max_hit_damage).toBe(50_000);
+        expect(attempt.expires_at! - attempt.issued_at!).toBe(30 * 60 * 1000);
+      }
 
       const durationMs = attempt.boss!.min_combat_ms + 1_000;
       vi.advanceTimersByTime(durationMs);
@@ -496,7 +503,7 @@ describe("server-validated boss combat", () => {
   it("rejects expired, reused, too-short, and insufficient-damage claims and consumes failed proofs", async () => {
     const { db, attempts, getBossObsidian } = createDatabase();
     const expired = await startBoss(db, "leviathan");
-    vi.advanceTimersByTime(10 * 60 * 1000 + 1);
+    vi.advanceTimersByTime(30 * 60 * 1000 + 1);
     const expiredEvidence = createEvidence(
       expired.body.issued_at!,
       10 * 60 * 1000,

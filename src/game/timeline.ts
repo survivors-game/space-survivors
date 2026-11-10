@@ -15,10 +15,10 @@ export const WORLD1_HORDES: Record<string, number>[] = [
   { hunter: 30, destroyer: 40, bomber: 30 },
   { destroyer: 45, bomber: 35, parasite: 20 },
   { destroyer: 30, bomber: 35, parasite: 35 },
-  { destroyer: 15, bomber: 40, parasite: 45 },
-  { bomber: 40, parasite: 60 },
-  { bomber: 20, parasite: 80 },
-  { parasite: 100 },
+  { hunter: 15, destroyer: 30, bomber: 30, parasite: 25 },
+  { hunter: 15, destroyer: 30, bomber: 30, parasite: 25 },
+  { hunter: 20, destroyer: 30, bomber: 30, parasite: 20 },
+  { hunter: 20, destroyer: 35, bomber: 30, parasite: 15 },
 ];
 
 /** Índice (0..9) del intervalo de horda en el que se encuentra el tiempo transcurrido. */
@@ -112,18 +112,19 @@ export const BOSS_SCHEDULE: BossEvent[] = [
 export const CAMPAIGN_FINAL_BOSSES: BossEvent[] = [{ minute: 15, boss: "leviathan", final: true }];
 
 /* Ajustes de equilibrio del mundo 1 (solo campaña). */
-export const WORLD1_MAX_ENEMIES = 60; // enemigos normales simultáneos (antes: 90)
-export const WORLD1_PICKUP_CHANCE = 0.001; // 0,1 % base gratis en la horda 1.
-export const WORLD1_PICKUP_CHANCE_INCREMENT = 0.0005; // +0,05 puntos porcentuales por horda.
+export const WORLD1_MAX_ENEMIES = 90; // mayor presión para las hordas avanzadas.
+export const WORLD1_PICKUP_CHANCE = 0.002; // 0,2 % base gratis en la horda 1.
+export const WORLD1_PICKUP_CHANCE_INCREMENT = 0.0015; // +0,15 puntos porcentuales por horda.
 
 /** Probabilidad de drop en Mundo 1: aumenta con cada horda para premiar la dificultad. */
 export function world1PickupChanceAtHorde(hordeIndex: number, elite = false): number {
   const index = Math.max(0, Math.min(HORDE_COUNT - 1, Math.floor(hordeIndex)));
-  const baseChance = elite ? 0.005 : WORLD1_PICKUP_CHANCE;
-  return baseChance + index * WORLD1_PICKUP_CHANCE_INCREMENT;
+  const baseChance = elite ? 0.015 : WORLD1_PICKUP_CHANCE;
+  const increment = elite ? 0.004 : WORLD1_PICKUP_CHANCE_INCREMENT;
+  return baseChance + index * increment;
 }
 
-// Presión adicional exclusiva de las hordas 7, 8 y 9 del mundo 1.
+// La presión de combate crece en cada horda avanzada: más enemigos, resistentes y peligrosos.
 export const WORLD1_HORDE_PRESSURE = [
   { hp: 1, damage: 1, speed: 1, spawn: 1 },
   { hp: 1, damage: 1, speed: 1, spawn: 1 },
@@ -131,10 +132,10 @@ export const WORLD1_HORDE_PRESSURE = [
   { hp: 1, damage: 1, speed: 1, spawn: 1 },
   { hp: 1, damage: 1, speed: 1, spawn: 1 },
   { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1.35, damage: 1.25, speed: 1.08, spawn: 0.9 },
-  { hp: 1.65, damage: 1.5, speed: 1.14, spawn: 0.82 },
-  { hp: 2, damage: 1.8, speed: 1.2, spawn: 0.75 },
-  { hp: 1, damage: 1, speed: 1, spawn: 1 },
+  { hp: 1.5, damage: 1.35, speed: 1.1, spawn: 0.72 },
+  { hp: 1.9, damage: 1.65, speed: 1.15, spawn: 0.6 },
+  { hp: 2.4, damage: 2, speed: 1.2, spawn: 0.5 },
+  { hp: 3, damage: 2.4, speed: 1.25, spawn: 0.42 },
 ] as const;
 
 export type FormationKind = "vee" | "ring" | "wall" | "squad" | "swarm" | "pincer";

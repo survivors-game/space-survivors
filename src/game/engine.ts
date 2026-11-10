@@ -1525,11 +1525,9 @@ export class Engine {
       ? world1Campaign
         ? world1PickupChanceAtHorde(hordeIndex, true)
         : 0.005
-      : d.behavior === "spawnling"
-        ? 0
-        : world1Campaign
-          ? world1PickupChanceAtHorde(hordeIndex)
-          : 0.0005;
+      : world1Campaign
+        ? world1PickupChanceAtHorde(hordeIndex)
+        : 0.0005;
     if (Math.random() < Math.min(1, pk * vipDropMultiplier(this.vipActive)))
       this.dropPickup(e.x, e.y);
     if (d.behavior === "parasite")

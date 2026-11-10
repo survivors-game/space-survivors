@@ -26,7 +26,11 @@ import { ENEMIES } from "@/game/data/enemies";
 import { BOSSES } from "@/game/data/bosses";
 import { STAGES } from "@/game/data/stages";
 import { CONFIG } from "@/game/config";
-import { WORLD1_PICKUP_CHANCE, xpForLevel } from "@/game/timeline";
+import {
+  WORLD1_PICKUP_CHANCE,
+  WORLD1_PICKUP_CHANCE_INCREMENT,
+  xpForLevel,
+} from "@/game/timeline";
 import {
   DAILY_CHEST,
   DAILY_MISSION_TEMPLATES,
@@ -280,9 +284,9 @@ const partida: WikiSection = {
       <H>Objetos</H>
       <P>
         Al eliminar enemigos, pueden aparecer objetos. La probabilidad comienza en{" "}
-        {pct(WORLD1_PICKUP_CHANCE)} por enemigo y aumenta {pct(0.0005)} con cada horda superada,
-        para recompensar el avance a las hordas más difíciles. VIP multiplica estas probabilidades
-        por 10.
+        {pct(WORLD1_PICKUP_CHANCE)} por enemigo y aumenta {pct(WORLD1_PICKUP_CHANCE_INCREMENT)} con
+        cada horda superada. Las larvas también pueden soltar objetos. VIP multiplica estas
+        probabilidades por 15.
       </P>
       <H>Resultado</H>
       <P>

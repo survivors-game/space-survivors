@@ -20,7 +20,7 @@ describe("vip constants", () => {
   it("define the agreed prices and bonuses", () => {
     expect(VIP_DURATION_DAYS).toBe(30);
     expect(VIP_PRICE_OBSIDIAN).toBe(20);
-    expect(VIP_DROP_BONUS).toBe(9);
+    expect(VIP_DROP_BONUS).toBe(14);
     expect(VIP_CREDIT_BONUS).toBe(0.2);
   });
 });
@@ -78,8 +78,8 @@ describe("obsidian balance check", () => {
 });
 
 describe("combat multipliers", () => {
-  it("multiplies drop chance by ten with VIP and stays neutral without", () => {
-    expect(vipDropMultiplier(true)).toBe(10);
+  it("multiplies drop chance by fifteen with VIP and stays neutral without", () => {
+    expect(vipDropMultiplier(true)).toBe(15);
     expect(vipDropMultiplier(false)).toBe(1);
   });
 
@@ -93,8 +93,9 @@ describe("combat multipliers", () => {
     expect(clamped).toBe(1);
   });
 
-  it("keeps spawnling kills (pk = 0) at zero drop chance even with VIP", () => {
-    expect(Math.min(1, 0 * vipDropMultiplier(true))).toBe(0);
+  it("allows larva kills to produce drops and applies the full VIP multiplier", () => {
+    expect(Math.min(1, 0.002 * vipDropMultiplier(false))).toBeCloseTo(0.002);
+    expect(Math.min(1, 0.002 * vipDropMultiplier(true))).toBeCloseTo(0.03);
   });
 
   it("keeps the credit bonus on low-value kills instead of rounding it away", () => {
