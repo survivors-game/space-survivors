@@ -738,7 +738,7 @@ function ChatAdminSection() {
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
-  const act = async (payload: Record<string, string | number>) => {
+  const act = async (payload: Record<string, string | number | boolean>) => {
     const reason = typeof payload.reason === "string" ? payload.reason : "";
     if (reason.trim().length < 5) { setError("Escribe un motivo de al menos 5 caracteres."); return; }
     setBusy(true); setError(""); setNotice("");
