@@ -3783,9 +3783,10 @@ async function handleMarketRequest(
        LIMIT 2`,
     ).bind(playerQuery, playerQuery, playerQuery, playerQuery)
       .all<{ pilot_id: string; obsidian: number }>();
-    if (!matches.results?.length) return json({ error: "No se encontró el jugador." }, 404);
-    if (matches.results.length > 1) return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
-    const pilot = matches.results[0]!;
+    const matchedPlayers = matches.results ?? [];
+    if (!matchedPlayers.length) return json({ error: "No se encontró el jugador." }, 404);
+    if (matchedPlayers.length > 1) return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
+    const pilot = matchedPlayers[0]!;
     const pilotId = pilot.pilot_id;
 
     let balanceBefore = 0;
