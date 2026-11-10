@@ -4241,7 +4241,7 @@ async function handleAdminSummaryRequest(
       activeSessions,
       pendingPayments,
       openDisputes,
-      alerts: openSupport + openReports + recentErrors + pendingPayments,
+      alerts: openSupport + openReports + recentErrors + pendingPayments + openDisputes,
     },
     alerts,
   });
