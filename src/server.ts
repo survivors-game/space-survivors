@@ -4031,13 +4031,13 @@ async function handleAdminConfigRequest(
     return json({ error: "Acceso administrativo requerido." }, 403);
   try {
     await ensureAuthSchema(db);
-    await db.prepare(\`CREATE TABLE IF NOT EXISTS admin_game_settings (
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_game_settings (
       setting_key TEXT PRIMARY KEY, setting_value TEXT NOT NULL, updated_at INTEGER NOT NULL
-    )\`).run();
-    await db.prepare(\`CREATE TABLE IF NOT EXISTS admin_game_settings_logs (
+    )`).run();
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_game_settings_logs (
       id TEXT PRIMARY KEY, setting_key TEXT NOT NULL, old_value TEXT NOT NULL,
       new_value TEXT NOT NULL, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
-    )\`).run();
+    )`).run();
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_game_settings_logs_created ON admin_game_settings_logs(created_at DESC)").run();
     const defaults: Record<string,string> = {
       maintenance_mode: "false", registration_enabled: "true",
