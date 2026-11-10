@@ -3668,17 +3668,18 @@ async function handleBossRequest(
       .bind(account.pilot_id)
       .first<{ vip_until: number | null }>();
     const vipActive = vipStatus?.vip_until !== null && (vipStatus?.vip_until ?? 0) > now;
-    const dropMultiplier = vipActive ? 3 : 1;
+    const shipDropChance = vipActive ? 0.15 : reward.shipChance;
+    const itemDropChance = vipActive ? 0.20 : reward.itemChance;
     const rewardId = claimId;
     const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
-    if (rollChance(Math.min(1, reward.shipChance * dropMultiplier))) {
+    if (rollChance(shipDropChance)) {
       drops.push({
         itemId: `boss_ship_${reward.bossId}_${reward.rank.toLowerCase()}`,
         itemName: `Nave de combate · Rango ${reward.rank}`,
         itemType: "nave",
       });
     }
-    if (rollChance(Math.min(1, reward.itemChance * dropMultiplier))) {
+    if (rollChance(itemDropChance)) {
       drops.push({
         itemId: `boss_item_${reward.bossId}_${reward.rank.toLowerCase()}`,
         itemName: `Objeto especial · Rango ${reward.rank}`,
