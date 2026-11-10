@@ -126,7 +126,7 @@ export class ChatRoom extends DurableObject {
           pilotId,
         )
         .toArray()[0];
-      if (mute && (mute.expires_at === null || mute.expires_at > Date.now())) {
+      if (mute && (mute["expires_at"] === null || mute["expires_at"] > Date.now())) {
         return new Response("El acceso al chat está restringido.", { status: 403 });
       }
       if (mute) this.ctx.storage.sql.exec("DELETE FROM chat_mutes WHERE pilot_id = ?", pilotId);
@@ -154,15 +154,15 @@ export class ChatRoom extends DurableObject {
         )
         .toArray()
         .map((message) => ({
-          id: Number(message.id),
-          type: String(message.type),
-          pilotId: String(message.pilot_id),
-          callsign: String(message.callsign),
-          text: String(message.text),
-          language: String(message.language),
-          allianceTag: message.alliance_tag ? String(message.alliance_tag) : null,
-          vip: Number(message.vip) === 1,
-          timestamp: Number(message.timestamp),
+          id: Number(message["id"]),
+          type: String(message["type"]),
+          pilotId: String(message["pilot_id"]),
+          callsign: String(message["callsign"]),
+          text: String(message["text"]),
+          language: String(message["language"]),
+          allianceTag: message["alliance_tag"] ? String(message["alliance_tag"]) : null,
+          vip: Number(message["vip"]) === 1,
+          timestamp: Number(message["timestamp"]),
         }));
       const mutes = this.ctx.storage.sql
         .exec(
@@ -171,10 +171,10 @@ export class ChatRoom extends DurableObject {
         )
         .toArray()
         .map((mute) => ({
-          pilotId: String(mute.pilot_id),
-          expiresAt: mute.expires_at === null ? null : Number(mute.expires_at),
-          reason: String(mute.reason),
-          createdAt: Number(mute.created_at),
+          pilotId: String(mute["pilot_id"]),
+          expiresAt: mute["expires_at"] === null ? null : Number(mute["expires_at"]),
+          reason: String(mute["reason"]),
+          createdAt: Number(mute["created_at"]),
         }));
       const chatEnabled =
         this.ctx.storage.sql
@@ -207,11 +207,11 @@ export class ChatRoom extends DurableObject {
         if (!Number.isSafeInteger(messageId) || messageId <= 0) {
           return Response.json({ error: "Identificador de mensaje no válido." }, { status: 400 });
         }
-        const deleted = this.ctx.storage.sql.exec(
-          "DELETE FROM chat_messages WHERE id = ?",
+        const deleted = this.ctx.storage.sql.exec<{ id: number }>(
+          "DELETE FROM chat_messages WHERE id = ? RETURNING id",
           messageId,
         );
-        if (deleted.rowsWritten === 0) {
+        if (deleted.toArray().length === 0) {
           return Response.json({ error: "El mensaje ya no existe." }, { status: 404 });
         }
         const notice = JSON.stringify({ type: "deleted", messageId });
@@ -318,7 +318,7 @@ export class ChatRoom extends DurableObject {
         attachment.pilotId,
       )
       .toArray()[0];
-    if (mute && (mute.expires_at === null || mute.expires_at > Date.now())) {
+    if (mute && (mute["expires_at"] === null || mute["expires_at"] > Date.now())) {
       socket.close(1008, "Chat access restricted");
       return;
     }
@@ -356,7 +356,7 @@ export class ChatRoom extends DurableObject {
     const serialized = JSON.stringify(message);
     for (const socket of this.ctx.getWebSockets()) {
       const client = socket as HibernatingWebSocket;
-      if (client.deserializeAttachment().language !== message.language) continue;
+      if (client.deserializeAttachment().language !== message["language"]) continue;
       try {
         socket.send(serialized);
       } catch (error) {
@@ -414,15 +414,15 @@ export class ChatRoom extends DurableObject {
     for (const message of messages) {
       socket.send(
         JSON.stringify({
-          id: message.id,
-          type: message.type,
-          language: message.language,
-          pilotId: message.pilot_id,
-          callsign: message.callsign,
-          allianceTag: message.alliance_tag,
-          vip: message.vip === 1,
-          text: message.text,
-          timestamp: message.timestamp,
+          id: message["id"],
+          type: message["type"],
+          language: message["language"],
+          pilotId: message["pilot_id"],
+          callsign: message["callsign"],
+          allianceTag: message["alliance_tag"],
+          vip: message["vip"] === 1,
+          text: message["text"],
+          timestamp: message["timestamp"],
         }),
       );
     }
