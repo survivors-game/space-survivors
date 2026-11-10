@@ -3942,6 +3942,151 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
+
+async function handleAdminAlliancesRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/admin/alliances") return null;
+  if (request.method !== "GET" && request.method !== "POST")
+    return json({ error: "Método no permitido." }, 405);
+  if (request.method === "POST" && !isSameOriginPost(request, url))
+    return json({ error: "Solicitud no autorizada." }, 403);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  const db = env.DB;
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
+  if (account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub)))
+    return json({ error: "Acceso administrativo requerido." }, 403);
+  try {
+    await ensureAuthSchema(db);
+    await db.prepare(`CREATE TABLE IF NOT EXISTS admin_alliance_logs (
+      id TEXT PRIMARY KEY, alliance_id TEXT, war_id TEXT, action TEXT NOT NULL,
+      target_pilot_id TEXT, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL
+    )`).run();
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_alliance_logs_created ON admin_alliance_logs(created_at DESC)").run();
+  } catch (error) {
+    console.error("No se pudo preparar la auditoría de alianzas:", error);
+    return json({ error: "No se pudo preparar la gestión de alianzas." }, 503);
+  }
+
+  if (request.method === "GET") {
+    const allianceId = url.searchParams.get("alliance_id") ?? "";
+    const [alliances, wars, logs, members] = await Promise.all([
+      db.prepare(`SELECT a.alliance_id,a.name,a.tag,a.leader_pilot_id,a.level,a.war_wins,a.war_losses,a.created_at,
+        COALESCE(NULLIF(profile.display_name,''),leader.callsign,'PILOTO') AS leader_name,
+        (SELECT COUNT(*) FROM alliance_members m WHERE m.alliance_id=a.alliance_id) AS member_count,
+        EXISTS(SELECT 1 FROM alliance_war_locks lock WHERE lock.alliance_id=a.alliance_id) AS in_war
+        FROM alliances a JOIN pilots leader ON leader.pilot_id=a.leader_pilot_id
+        LEFT JOIN player_profiles profile ON profile.pilot_id=leader.pilot_id
+        ORDER BY a.level DESC,a.war_wins DESC,a.name LIMIT 200`).all(),
+      db.prepare(`SELECT w.war_id,w.attacker_alliance_id,w.defender_alliance_id,w.status,w.winner_alliance_id,
+        w.created_at,w.started_at,w.ended_at,w.attacker_hordes_survived,w.defender_hordes_survived,
+        aa.name AS attacker_name,aa.tag AS attacker_tag,da.name AS defender_name,da.tag AS defender_tag,
+        (SELECT COUNT(*) FROM alliance_war_members m WHERE m.war_id=w.war_id) AS member_count
+        FROM alliance_wars w JOIN alliances aa ON aa.alliance_id=w.attacker_alliance_id
+        JOIN alliances da ON da.alliance_id=w.defender_alliance_id
+        ORDER BY w.created_at DESC LIMIT 100`).all(),
+      db.prepare("SELECT id,alliance_id,war_id,action,target_pilot_id,reason,admin_email,created_at FROM admin_alliance_logs ORDER BY created_at DESC LIMIT 100").all(),
+      allianceId ? db.prepare(`SELECT m.alliance_id,m.pilot_id,m.role,m.joined_at,
+        COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
+        FROM alliance_members m JOIN pilots p ON p.pilot_id=m.pilot_id
+        LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+        LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
+        WHERE m.alliance_id=? ORDER BY CASE m.role WHEN 'lider' THEN 0 WHEN 'teniente' THEN 1 ELSE 2 END,m.joined_at`).bind(allianceId).all() : Promise.resolve({results:[]}),
+    ]);
+    return json({alliances:alliances.results??[],wars:wars.results??[],members:members.results??[],logs:logs.results??[]});
+  }
+
+  const body = await readJson(request, 4096);
+  const action = body?.["action"];
+  const allianceId = typeof body?.["allianceId"] === "string" ? body["allianceId"].trim() : "";
+  const pilotId = typeof body?.["pilotId"] === "string" ? body["pilotId"].trim() : "";
+  const warId = typeof body?.["warId"] === "string" ? body["warId"].trim() : "";
+  const role = body?.["role"];
+  const reason = typeof body?.["reason"] === "string" ? body["reason"].trim() : "";
+  if (reason.length < 5 || reason.length > 240)
+    return json({error:"Indica un motivo de entre 5 y 240 caracteres."},400);
+  const now = Date.now();
+  const log = (aId: string|null,wId: string|null,act: string,target: string|null) =>
+    db.prepare("INSERT INTO admin_alliance_logs (id,alliance_id,war_id,action,target_pilot_id,reason,admin_email,created_at) VALUES (?,?,?,?,?,?,?,?)")
+      .bind(crypto.randomUUID(),aId,wId,act,target,reason,account.email,now);
+
+  if (action === "set-role" || action === "remove-member") {
+    if (!allianceId || !pilotId) return json({error:"Alianza o piloto no válido."},400);
+    const member = await db.prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?")
+      .bind(allianceId,pilotId).first<{role:string}>();
+    if (!member) return json({error:"El piloto no pertenece a esa alianza."},404);
+    if (member.role === "lider") return json({error:"Transfiere el liderazgo antes de modificar o retirar al líder."},409);
+    if (action === "set-role") {
+      if (role !== "teniente" && role !== "miembro") return json({error:"El rol indicado no es válido."},400);
+      await db.batch([
+        db.prepare("UPDATE alliance_members SET role=? WHERE alliance_id=? AND pilot_id=?").bind(role,allianceId,pilotId),
+        log(allianceId,null,"set-role:"+String(role),pilotId),
+      ]);
+    } else {
+      const activeWar = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
+      if (activeWar) return json({error:"No puedes retirar miembros mientras la alianza tiene una guerra pendiente o activa."},409);
+      await db.batch([
+        db.prepare("DELETE FROM alliance_members WHERE alliance_id=? AND pilot_id=?").bind(allianceId,pilotId),
+        log(allianceId,null,"remove-member",pilotId),
+      ]);
+    }
+    return json({success:true});
+  }
+
+  if (action === "transfer-leader") {
+    const newLeaderId = pilotId;
+    if (!allianceId || !newLeaderId) return json({error:"Alianza o nuevo líder no válido."},400);
+    const alliance = await db.prepare("SELECT leader_pilot_id FROM alliances WHERE alliance_id=?").bind(allianceId).first<{leader_pilot_id:string}>();
+    const target = await db.prepare("SELECT role FROM alliance_members WHERE alliance_id=? AND pilot_id=?").bind(allianceId,newLeaderId).first();
+    if (!alliance || !target) return json({error:"El nuevo líder debe pertenecer a la alianza."},404);
+    if (alliance.leader_pilot_id === newLeaderId) return json({error:"Ese piloto ya es el líder."},409);
+    await db.batch([
+      db.prepare("UPDATE alliance_members SET role='teniente' WHERE alliance_id=? AND pilot_id=?").bind(allianceId,alliance.leader_pilot_id),
+      db.prepare("UPDATE alliance_members SET role='lider' WHERE alliance_id=? AND pilot_id=?").bind(allianceId,newLeaderId),
+      db.prepare("UPDATE alliances SET leader_pilot_id=? WHERE alliance_id=?").bind(newLeaderId,allianceId),
+      log(allianceId,null,"transfer-leader",newLeaderId),
+    ]);
+    return json({success:true});
+  }
+
+  if (action === "dissolve") {
+    if (!allianceId) return json({error:"Alianza no válida."},400);
+    const alliance = await db.prepare("SELECT name FROM alliances WHERE alliance_id=?").bind(allianceId).first<{name:string}>();
+    if (!alliance) return json({error:"No se encontró la alianza."},404);
+    const locked = await db.prepare("SELECT war_id FROM alliance_war_locks WHERE alliance_id=?").bind(allianceId).first();
+    if (locked) return json({error:"No puedes disolver una alianza con una guerra pendiente o activa."},409);
+    await db.batch([
+      db.prepare("DELETE FROM alliances WHERE alliance_id=?").bind(allianceId),
+      log(allianceId,null,"dissolve:"+alliance.name,null),
+    ]);
+    return json({success:true});
+  }
+
+  if (action === "reject-war" || action === "cancel-war") {
+    if (!warId) return json({error:"Guerra no válida."},400);
+    const war = await db.prepare("SELECT attacker_alliance_id,defender_alliance_id,status FROM alliance_wars WHERE war_id=?")
+      .bind(warId).first<{attacker_alliance_id:string;defender_alliance_id:string;status:string}>();
+    if (!war) return json({error:"No se encontró la guerra."},404);
+    if (action === "reject-war" && war.status !== "DECLARED")
+      return json({error:"Solo puedes rechazar declaraciones pendientes."},409);
+    if (action === "cancel-war" && war.status !== "DECLARED" && war.status !== "PREPARING")
+      return json({error:"Solo puedes cancelar guerras declaradas o en preparación. Los combates iniciados no se alteran."},409);
+    const status = action === "reject-war" ? "REJECTED" : "CANCELLED";
+    await db.batch([
+      db.prepare("UPDATE alliance_wars SET status=?,ended_at=? WHERE war_id=? AND status=?")
+        .bind(status,now,warId,war.status),
+      db.prepare("DELETE FROM alliance_war_locks WHERE war_id=?").bind(warId),
+      log(war.attacker_alliance_id,warId,status.toLowerCase(),null),
+    ]);
+    return json({success:true,status});
+  }
+  return json({error:"Acción administrativa no válida."},400);
+}
+
 async function handleAdminSeasonsRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -6801,6 +6946,8 @@ export default {
   async fetch(request: Request, env?: unknown) {
     try {
       const workerEnv = getWorkerEnv(request, env);
+      const alliancesAdminResponse = await handleAdminAlliancesRequest(request, workerEnv);
+      if (alliancesAdminResponse) return alliancesAdminResponse;
       const seasonsResponse = await handleAdminSeasonsRequest(request, workerEnv);
       if (seasonsResponse) return seasonsResponse;
       const rewardsResponse = await handleAdminRewardsRequest(request, workerEnv);
