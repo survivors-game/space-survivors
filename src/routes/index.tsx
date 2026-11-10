@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -1848,6 +1848,7 @@ function Index() {
 
   return (
     <main className="relative min-h-dvh overflow-x-clip bg-[#070814] font-pixel text-white selection:bg-[#00f0ff]/30">
+      <AnnouncementTicker className="relative z-30" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_75%_5%,#8a2be21c,transparent_38%),radial-gradient(ellipse_at_12%_82%,#00f0ff12,transparent_32%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.1] [background-image:linear-gradient(#00f0ff_1px,transparent_1px),linear-gradient(90deg,#00f0ff_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]" />
       {screen === "MENU" ? <MenuAttractBackdrop /> : null}
@@ -3020,6 +3021,99 @@ function Index() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+const TICKER_TYPE_COLOR: Record<string, string> = {
+  NOTICIA: "#00f0ff",
+  EVENTO: "#ffd700",
+  MANTENIMIENTO: "#ff8a3d",
+  TEMPORADA: "#c4a1ff",
+};
+
+type TickerAnnouncement = {
+  id: string;
+  title: string;
+  type: string;
+  message: string;
+  created_at: number;
+  updated_at: number;
+};
+
+/**
+ * Tira de anuncios persistente: se desplaza de derecha a izquierda en la parte
+ * superior y se mantiene mientras la administración no la retire. Usa tamaños en
+ * rem (text-base / text-lg) para escalar correctamente con el zoom del navegador.
+ */
+function AnnouncementTicker({ className = "" }: { className?: string }) {
+  const [items, setItems] = useState<TickerAnnouncement[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      fetch("/api/announcements", { credentials: "same-origin" })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const data = (await response.json()) as { announcements?: TickerAnnouncement[] };
+          if (active) setItems(data.announcements ?? []);
+        })
+        .catch(() => undefined);
+    };
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  if (items.length === 0) return null;
+
+  // Velocidad proporcional al contenido, con un mínimo para que sea legible.
+  const duration = Math.max(28, items.length * 16);
+
+  const renderSegment = (copy: boolean) => (
+    <div className="flex shrink-0 items-center" aria-hidden={copy}>
+      {items.map((item) => {
+        const color = TICKER_TYPE_COLOR[item.type] ?? "#00f0ff";
+        return (
+          <span
+            key={`${copy ? "copy" : "main"}-${item.id}`}
+            className="flex shrink-0 items-center gap-3 whitespace-nowrap px-6"
+          >
+            <span
+              className="px-2 py-0.5 text-sm font-bold uppercase tracking-wider"
+              style={{ color, border: `1px solid ${color}88`, background: `${color}14` }}
+            >
+              {item.type}
+            </span>
+            <span className="text-lg font-bold uppercase tracking-wide text-white">
+              {item.title}
+            </span>
+            <span className="text-lg text-white/80">{item.message}</span>
+            <span className="px-4 text-cyan-300/60" aria-hidden="true">
+              ◆
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <section
+      aria-label="Anuncios importantes"
+      className={`group overflow-hidden border-b border-cyan-400/30 bg-[#070814]/95 shadow-[0_2px_16px_rgba(0,240,255,0.08)] ${className}`}
+    >
+      <div
+        className="flex w-max items-center py-2.5 group-hover:[animation-play-state:paused]"
+        style={{ animation: `announcement-ticker ${duration}s linear infinite` }}
+      >
+        {renderSegment(false)}
+        {renderSegment(true)}
+      </div>
+      <style>{`@keyframes announcement-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }`}</style>
+    </section>
   );
 }
 
