@@ -3836,7 +3836,13 @@ async function handleMarketRequest(
            FROM player_progress
            WHERE pilot_id = ? AND CAST(COALESCE(json_extract(progress_json, '$.credits'), 0) AS INTEGER) = ?`,
         ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter);
-    const results = await db.batch([update, log]);
+    let results;
+    try {
+      results = await db.batch([update, log]);
+    } catch (error) {
+      console.error("No se pudo guardar el ajuste y su registro económico:", error);
+      return json({ error: "No se pudo completar el ajuste económico. El saldo no fue modificado." }, 409);
+    }
     if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
       return json({ error: "El saldo cambió durante la operación. Actualiza la pantalla e inténtalo de nuevo." }, 409);
     }
