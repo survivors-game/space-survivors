@@ -1,4 +1,4 @@
- import "./lib/error-capture";
+import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -3744,7 +3744,12 @@ async function handleBossRequest(
           account.pilot_id,
           reward.bossId,
           reward.obsidian,
-          JSON.stringify(drops.map((drop) => ({ type: drop.itemType === "nave" ? "nave" : "objeto", name: drop.itemName }))),
+          JSON.stringify(
+            drops.map((drop) => ({
+              type: drop.itemType === "nave" ? "nave" : "objeto",
+              name: drop.itemName,
+            })),
+          ),
           now,
           account.pilot_id,
           reward.bossId,
