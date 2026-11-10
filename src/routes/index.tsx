@@ -1030,7 +1030,13 @@ function Index() {
         onBossDefeated: async (bossId, token, seed, outcome, evidence) => {
           try {
             const proof = await createBossCombatProof(seed, evidence);
-            await marketRequest<{ success: boolean; bossId: string }>("/api/boss/claim", {
+            const claim = await marketRequest<{
+              success: boolean;
+              bossId: string;
+              obsidian: number;
+              rewards: { itemType: "nave" | "objeto"; itemName: string }[];
+              helperReward: { credits: number; obsidian: number } | null;
+            }>("/api/boss/claim", {
               method: "POST",
               body: JSON.stringify({
                 boss_id: bossId,
@@ -1044,11 +1050,33 @@ function Index() {
               }),
             });
             setMarketRefresh((version) => version + 1);
-            setNotice(
-              outcome === "victory"
-                ? "JEFE DERROTADO. RECOMPENSAS ACREDITADAS."
-                : "COMBATE REGISTRADO.",
-            );
+            if (outcome === "victory") {
+              const rewardLines = [
+                `+${claim.obsidian} OBS`,
+                ...claim.rewards.map((reward) => reward.itemName),
+                ...(claim.helperReward
+                  ? [`+${claim.helperReward.credits} CR · +${claim.helperReward.obsidian} OBS por ayuda`]
+                  : []),
+              ];
+              engineRef.current?.banner("JEFE DERROTADO", rewardLines.join(" · "), "good");
+              const shipDrop = claim.rewards.find((reward) => reward.itemType === "nave");
+              if (shipDrop) {
+                void fetch("/api/chat/event", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    type: "boss_kill",
+                    bossName: BOSSES.find((boss) => boss.id === bossId)?.name ?? bossId,
+                    shipName: shipDrop.itemName,
+                  }),
+                }).catch((error: unknown) => {
+                  console.error("No se pudo anunciar la nave obtenida en el chat:", error);
+                });
+              }
+            } else {
+              engineRef.current?.banner("COMBATE FINALIZADO", "Sin recompensas.", "info");
+            }
           } catch (error: unknown) {
             console.error("No se pudo validar el combate del boss:", error);
             setNotice(
