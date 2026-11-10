@@ -3703,9 +3703,7 @@ async function handleMarketRequest(
     if (request.method === "GET" && !pilotId) {
       const search = (url.searchParams.get("search") ?? "").trim().slice(0, 100);
       const filter = url.searchParams.get("filter") ?? "Todos";
-      const pattern = "%" + search.replace(/[\\%_]/g, "\\  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
-
-  if (isAdminPath && request.method === "POST") {") + "%";
+      const pattern = "%" + search.replace(/[\\%_]/g, (character) => "\\" + character) + "%";
       const rows = await db
         .prepare(
           `SELECT p.pilot_id, p.callsign, p.obsidian, p.boss_obsidian, p.vip_until,
