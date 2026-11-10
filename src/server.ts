@@ -4128,7 +4128,6 @@ async function handleAnnouncementsRequest(
   return json({ success: true, id: announcementId });
 }
 
-
 async function handleAdminSummaryRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -4172,7 +4171,10 @@ async function handleAdminSummaryRequest(
 
   const count = async (sql: string, values: unknown[] = []): Promise<number> => {
     try {
-      const row = await db.prepare(sql).bind(...values).first<Record<string, unknown>>();
+      const row = await db
+        .prepare(sql)
+        .bind(...values)
+        .first<Record<string, unknown>>();
       return Number(row?.["count"] ?? 0);
     } catch {
       return 0;
@@ -4180,7 +4182,10 @@ async function handleAdminSummaryRequest(
   };
   const rows = async (sql: string, values: unknown[] = []): Promise<Record<string, unknown>[]> => {
     try {
-      const result = await db.prepare(sql).bind(...values).all<Record<string, unknown>>();
+      const result = await db
+        .prepare(sql)
+        .bind(...values)
+        .all<Record<string, unknown>>();
       return result.results ?? [];
     } catch {
       return [];
@@ -4188,16 +4193,30 @@ async function handleAdminSummaryRequest(
   };
 
   const now = Date.now();
-  const [players, activeSessions, pendingPayments, openDisputes, openSupport, openReports, recentErrors] =
-    await Promise.all([
-      count("SELECT COUNT(*) AS count FROM pilots p JOIN player_accounts pa ON pa.pilot_id = p.pilot_id"),
-      count("SELECT COUNT(*) AS count FROM auth_sessions WHERE wallet_address LIKE 'google:%' AND expires_at > ?", [now]),
-      count("SELECT COUNT(*) AS count FROM obsidian_payment_requests WHERE status = 'PENDING'"),
-      count("SELECT COUNT(*) AS count FROM p2p_disputes WHERE status = 'OPEN'"),
-      count("SELECT COUNT(*) AS count FROM support_tickets WHERE status IN ('OPEN','IN_PROGRESS')"),
-      count("SELECT COUNT(*) AS count FROM chat_reports WHERE status = 'OPEN'"),
-      count("SELECT COUNT(*) AS count FROM admin_server_errors WHERE created_at > ?", [now - 86400000]),
-    ]);
+  const [
+    players,
+    activeSessions,
+    pendingPayments,
+    openDisputes,
+    openSupport,
+    openReports,
+    recentErrors,
+  ] = await Promise.all([
+    count(
+      "SELECT COUNT(*) AS count FROM pilots p JOIN player_accounts pa ON pa.pilot_id = p.pilot_id",
+    ),
+    count(
+      "SELECT COUNT(*) AS count FROM auth_sessions WHERE wallet_address LIKE 'google:%' AND expires_at > ?",
+      [now],
+    ),
+    count("SELECT COUNT(*) AS count FROM obsidian_payment_requests WHERE status = 'PENDING'"),
+    count("SELECT COUNT(*) AS count FROM p2p_disputes WHERE status = 'OPEN'"),
+    count("SELECT COUNT(*) AS count FROM support_tickets WHERE status IN ('OPEN','IN_PROGRESS')"),
+    count("SELECT COUNT(*) AS count FROM chat_reports WHERE status = 'OPEN'"),
+    count("SELECT COUNT(*) AS count FROM admin_server_errors WHERE created_at > ?", [
+      now - 86400000,
+    ]),
+  ]);
 
   const [payments, disputes, support, reports, errors] = await Promise.all([
     rows(
@@ -4218,13 +4237,7 @@ async function handleAdminSummaryRequest(
     ),
   ]);
 
-  const alerts = [
-    ...payments,
-    ...disputes,
-    ...support,
-    ...reports,
-    ...errors,
-  ]
+  const alerts = [...payments, ...disputes, ...support, ...reports, ...errors]
     .map((row) => ({
       id: String(row["id"] ?? crypto.randomUUID()),
       created_at: Number(row["created_at"] ?? 0),

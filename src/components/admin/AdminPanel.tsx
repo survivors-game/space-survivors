@@ -733,7 +733,6 @@ function SectionView({
   );
 }
 
-
 interface AdminSummaryAlert {
   id: string;
   created_at: number;
@@ -852,7 +851,11 @@ function AdminSummarySection() {
               ) : (
                 <tr>
                   <td colSpan={4} className="px-3 py-8 text-center text-white/50">
-                    {loading ? "Cargando alertas…" : error ? "No se pudieron cargar las alertas." : "No hay alertas pendientes."}
+                    {loading
+                      ? "Cargando alertas…"
+                      : error
+                        ? "No se pudieron cargar las alertas."
+                        : "No hay alertas pendientes."}
                   </td>
                 </tr>
               )}
