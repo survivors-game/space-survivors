@@ -14,12 +14,6 @@ function database() {
           return { meta: { changes: 1 } };
         },
         async first() {
-          if (query.includes("FROM auth_sessions"))
-            return { wallet_address: "google:admin-sub", expires_at: Date.now() + 60_000 };
-          if (query.includes("FROM player_accounts") && query.includes("google_sub"))
-            return { google_sub: "admin-sub", email: ADMIN_EMAIL, pilot_id: "plt_admin" };
-          if (query.includes("FROM admin_sessions"))
-            return { token_hash: "valid-admin-session", google_sub: "admin-sub" };
           if (query.includes("COUNT(*) AS count FROM pilots")) return { count: 12 };
           if (query.includes("COUNT(*) AS count FROM auth_sessions")) return { count: 3 };
           if (query.includes("COUNT(*) AS count FROM obsidian_payment_requests")) return { count: 2 };
@@ -27,6 +21,12 @@ function database() {
           if (query.includes("COUNT(*) AS count FROM support_tickets")) return { count: 4 };
           if (query.includes("COUNT(*) AS count FROM chat_reports")) return { count: 5 };
           if (query.includes("COUNT(*) AS count FROM admin_server_errors")) return { count: 1 };
+          if (query.includes("FROM auth_sessions"))
+            return { wallet_address: "google:admin-sub", expires_at: Date.now() + 60_000 };
+          if (query.includes("FROM player_accounts") && query.includes("google_sub"))
+            return { google_sub: "admin-sub", email: ADMIN_EMAIL, pilot_id: "plt_admin" };
+          if (query.includes("FROM admin_sessions"))
+            return { token_hash: "valid-admin-session", google_sub: "admin-sub" };
           return null;
         },
         async all() {
