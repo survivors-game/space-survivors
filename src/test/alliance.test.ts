@@ -325,7 +325,7 @@ describe("alliance system", () => {
         headers: {
           Upgrade: "websocket",
           origin: "https://game.example",
-          cookie: `__Host-ss_session=${tokenFor(0)}`,
+          cookie: `__Host-ss_session=${tokenFor(0)}; __Host-ss_admin=alliance-admin-session`,
         },
       }),
       {
@@ -364,6 +364,10 @@ describe("alliance system", () => {
       "emprendedora.onlinevee@gmail.com",
       pilotId(0),
     );
+    const now = Date.now();
+    db.prepare(
+      "INSERT INTO admin_sessions (token_hash, google_sub, created_at, expires_at) VALUES (?, ?, ?, ?)",
+    ).run(hashToken("alliance-admin-session"), "alliance-sub-0", now, now + 60_000);
     const adminResponse = await server.fetch(request, { DB: database });
     expect(adminResponse.status).toBe(200);
     const vip = db.prepare("SELECT vip_until FROM pilots WHERE pilot_id = ?").get(pilotId(1)) as {
