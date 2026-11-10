@@ -681,7 +681,7 @@ function SectionView({
             ) : null}
 
             <div className="min-w-0 space-y-5">
-              {def.tables?.map((t) => (
+              {def.id !== "premios" ? def.tables?.map((t) => (
                 <div key={t.title} className="overflow-hidden rounded border border-white/10">
                   <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
                     <FileClock className="size-3" />
@@ -711,7 +711,7 @@ function SectionView({
                     </table>
                   </div>
                 </div>
-              ))}
+              )) : null}
               {def.actions ? (
                 <div className="flex flex-wrap gap-2">
                   {def.actions.map((a) => (
@@ -1605,7 +1605,35 @@ function ChatAdminSection() {
       ) : null}
       {loading ? <p className="py-8 text-center text-sm text-white/50">Cargando...</p> : null}
       {!loading && tab === "mensajes" ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 border border-white/10 bg-white/[0.02] p-3">
+            <span className="mr-auto text-xs text-white/60">Limpieza masiva del historial</span>
+            {([
+              ["delete-last-12-hours", "Borrar últimas 12 h"],
+              ["delete-last-24-hours", "Borrar últimas 24 h"],
+              ["delete-all-messages", "Borrar todos"],
+            ] as const).map(([action, label]) => (
+              <button
+                key={action}
+                type="button"
+                disabled={busy || loading}
+                onClick={() => {
+                  const description = action === "delete-last-12-hours"
+                    ? "los mensajes de las últimas 12 horas"
+                    : action === "delete-last-24-hours"
+                      ? "los mensajes de las últimas 24 horas"
+                      : "TODOS los mensajes almacenados";
+                  if (!window.confirm("¿Confirmas borrar " + description + "? Esta acción no se puede deshacer.")) return;
+                  const reason = askReason("Motivo obligatorio para la limpieza masiva:");
+                  if (reason) void act({ action, reason });
+                }}
+                className={`border px-2.5 py-2 text-[10px] disabled:opacity-40 ${action === "delete-all-messages" ? "border-rose-400/40 text-rose-200" : "border-amber-400/30 text-amber-200"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-2">
           {filteredMessages.map((item) => (
             <article
               key={`${item.language}-${item.id}`}
@@ -1643,6 +1671,7 @@ function ChatAdminSection() {
           {filteredMessages.length === 0 ? (
             <p className="py-6 text-center text-sm text-white/40">No hay mensajes.</p>
           ) : null}
+          </div>
         </div>
       ) : null}
       {!loading && tab === "denuncias" ? (
