@@ -552,7 +552,7 @@ function SectionView({
         </div>
       ) : null}
 
-      {def.id === "jugadores" ? <PlayersSection /> : <>
+      {def.id === "economia" ? <EconomySection /> : def.id === "jugadores" ? <PlayersSection /> : <>
       {def.stats ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {def.stats.map((s) => (
@@ -685,6 +685,201 @@ function SectionView({
       </div>
       </>}
     </div>
+  );
+}
+
+function EconomySection() {
+  type Movement = {
+    id: string; pilot_id: string; currency: "CR" | "OBS"; delta: number;
+    balance_before: number; balance_after: number; reason: string;
+    admin_email: string; created_at: number; callsign: string; email: string | null;
+  };
+  const [totals, setTotals] = useState({ cr: 0, obs: 0, movementsToday: 0 });
+  const [movements, setMovements] = useState<Movement[]>([]);
+  const [currencyFilter, setCurrencyFilter] = useState("Todos");
+  const [direction, setDirection] = useState("Todos");
+  const [search, setSearch] = useState("");
+  const [player, setPlayer] = useState("");
+  const [currency, setCurrency] = useState<"CR" | "OBS">("CR");
+  const [operation, setOperation] = useState<"credit" | "debit">("credit");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const loadEconomy = async (
+    nextCurrency = currencyFilter,
+    nextDirection = direction,
+    nextSearch = search,
+  ) => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({
+        currency: nextCurrency,
+        direction: nextDirection,
+        search: nextSearch,
+      });
+      const response = await fetch(`/api/admin/economy?${params.toString()}`, {
+        credentials: "same-origin",
+      });
+      const data = await response.json() as {
+        totals?: { cr: number; obs: number; movementsToday: number };
+        movements?: Movement[];
+        error?: string;
+      };
+      if (!response.ok) throw new Error(data.error || "No se pudo cargar la economía.");
+      setTotals(data.totals ?? { cr: 0, obs: 0, movementsToday: 0 });
+      setMovements(data.movements ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo cargar la economía.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadEconomy("Todos", "Todos", "");
+  }, []);
+
+  const submitAdjustment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const numericAmount = Number(amount);
+    if (!player.trim() || !Number.isSafeInteger(numericAmount) || numericAmount < 1 || reason.trim().length < 5) {
+      setError("Completa jugador, cantidad entera y motivo.");
+      return;
+    }
+    const label = operation === "credit" ? "acreditar" : "descontar";
+    if (!window.confirm(`¿Confirmas ${label} ${numericAmount.toLocaleString()} ${currency} a ${player.trim()}?`)) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/economy", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          player: player.trim(),
+          currency,
+          operation,
+          amount: numericAmount,
+          reason: reason.trim(),
+        }),
+      });
+      const data = await response.json() as {
+        success?: boolean; balanceBefore?: number; balanceAfter?: number; error?: string;
+      };
+      if (!response.ok || !data.success) throw new Error(data.error || "No se pudo ajustar el saldo.");
+      setNotice(`Operación realizada. Saldo anterior: ${(data.balanceBefore ?? 0).toLocaleString()}; saldo nuevo: ${(data.balanceAfter ?? 0).toLocaleString()} ${currency}.`);
+      setAmount("");
+      setReason("");
+      await loadEconomy();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo ajustar el saldo.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dateLabel = (value: number) => new Date(value).toLocaleString();
+
+  return (
+    <section className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          ["CR en circulación", totals.cr.toLocaleString()],
+          ["OBS en circulación", totals.obs.toLocaleString()],
+          ["Movimientos administrativos hoy", totals.movementsToday.toLocaleString()],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-[11px] uppercase tracking-wider text-white/55">{label}</p>
+            <p className="mt-2 font-arcade text-sm text-white">{loading ? "..." : value}</p>
+          </div>
+        ))}
+      </div>
+
+      {notice ? <p role="status" className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
+      {error ? <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+
+      <form onSubmit={(event) => void submitAdjustment(event)} className="grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2">
+        <div className="text-xs uppercase tracking-wider text-cyan-200 md:col-span-2">Ajustar saldo de un jugador</div>
+        <label className="block text-xs text-white/65">
+          Jugador (ID, correo o nombre exacto)
+          <input value={player} onChange={(event) => setPlayer(event.target.value)} maxLength={100} placeholder="plt_... o correo@..." className={inputCls} />
+        </label>
+        <label className="block text-xs text-white/65">
+          Moneda
+          <select value={currency} onChange={(event) => setCurrency(event.target.value as "CR" | "OBS")} className={inputCls}>
+            <option value="CR">CR</option><option value="OBS">OBS</option>
+          </select>
+        </label>
+        <label className="block text-xs text-white/65">
+          Operación
+          <select value={operation} onChange={(event) => setOperation(event.target.value as "credit" | "debit")} className={inputCls}>
+            <option value="credit">Acreditar</option><option value="debit">Descontar</option>
+          </select>
+        </label>
+        <label className="block text-xs text-white/65">
+          Cantidad (número entero)
+          <input type="number" min="1" step="1" max="1000000000" value={amount} onChange={(event) => setAmount(event.target.value)} className={inputCls} />
+        </label>
+        <label className="block text-xs text-white/65 md:col-span-2">
+          Motivo obligatorio
+          <textarea rows={2} maxLength={240} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explica por qué se realiza el ajuste..." className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm text-white outline-none focus:border-cyan-400/40" />
+        </label>
+        <button type="submit" disabled={busy || !player.trim() || !Number.isSafeInteger(Number(amount)) || Number(amount) < 1 || reason.trim().length < 5} className="rounded border border-cyan-400/30 px-3 py-2 text-xs font-bold uppercase text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40 md:col-span-2">
+          {busy ? "Procesando..." : operation === "credit" ? "Acreditar saldo" : "Descontar saldo"}
+        </button>
+      </form>
+
+      <div className="space-y-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <form onSubmit={(event) => { event.preventDefault(); void loadEconomy(currencyFilter, direction, search); }} className="flex min-w-0 flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3">
+            <Search className="size-4 shrink-0 text-white/55" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar jugador en movimientos..." className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40" />
+            <button type="submit" className="text-xs font-bold uppercase text-cyan-200">Buscar</button>
+          </form>
+          <select value={currencyFilter} onChange={(event) => { setCurrencyFilter(event.target.value); void loadEconomy(event.target.value, direction, search); }} className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white">
+            {["Todos", "CR", "OBS"].map((value) => <option key={value}>{value}</option>)}
+          </select>
+          <select value={direction} onChange={(event) => { setDirection(event.target.value); void loadEconomy(currencyFilter, event.target.value, search); }} className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white">
+            {["Todos", "Entradas", "Salidas"].map((value) => <option key={value}>{value}</option>)}
+          </select>
+        </div>
+
+        <div className="overflow-hidden rounded border border-white/10">
+          <div className="flex justify-between border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-white/65">
+            <span>Historial de ajustes administrativos</span><span>{loading ? "Cargando..." : movements.length}</span>
+          </div>
+          {movements.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="text-white/50"><tr>
+                  <th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Jugador</th><th className="px-3 py-2">Moneda</th>
+                  <th className="px-3 py-2">Movimiento</th><th className="px-3 py-2">Saldo anterior</th>
+                  <th className="px-3 py-2">Saldo nuevo</th><th className="px-3 py-2">Motivo</th><th className="px-3 py-2">Admin</th>
+                </tr></thead>
+                <tbody>{movements.map((item) => (
+                  <tr key={item.id} className="border-t border-white/5">
+                    <td className="whitespace-nowrap px-3 py-2 text-xs text-white/55">{dateLabel(item.created_at)}</td>
+                    <td className="px-3 py-2"><span>{item.callsign}</span><span className="block text-xs text-white/40">{item.email || item.pilot_id}</span></td>
+                    <td className="px-3 py-2">{item.currency}</td>
+                    <td className={`px-3 py-2 font-bold ${item.delta > 0 ? "text-emerald-300" : "text-rose-300"}`}>{item.delta > 0 ? "+" : ""}{item.delta.toLocaleString()}</td>
+                    <td className="px-3 py-2">{item.balance_before.toLocaleString()}</td>
+                    <td className="px-3 py-2">{item.balance_after.toLocaleString()}</td>
+                    <td className="max-w-[220px] whitespace-normal px-3 py-2 text-xs text-white/65">{item.reason}</td>
+                    <td className="px-3 py-2 text-xs text-white/45">{item.admin_email}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <p className="p-6 text-center text-sm text-white/45">{loading ? "Cargando movimientos..." : "Todavía no hay ajustes administrativos."}</p>}
+        </div>
+      </div>
+    </section>
   );
 }
 
