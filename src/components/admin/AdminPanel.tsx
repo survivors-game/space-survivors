@@ -552,6 +552,7 @@ function SectionView({
         </div>
       ) : null}
 
+      {def.id === "jugadores" ? <PlayersSection /> : <>
       {def.stats ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {def.stats.map((s) => (
@@ -682,7 +683,262 @@ function SectionView({
           ) : null}
         </div>
       </div>
+      </>}
     </div>
+  );
+}
+
+function PlayersSection() {
+  type Player = {
+    pilotId: string; name: string; email: string; credits: number; obsidian: number;
+    bossObsidian: number; vipUntil: number | null; suspended: boolean; createdAt: number;
+  };
+  type PlayerDetail = Player & {
+    selectedShipId: string; updatedAt: number; suspensionReason: string | null; referrals: number;
+  };
+  type InventoryItem = {
+    id: string; item_id: string; item_name: string; item_type: string;
+    quantity: number; is_locked: number; grant_source: string;
+  };
+  type HistoryItem = { amount: number; reason: string; created_at: number };
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("Todos");
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [selected, setSelected] = useState<PlayerDetail | null>(null);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const loadPlayers = async (nextFilter = filter, nextSearch = search) => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ filter: nextFilter, search: nextSearch });
+      const response = await fetch(`/api/admin/players?${params.toString()}`, {
+        credentials: "same-origin",
+      });
+      const data = await response.json() as { players?: Player[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudieron cargar los jugadores.");
+      setPlayers(data.players ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudieron cargar los jugadores.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openPlayer = async (pilotId: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/players/${encodeURIComponent(pilotId)}`, {
+        credentials: "same-origin",
+      });
+      const data = await response.json() as {
+        player?: PlayerDetail; inventory?: InventoryItem[]; history?: HistoryItem[]; error?: string;
+      };
+      if (!response.ok || !data.player) throw new Error(data.error || "No se pudo abrir el perfil.");
+      setSelected(data.player);
+      setInventory(data.inventory ?? []);
+      setHistory(data.history ?? []);
+      setReason("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo abrir el perfil.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadPlayers("Todos", "");
+    // La carga inicial se realiza una sola vez al abrir la sección.
+  }, []);
+
+  const changeStatus = async () => {
+    if (!selected || busy) return;
+    if (!selected.suspended && reason.trim().length < 5) {
+      setError("Escribe un motivo de al menos 5 caracteres.");
+      return;
+    }
+    const nextSuspended = !selected.suspended;
+    if (!window.confirm(nextSuspended ? "¿Suspender esta cuenta?" : "¿Reactivar esta cuenta?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/players/${encodeURIComponent(selected.pilotId)}/status`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ suspended: nextSuspended, reason: reason.trim() }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error || "No se pudo actualizar la cuenta.");
+      await openPlayer(selected.pilotId);
+      await loadPlayers(filter, search);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo actualizar la cuenta.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dateLabel = (value: number | null) =>
+    value ? new Date(value).toLocaleString() : "—";
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <form
+          className="flex min-w-0 flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3"
+          onSubmit={(event) => { event.preventDefault(); setSelected(null); void loadPlayers(filter, search); }}
+        >
+          <Search className="size-4 shrink-0 text-white/55" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por piloto, correo o ID..."
+            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
+          />
+          <button type="submit" className="text-xs font-bold uppercase text-cyan-200">Buscar</button>
+        </form>
+        <select
+          value={filter}
+          onChange={(event) => {
+            const next = event.target.value;
+            setFilter(next);
+            setSelected(null);
+            void loadPlayers(next, search);
+          }}
+          className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white"
+        >
+          {["Todos", "Activos", "VIP", "Suspendidos"].map((value) => <option key={value}>{value}</option>)}
+        </select>
+      </div>
+
+      {error ? <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+      {selected ? (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setSelected(null)}
+            className="text-xs uppercase tracking-wider text-cyan-200 hover:text-white"
+          >
+            ← Volver a jugadores
+          </button>
+          <div className="rounded border border-cyan-400/20 bg-white/[0.03] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-white">{selected.name}</h2>
+                <p className="text-sm text-white/60">{selected.email}</p>
+                <p className="mt-1 break-all text-xs text-white/40">{selected.pilotId}</p>
+              </div>
+              <span className={`rounded border px-2 py-1 text-xs ${selected.suspended ? "border-rose-400/40 text-rose-300" : "border-emerald-400/40 text-emerald-300"}`}>
+                {selected.suspended ? "SUSPENDIDO" : "ACTIVO"}
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                ["CR", selected.credits.toLocaleString()],
+                ["OBS", selected.obsidian.toLocaleString()],
+                ["OBS de jefes", selected.bossObsidian.toLocaleString()],
+                ["Referidos", selected.referrals.toLocaleString()],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded border border-white/10 p-3">
+                  <p className="text-xs text-white/50">{label}</p>
+                  <p className="mt-1 font-bold text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-1 text-xs text-white/55 sm:grid-cols-2">
+              <p>Registro: {dateLabel(selected.createdAt)}</p>
+              <p>VIP hasta: {dateLabel(selected.vipUntil)}</p>
+              <p>Nave seleccionada: {selected.selectedShipId}</p>
+              <p>Última actualización: {dateLabel(selected.updatedAt)}</p>
+            </div>
+            {selected.suspended ? (
+              <p className="mt-3 text-sm text-rose-200">Motivo: {selected.suspensionReason || "No especificado"}</p>
+            ) : (
+              <div className="mt-4">
+                <label className="block text-xs text-white/60">
+                  Motivo de suspensión
+                  <input
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    maxLength={240}
+                    placeholder="Escribe el motivo..."
+                    className="mt-1 h-10 w-full rounded border border-white/10 bg-black/40 px-3 text-sm text-white outline-none"
+                  />
+                </label>
+              </div>
+            )}
+            <button
+              type="button"
+              disabled={busy || (!selected.suspended && reason.trim().length < 5)}
+              onClick={() => void changeStatus()}
+              className={`mt-3 rounded border px-3 py-2 text-xs font-bold uppercase disabled:opacity-40 ${selected.suspended ? "border-emerald-400/40 text-emerald-300" : "border-rose-400/40 text-rose-300"}`}
+            >
+              {busy ? "Procesando..." : selected.suspended ? "Reactivar cuenta" : "Suspender cuenta"}
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded border border-white/10">
+            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">Inventario</h3>
+            {inventory.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-white/50"><tr><th className="px-3 py-2">Artículo</th><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Cantidad</th><th className="px-3 py-2">Estado</th></tr></thead>
+                  <tbody>{inventory.map((item) => (
+                    <tr key={item.id} className="border-t border-white/5">
+                      <td className="px-3 py-2">{item.item_name}</td>
+                      <td className="px-3 py-2">{item.item_type}</td>
+                      <td className="px-3 py-2">{item.quantity}</td>
+                      <td className="px-3 py-2">{item.is_locked ? "En mercado" : "Disponible"}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            ) : <p className="p-4 text-sm text-white/45">Inventario vacío.</p>}
+          </div>
+
+          <div className="overflow-hidden rounded border border-white/10">
+            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">Historial de OBS acreditadas por administración</h3>
+            {history.length ? history.map((entry, index) => (
+              <div key={index} className="flex flex-wrap justify-between gap-2 border-t border-white/5 px-3 py-2 text-sm">
+                <span>{entry.reason}</span>
+                <span className="text-cyan-200">+{entry.amount} OBS</span>
+                <span className="text-xs text-white/45">{dateLabel(entry.created_at)}</span>
+              </div>
+            )) : <p className="p-4 text-sm text-white/45">Sin movimientos administrativos de OBS.</p>}
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded border border-white/10">
+          <div className="flex justify-between border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-white/65">
+            <span>Jugadores registrados</span><span>{loading ? "Cargando..." : players.length}</span>
+          </div>
+          {players.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="text-white/50"><tr><th className="px-3 py-2">Piloto</th><th className="px-3 py-2">Correo</th><th className="px-3 py-2">CR</th><th className="px-3 py-2">OBS</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Perfil</th></tr></thead>
+                <tbody>{players.map((player) => (
+                  <tr key={player.pilotId} className="border-t border-white/5">
+                    <td className="px-3 py-2">{player.name}</td>
+                    <td className="px-3 py-2 text-white/60">{player.email}</td>
+                    <td className="px-3 py-2">{player.credits.toLocaleString()}</td>
+                    <td className="px-3 py-2">{player.obsidian.toLocaleString()}</td>
+                    <td className="px-3 py-2">{player.suspended ? "Suspendido" : player.vipUntil && player.vipUntil > Date.now() ? "VIP" : "Activo"}</td>
+                    <td className="px-3 py-2"><button type="button" onClick={() => void openPlayer(player.pilotId)} className="text-cyan-200 hover:text-white">Ver perfil</button></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <p className="p-6 text-center text-sm text-white/45">{loading ? "Cargando jugadores..." : "No se encontraron jugadores."}</p>}
+        </div>
+      )}
+    </section>
   );
 }
 
