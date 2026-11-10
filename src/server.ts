@@ -2011,7 +2011,7 @@ async function handleAdminAuthRequest(
   if (attempts?.blocked_until && attempts.blocked_until > now)
     return json({ error: "Demasiados intentos. Inténtalo más tarde." }, 429);
   const body = await readJson(request, 2048);
-  const suppliedPassword = typeof body?.password === "string" ? body.password : "";
+  const suppliedPassword = typeof body?.["password"] === "string" ? body["password"] : "";
   const expectedHash = await sha256Hex(env.ADMIN_PANEL_PASSWORD);
   const suppliedHash = await sha256Hex(suppliedPassword);
   let difference = 0;
@@ -3941,15 +3941,15 @@ async function handleMarketRequest(
     }
 
     const body = await readJson(request, 4096);
-    const action = body?.action;
-    const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+    const action = body?.["action"];
+    const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
     if (reason.length < 5) {
       return json({ error: "Escribe el motivo de la operación (mínimo 5 caracteres)." }, 400);
     }
     const now = Date.now();
 
     if (action === "resolve-buyer" || action === "resolve-seller") {
-      const disputeId = typeof body?.disputeId === "string" ? body.disputeId.trim() : "";
+      const disputeId = typeof body?.["disputeId"] === "string" ? body["disputeId"].trim() : "";
       if (!/^dsp_[a-f0-9]{24}$/.test(disputeId)) {
         return json({ error: "Identificador de disputa no válido." }, 400);
       }
@@ -4010,7 +4010,7 @@ async function handleMarketRequest(
     }
 
     if (action === "remove-listing") {
-      const adId = typeof body?.adId === "string" ? body.adId.trim() : "";
+      const adId = typeof body?.["adId"] === "string" ? body["adId"].trim() : "";
       if (!/^ad_[a-f0-9]{16}$/.test(adId)) {
         return json({ error: "Identificador de publicación no válido." }, 400);
       }
@@ -4118,11 +4118,11 @@ async function handleMarketRequest(
     }
 
     const body = await readJson(request, 4096);
-    const action = body?.action;
+    const action = body?.["action"];
     if (action === "save-wallet") {
       const walletAddress =
-        typeof body?.walletAddress === "string" ? body.walletAddress.trim() : "";
-      const qrUrl = typeof body?.qrUrl === "string" ? body.qrUrl.trim() : "";
+        typeof body?.["walletAddress"] === "string" ? body["walletAddress"].trim() : "";
+      const qrUrl = typeof body?.["qrUrl"] === "string" ? body["qrUrl"].trim() : "";
       if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
         return json({ error: "La dirección de wallet Polygon no es válida." }, 400);
       }
@@ -4162,7 +4162,7 @@ async function handleMarketRequest(
     if (action !== "approve" && action !== "reject") {
       return json({ error: "Operación de pago no válida." }, 400);
     }
-    const paymentId = typeof body?.paymentId === "string" ? body.paymentId.trim() : "";
+    const paymentId = typeof body?.["paymentId"] === "string" ? body["paymentId"].trim() : "";
     if (!/^pay_[a-f0-9]{20}$/.test(paymentId)) {
       return json({ error: "Identificador de pago no válido." }, 400);
     }
@@ -4187,7 +4187,7 @@ async function handleMarketRequest(
 
     const now = Date.now();
     if (action === "reject") {
-      const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+      const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
       if (reason.length < 5) {
         return json({ error: "Escribe un motivo de rechazo de al menos 5 caracteres." }, 400);
       }
@@ -4357,11 +4357,11 @@ async function handleMarketRequest(
     }
 
     const body = await readJson(request, 4096);
-    const playerQuery = typeof body?.player === "string" ? body.player.trim().slice(0, 100) : "";
-    const currency = body?.currency;
-    const operation = body?.operation;
-    const amount = body?.amount;
-    const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 240) : "";
+    const playerQuery = typeof body?.["player"] === "string" ? body["player"].trim().slice(0, 100) : "";
+    const currency = body?.["currency"];
+    const operation = body?.["operation"];
+    const amount = body?.["amount"];
+    const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
     if (
       !playerQuery ||
       (currency !== "CR" && currency !== "OBS") ||
@@ -4403,8 +4403,8 @@ async function handleMarketRequest(
         const progress = current?.progress_json
           ? (JSON.parse(current.progress_json) as { credits?: unknown })
           : {};
-        balanceBefore = Number.isSafeInteger(Number(progress.credits))
-          ? Math.max(0, Number(progress.credits))
+        balanceBefore = Number.isSafeInteger(Number(progress["credits"]))
+          ? Math.max(0, Number(progress["credits"]))
           : 0;
       } catch {
         return json({ error: "El saldo CR del jugador no se puede leer." }, 409);
@@ -4561,7 +4561,7 @@ async function handleMarketRequest(
           const progress = row.progress_json
             ? (JSON.parse(row.progress_json) as { credits?: unknown })
             : {};
-          credits = Number(progress.credits) || 0;
+          credits = Number(progress["credits"]) || 0;
         } catch {
           /* Un progreso dañado no debe impedir mostrar el resto del perfil. */
         }
@@ -4662,7 +4662,7 @@ async function handleMarketRequest(
           pilotId: player.pilot_id,
           name: player.display_name?.trim() || player.callsign,
           email: player.email,
-          credits: Number(progress.credits) || 0,
+          credits: Number(progress["credits"]) || 0,
           obsidian: player.obsidian,
           bossObsidian: player.boss_obsidian,
           vipUntil: player.vip_until,
@@ -4681,11 +4681,11 @@ async function handleMarketRequest(
 
     if (request.method === "POST" && isStatusPath) {
       const body = await readJson(request, 2048);
-      if (typeof body?.suspended !== "boolean") {
+      if (typeof body?.["suspended"] !== "boolean") {
         return json({ error: "Indica si la cuenta debe quedar suspendida o activa." }, 400);
       }
-      const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 240) : "";
-      if (body.suspended && reason.length < 5) {
+      const reason = typeof body["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
+      if (body["suspended"] && reason.length < 5) {
         return json({ error: "Escribe un motivo de al menos 5 caracteres." }, 400);
       }
       const target = await db
@@ -4693,11 +4693,11 @@ async function handleMarketRequest(
         .bind(pilotId)
         .first<{ google_sub: string }>();
       if (!target) return json({ error: "No se encontró el jugador." }, 404);
-      if (body.suspended && target.google_sub === account.google_sub) {
+      if (body["suspended"] && target.google_sub === account.google_sub) {
         return json({ error: "No puedes suspender tu propia cuenta administradora." }, 400);
       }
       const now = Date.now();
-      const action = body.suspended ? "SUSPENDIDO" : "REACTIVADO";
+      const action = body["suspended"] ? "SUSPENDIDO" : "REACTIVADO";
       const statements = [
         db
           .prepare(
@@ -4708,14 +4708,14 @@ async function handleMarketRequest(
              reason = excluded.reason,
              updated_at = excluded.updated_at`,
           )
-          .bind(pilotId, body.suspended ? now : null, body.suspended ? reason : null, now),
+          .bind(pilotId, body["suspended"] ? now : null, body["suspended"] ? reason : null, now),
         db
           .prepare(
             "INSERT INTO admin_player_logs (id, pilot_id, action, reason, created_at) VALUES (?, ?, ?, ?, ?)",
           )
           .bind("plog_" + randomHex(8), pilotId, action, reason || "Sin motivo indicado", now),
       ];
-      if (body.suspended) {
+      if (body["suspended"]) {
         statements.push(
           db
             .prepare("DELETE FROM auth_sessions WHERE wallet_address = ?")
@@ -4723,7 +4723,7 @@ async function handleMarketRequest(
         );
       }
       await db.batch(statements);
-      return json({ success: true, suspended: body.suspended });
+      return json({ success: true, suspended: body["suspended"] });
     }
 
     return json({ error: "Ruta de jugador no encontrada." }, 404);
@@ -4944,9 +4944,9 @@ async function handleMarketRequest(
   }
   if (url.pathname === "/api/market/dispute" && request.method === "POST") {
     const body = await readJson(request, 4096);
-    const orderId = typeof body?.order_id === "string" ? body.order_id.trim() : "";
-    const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
-    const evidenceUrl = typeof body?.evidence_url === "string" ? body.evidence_url.trim() : "";
+    const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
+    const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 500) : "";
+    const evidenceUrl = typeof body?.["evidence_url"] === "string" ? body["evidence_url"].trim() : "";
     if (!orderId || orderId.length > 64 || reason.length < 10) {
       return pilotJson(
         request,
@@ -5021,9 +5021,9 @@ async function handleMarketRequest(
 
   if (url.pathname === "/api/market/dispute/message" && request.method === "POST") {
     const body = await readJson(request, 4096);
-    const orderId = typeof body?.order_id === "string" ? body.order_id.trim() : "";
-    const message = typeof body?.message === "string" ? body.message.trim().slice(0, 1000) : "";
-    const evidenceUrl = typeof body?.evidence_url === "string" ? body.evidence_url.trim() : "";
+    const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
+    const message = typeof body?.["message"] === "string" ? body["message"].trim().slice(0, 1000) : "";
+    const evidenceUrl = typeof body?.["evidence_url"] === "string" ? body["evidence_url"].trim() : "";
     if (!orderId || orderId.length > 64 || message.length < 2) {
       return pilotJson(request, pilotId, { error: "Escribe un mensaje válido." }, 400);
     }
