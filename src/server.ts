@@ -4029,12 +4029,19 @@ async function handleAdminRewardsRequest(
   if (duplicate)
     return json({ error: "Esta entrega ya fue procesada. Actualiza el historial." }, 409);
 
-  const matches = await db
-    .prepare(
-      "SELECT p.pilot_id, p.callsign, pa.email FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id WHERE p.pilot_id = ? OR lower(pa.email) = lower(?) OR lower(p.callsign) = lower(?) OR lower(pp.display_name) = lower(?) LIMIT 2",
-    )
-    .bind(recipient, recipient, recipient, recipient)
-    .all<{ pilot_id: string; callsign: string; email: string | null }>();
+  const matches = validPilotId(recipient)
+    ? await db
+        .prepare(
+          "SELECT p.pilot_id, p.callsign, pa.email FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id WHERE p.pilot_id = ? LIMIT 1",
+        )
+        .bind(recipient)
+        .all<{ pilot_id: string; callsign: string; email: string | null }>()
+    : await db
+        .prepare(
+          "SELECT p.pilot_id, p.callsign, pa.email FROM pilots p LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id WHERE lower(pa.email) = lower(?) OR lower(p.callsign) = lower(?) OR lower(pp.display_name) = lower(?) LIMIT 2",
+        )
+        .bind(recipient, recipient, recipient)
+        .all<{ pilot_id: string; callsign: string; email: string | null }>();
   if (!matches.results?.length) return json({ error: "No se encontró ese jugador." }, 404);
   if (matches.results.length > 1)
     return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
