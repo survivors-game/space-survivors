@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -3058,11 +3058,18 @@ function AnnouncementTicker({ className = "" }: { className?: string }) {
         })
         .catch(() => undefined);
     };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
     load();
-    const timer = window.setInterval(load, 60_000);
+    const timer = window.setInterval(load, 10_000);
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       window.clearInterval(timer);
+      window.removeEventListener("focus", load);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
