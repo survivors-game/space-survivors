@@ -61,7 +61,10 @@ function makeRequest(body: Record<string, unknown>, authenticated = true, panelS
       "content-type": "application/json",
       origin: "https://game.example",
       ...(authenticated
-        ? { cookie: "__Host-ss_session=admin" + (panelSession ? "; __Host-ss_admin=admin-panel" : "") }
+        ? {
+            cookie:
+              "__Host-ss_session=admin" + (panelSession ? "; __Host-ss_admin=admin-panel" : ""),
+          }
         : {}),
     },
     body: JSON.stringify(body),
@@ -72,7 +75,16 @@ describe("administrative CR and OBS economy", () => {
   it("rejects requests without an authenticated account", async () => {
     const mock = createDatabase();
     const response = await server.fetch(
-      makeRequest({ player: PILOT_ID, currency: "OBS", operation: "credit", amount: 10, reason: "Ajuste de prueba" }, false),
+      makeRequest(
+        {
+          player: PILOT_ID,
+          currency: "OBS",
+          operation: "credit",
+          amount: 10,
+          reason: "Ajuste de prueba",
+        },
+        false,
+      ),
       { DB: mock.db },
     );
     expect(response.status).toBe(401);
@@ -82,7 +94,17 @@ describe("administrative CR and OBS economy", () => {
   it("requires the second administrative password session", async () => {
     const mock = createDatabase();
     const response = await server.fetch(
-      makeRequest({ player: PILOT_ID, currency: "OBS", operation: "credit", amount: 10, reason: "Ajuste de prueba" }, true, false),
+      makeRequest(
+        {
+          player: PILOT_ID,
+          currency: "OBS",
+          operation: "credit",
+          amount: 10,
+          reason: "Ajuste de prueba",
+        },
+        true,
+        false,
+      ),
       { DB: mock.db },
     );
     expect(response.status).toBe(403);
@@ -92,7 +114,13 @@ describe("administrative CR and OBS economy", () => {
   it("rejects a non-administrator account", async () => {
     const mock = createDatabase({ email: "player@example.com" });
     const response = await server.fetch(
-      makeRequest({ player: PILOT_ID, currency: "CR", operation: "credit", amount: 10, reason: "Ajuste de prueba" }),
+      makeRequest({
+        player: PILOT_ID,
+        currency: "CR",
+        operation: "credit",
+        amount: 10,
+        reason: "Ajuste de prueba",
+      }),
       { DB: mock.db },
     );
     expect(response.status).toBe(403);
@@ -102,7 +130,13 @@ describe("administrative CR and OBS economy", () => {
   it("credits CR through the protected admin endpoint", async () => {
     const mock = createDatabase({ credits: 40 });
     const response = await server.fetch(
-      makeRequest({ player: PILOT_ID, currency: "CR", operation: "credit", amount: 25, reason: "Corrección solicitada" }),
+      makeRequest({
+        player: PILOT_ID,
+        currency: "CR",
+        operation: "credit",
+        amount: 25,
+        reason: "Corrección solicitada",
+      }),
       { DB: mock.db },
     );
     expect(response.status).toBe(200);
@@ -119,7 +153,13 @@ describe("administrative CR and OBS economy", () => {
   it("credits OBS through the protected admin endpoint", async () => {
     const mock = createDatabase({ obsidian: 15 });
     const response = await server.fetch(
-      makeRequest({ player: PILOT_ID, currency: "OBS", operation: "credit", amount: 10, reason: "Recompensa autorizada" }),
+      makeRequest({
+        player: PILOT_ID,
+        currency: "OBS",
+        operation: "credit",
+        amount: 10,
+        reason: "Recompensa autorizada",
+      }),
       { DB: mock.db },
     );
     expect(response.status).toBe(200);
@@ -136,7 +176,13 @@ describe("administrative CR and OBS economy", () => {
   it("prevents an OBS debit from making the balance negative", async () => {
     const mock = createDatabase({ obsidian: 2 });
     const response = await server.fetch(
-      makeRequest({ player: PILOT_ID, currency: "OBS", operation: "debit", amount: 3, reason: "Corrección solicitada" }),
+      makeRequest({
+        player: PILOT_ID,
+        currency: "OBS",
+        operation: "debit",
+        amount: 3,
+        reason: "Corrección solicitada",
+      }),
       { DB: mock.db },
     );
     expect(response.status).toBe(409);

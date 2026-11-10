@@ -185,7 +185,8 @@ async function ensureAuthSchema(db: D1Database): Promise<void> {
           `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
         ON auth_sessions(expires_at)`,
         )
-        .run();      await db
+        .run();
+      await db
         .prepare(
           `CREATE TABLE IF NOT EXISTS admin_sessions (
         token_hash TEXT PRIMARY KEY,
@@ -562,7 +563,10 @@ async function handleSocialRequest(
     if (isAdminVipPath) {
       if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
       if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-      if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) {
+      if (
+        account.email.toLowerCase() !== ADMIN_EMAIL ||
+        !(await hasValidAdminSession(db, request, account.google_sub))
+      ) {
         return json({ error: "Acceso administrativo requerido." }, 403);
       }
       const body = await readJson(request);
@@ -1935,25 +1939,47 @@ async function hasValidAdminSession(
 ): Promise<boolean> {
   const token = readCookie(request, ADMIN_SESSION_COOKIE);
   if (!token) return false;
-  const session = await db.prepare(
-    "SELECT token_hash FROM admin_sessions WHERE token_hash = ? AND google_sub = ? AND expires_at > ?",
-  ).bind(await sha256Hex(token), googleSub, Date.now()).first<{ token_hash: string }>();
+  const session = await db
+    .prepare(
+      "SELECT token_hash FROM admin_sessions WHERE token_hash = ? AND google_sub = ? AND expires_at > ?",
+    )
+    .bind(await sha256Hex(token), googleSub, Date.now())
+    .first<{ token_hash: string }>();
   return Boolean(session);
 }
 
 function adminSessionCookie(token: string, maxAge: number): string {
-  return ADMIN_SESSION_COOKIE + "=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" + maxAge;
+  return (
+    ADMIN_SESSION_COOKIE +
+    "=" +
+    token +
+    "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=" +
+    maxAge
+  );
 }
 
-async function handleAdminAuthRequest(request: Request, env: WorkerEnv | undefined): Promise<Response | null> {
+async function handleAdminAuthRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
   const url = new URL(request.url);
-  if (!["/api/admin/auth/login", "/api/admin/auth/status", "/api/admin/auth/logout"].includes(url.pathname)) return null;
+  if (
+    !["/api/admin/auth/login", "/api/admin/auth/status", "/api/admin/auth/logout"].includes(
+      url.pathname,
+    )
+  )
+    return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
   const db = env.DB;
-  try { await ensureAuthSchema(db); }
-  catch (error) { console.error("No se pudo preparar la autenticación administrativa:", error); return json({ error: "No se pudo preparar el acceso administrativo." }, 503); }
+  try {
+    await ensureAuthSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar la autenticación administrativa:", error);
+    return json({ error: "No se pudo preparar el acceso administrativo." }, 503);
+  }
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
-  if (!account || account.email.toLowerCase() !== ADMIN_EMAIL) return json({ error: "Acceso administrativo no autorizado." }, 403);
+  if (!account || account.email.toLowerCase() !== ADMIN_EMAIL)
+    return json({ error: "Acceso administrativo no autorizado." }, 403);
   if (url.pathname === "/api/admin/auth/status") {
     if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
     return json({ authenticated: await hasValidAdminSession(db, request, account.google_sub) });
@@ -1962,36 +1988,67 @@ async function handleAdminAuthRequest(request: Request, env: WorkerEnv | undefin
   if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
   if (url.pathname === "/api/admin/auth/logout") {
     const token = readCookie(request, ADMIN_SESSION_COOKIE);
-    if (token) await db.prepare("DELETE FROM admin_sessions WHERE token_hash = ?").bind(await sha256Hex(token)).run();
-    return json({ authenticated: false }, 200, { "set-cookie": ADMIN_SESSION_COOKIE + "=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
+    if (token)
+      await db
+        .prepare("DELETE FROM admin_sessions WHERE token_hash = ?")
+        .bind(await sha256Hex(token))
+        .run();
+    return json({ authenticated: false }, 200, {
+      "set-cookie":
+        ADMIN_SESSION_COOKIE + "=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0",
+    });
   }
-  if (!env.ADMIN_PANEL_PASSWORD || env.ADMIN_PANEL_PASSWORD.length < 16) return json({ error: "El acceso administrativo aún no está configurado." }, 503);
+  if (!env.ADMIN_PANEL_PASSWORD || env.ADMIN_PANEL_PASSWORD.length < 16)
+    return json({ error: "El acceso administrativo aún no está configurado." }, 503);
   const ipHash = await sha256Hex(request.headers.get("cf-connecting-ip") ?? "unknown");
   const now = Date.now();
-  const attempts = await db.prepare("SELECT attempts, window_started_at, blocked_until FROM admin_login_attempts WHERE ip_hash = ?")
-    .bind(ipHash).first<{ attempts: number; window_started_at: number; blocked_until: number }>();
-  if (attempts?.blocked_until && attempts.blocked_until > now) return json({ error: "Demasiados intentos. Inténtalo más tarde." }, 429);
+  const attempts = await db
+    .prepare(
+      "SELECT attempts, window_started_at, blocked_until FROM admin_login_attempts WHERE ip_hash = ?",
+    )
+    .bind(ipHash)
+    .first<{ attempts: number; window_started_at: number; blocked_until: number }>();
+  if (attempts?.blocked_until && attempts.blocked_until > now)
+    return json({ error: "Demasiados intentos. Inténtalo más tarde." }, 429);
   const body = await readJson(request, 2048);
   const suppliedPassword = typeof body?.password === "string" ? body.password : "";
   const expectedHash = await sha256Hex(env.ADMIN_PANEL_PASSWORD);
   const suppliedHash = await sha256Hex(suppliedPassword);
   let difference = 0;
-  for (let i = 0; i < expectedHash.length; i += 1) difference |= expectedHash.charCodeAt(i) ^ suppliedHash.charCodeAt(i);
+  for (let i = 0; i < expectedHash.length; i += 1)
+    difference |= expectedHash.charCodeAt(i) ^ suppliedHash.charCodeAt(i);
   if (!suppliedPassword || difference !== 0) {
     const inWindow = Boolean(attempts && attempts.window_started_at > now - ADMIN_LOGIN_WINDOW_MS);
     const nextAttempts = inWindow ? attempts!.attempts + 1 : 1;
     const windowStartedAt = inWindow ? attempts!.window_started_at : now;
     const blockedUntil = nextAttempts >= ADMIN_LOGIN_MAX_ATTEMPTS ? now + ADMIN_LOGIN_WINDOW_MS : 0;
-    await db.prepare("INSERT INTO admin_login_attempts (ip_hash, attempts, window_started_at, blocked_until) VALUES (?, ?, ?, ?) ON CONFLICT(ip_hash) DO UPDATE SET attempts=excluded.attempts, window_started_at=excluded.window_started_at, blocked_until=excluded.blocked_until")
-      .bind(ipHash, nextAttempts, windowStartedAt, blockedUntil).run();
-    return json({ error: blockedUntil ? "Demasiados intentos. Acceso bloqueado durante 15 minutos." : "Contraseña incorrecta." }, blockedUntil ? 429 : 401);
+    await db
+      .prepare(
+        "INSERT INTO admin_login_attempts (ip_hash, attempts, window_started_at, blocked_until) VALUES (?, ?, ?, ?) ON CONFLICT(ip_hash) DO UPDATE SET attempts=excluded.attempts, window_started_at=excluded.window_started_at, blocked_until=excluded.blocked_until",
+      )
+      .bind(ipHash, nextAttempts, windowStartedAt, blockedUntil)
+      .run();
+    return json(
+      {
+        error: blockedUntil
+          ? "Demasiados intentos. Acceso bloqueado durante 15 minutos."
+          : "Contraseña incorrecta.",
+      },
+      blockedUntil ? 429 : 401,
+    );
   }
   await db.prepare("DELETE FROM admin_login_attempts WHERE ip_hash = ?").bind(ipHash).run();
   const token = randomHex(32);
   const expiresAt = now + ADMIN_SESSION_TTL_MS;
-  await db.prepare("INSERT INTO admin_sessions (token_hash, google_sub, created_at, expires_at) VALUES (?, ?, ?, ?)")
-    .bind(await sha256Hex(token), account.google_sub, now, expiresAt).run();
-  return json({ authenticated: true, expiresAt }, 200, { "set-cookie": adminSessionCookie(token, Math.floor(ADMIN_SESSION_TTL_MS / 1000)) });
+  await db
+    .prepare(
+      "INSERT INTO admin_sessions (token_hash, google_sub, created_at, expires_at) VALUES (?, ?, ?, ?)",
+    )
+    .bind(await sha256Hex(token), account.google_sub, now, expiresAt)
+    .run();
+  return json({ authenticated: true, expiresAt }, 200, {
+    "set-cookie": adminSessionCookie(token, Math.floor(ADMIN_SESSION_TTL_MS / 1000)),
+  });
 }
 type MarketInventoryRow = {
   id: string;
@@ -3680,9 +3737,11 @@ async function handleMarketRequest(
   const isMarketPath =
     url.pathname.startsWith("/api/market/") || url.pathname.startsWith("/api/inventory/");
   const isAdminPlayersPath =
-    url.pathname === "/api/admin/players" || /^\/api\/admin\/players\/[^/]+(?:\/status)?$/.test(url.pathname);
+    url.pathname === "/api/admin/players" ||
+    /^\/api\/admin\/players\/[^/]+(?:\/status)?$/.test(url.pathname);
   const isAdminEconomyPath = url.pathname === "/api/admin/economy";
-  const isAdminPath = url.pathname === "/api/admin/credit-obsidian" || isAdminPlayersPath || isAdminEconomyPath;
+  const isAdminPath =
+    url.pathname === "/api/admin/credit-obsidian" || isAdminPlayersPath || isAdminEconomyPath;
   if (!isMarketPath && !isAdminPath) return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible en este Worker." }, 503);
 
@@ -3716,19 +3775,25 @@ async function handleMarketRequest(
       const currency = url.searchParams.get("currency") ?? "Todos";
       const direction = url.searchParams.get("direction") ?? "Todos";
       const search = (url.searchParams.get("search") ?? "").trim().slice(0, 100);
-      if (!["Todos", "CR", "OBS"].includes(currency) || !["Todos", "Entradas", "Salidas"].includes(direction)) {
+      if (
+        !["Todos", "CR", "OBS"].includes(currency) ||
+        !["Todos", "Entradas", "Salidas"].includes(direction)
+      ) {
         return json({ error: "Filtro de economía no válido." }, 400);
       }
       const pattern = "%" + search.replace(/[\\%_]/g, (character) => "\\" + character) + "%";
       const [totals, movements] = await Promise.all([
-        db.prepare(
-          `SELECT
+        db
+          .prepare(
+            `SELECT
             COALESCE(SUM(CASE WHEN json_valid(pr.progress_json) THEN CAST(COALESCE(json_extract(pr.progress_json, '$.credits'), 0) AS INTEGER) ELSE 0 END), 0) AS cr_total,
             COALESCE((SELECT SUM(obsidian) FROM pilots), 0) AS obs_total
            FROM player_progress pr`,
-        ).first<{ cr_total: number; obs_total: number }>(),
-        db.prepare(
-          `SELECT l.id, l.pilot_id, l.currency, l.delta, l.balance_before, l.balance_after,
+          )
+          .first<{ cr_total: number; obs_total: number }>(),
+        db
+          .prepare(
+            `SELECT l.id, l.pilot_id, l.currency, l.delta, l.balance_before, l.balance_after,
             l.reason, l.admin_email, l.created_at, p.callsign, pa.email
            FROM admin_economy_logs l
            JOIN pilots p ON p.pilot_id = l.pilot_id
@@ -3737,20 +3802,44 @@ async function handleMarketRequest(
              AND (? = 'Todos' OR (? = 'Entradas' AND l.delta > 0) OR (? = 'Salidas' AND l.delta < 0))
              AND (? = '' OR l.pilot_id LIKE ? ESCAPE '\\' OR p.callsign LIKE ? ESCAPE '\\' OR pa.email LIKE ? ESCAPE '\\')
            ORDER BY l.created_at DESC LIMIT 100`,
-        ).bind(currency, currency, direction, direction, direction, search, pattern, pattern, pattern)
+          )
+          .bind(
+            currency,
+            currency,
+            direction,
+            direction,
+            direction,
+            search,
+            pattern,
+            pattern,
+            pattern,
+          )
           .all<{
-            id: string; pilot_id: string; currency: string; delta: number; balance_before: number;
-            balance_after: number; reason: string; admin_email: string; created_at: number;
-            callsign: string; email: string | null;
+            id: string;
+            pilot_id: string;
+            currency: string;
+            delta: number;
+            balance_before: number;
+            balance_after: number;
+            reason: string;
+            admin_email: string;
+            created_at: number;
+            callsign: string;
+            email: string | null;
           }>(),
       ]);
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const todayCount = await db.prepare(
-        "SELECT COUNT(*) AS total FROM admin_economy_logs WHERE created_at >= ?",
-      ).bind(todayStart.getTime()).first<{ total: number }>();
+      const todayCount = await db
+        .prepare("SELECT COUNT(*) AS total FROM admin_economy_logs WHERE created_at >= ?")
+        .bind(todayStart.getTime())
+        .first<{ total: number }>();
       return json({
-        totals: { cr: totals?.cr_total ?? 0, obs: totals?.obs_total ?? 0, movementsToday: todayCount?.total ?? 0 },
+        totals: {
+          cr: totals?.cr_total ?? 0,
+          obs: totals?.obs_total ?? 0,
+          movementsToday: todayCount?.total ?? 0,
+        },
         movements: movements.results ?? [],
       });
     }
@@ -3773,30 +3862,38 @@ async function handleMarketRequest(
     ) {
       return json({ error: "Datos no válidos. Revisa jugador, moneda, cantidad y motivo." }, 400);
     }
-    const matches = await db.prepare(
-      `SELECT p.pilot_id, p.obsidian
+    const matches = await db
+      .prepare(
+        `SELECT p.pilot_id, p.obsidian
        FROM pilots p
        LEFT JOIN player_accounts pa ON pa.pilot_id = p.pilot_id
        LEFT JOIN player_profiles pp ON pp.pilot_id = p.pilot_id
        WHERE p.pilot_id = ? OR LOWER(pa.email) = LOWER(?)
          OR LOWER(p.callsign) = LOWER(?) OR LOWER(pp.display_name) = LOWER(?)
        LIMIT 2`,
-    ).bind(playerQuery, playerQuery, playerQuery, playerQuery)
+      )
+      .bind(playerQuery, playerQuery, playerQuery, playerQuery)
       .all<{ pilot_id: string; obsidian: number }>();
     const matchedPlayers = matches.results ?? [];
     if (!matchedPlayers.length) return json({ error: "No se encontró el jugador." }, 404);
-    if (matchedPlayers.length > 1) return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
+    if (matchedPlayers.length > 1)
+      return json({ error: "Hay varios jugadores con ese nombre. Usa su ID o correo." }, 409);
     const pilot = matchedPlayers[0]!;
     const pilotId = pilot.pilot_id;
 
     let balanceBefore = 0;
     if (currency === "CR") {
-      const current = await db.prepare(
-        "SELECT progress_json FROM player_progress WHERE pilot_id = ?",
-      ).bind(pilotId).first<{ progress_json: string }>();
+      const current = await db
+        .prepare("SELECT progress_json FROM player_progress WHERE pilot_id = ?")
+        .bind(pilotId)
+        .first<{ progress_json: string }>();
       try {
-        const progress = current?.progress_json ? JSON.parse(current.progress_json) as { credits?: unknown } : {};
-        balanceBefore = Number.isSafeInteger(Number(progress.credits)) ? Math.max(0, Number(progress.credits)) : 0;
+        const progress = current?.progress_json
+          ? (JSON.parse(current.progress_json) as { credits?: unknown })
+          : {};
+        balanceBefore = Number.isSafeInteger(Number(progress.credits))
+          ? Math.max(0, Number(progress.credits))
+          : 0;
       } catch {
         return json({ error: "El saldo CR del jugador no se puede leer." }, 409);
       }
@@ -3810,41 +3907,84 @@ async function handleMarketRequest(
     }
     const now = Date.now();
     const logId = "econ_" + randomHex(10);
-    const update = currency === "OBS"
-      ? db.prepare(
-          "UPDATE pilots SET obsidian = ?, updated_at = ? WHERE pilot_id = ? AND obsidian = ?",
-        ).bind(balanceAfter, now, pilotId, balanceBefore)
-      : db.prepare(
-          `INSERT INTO player_progress (pilot_id, progress_json, updated_at)
+    const update =
+      currency === "OBS"
+        ? db
+            .prepare(
+              "UPDATE pilots SET obsidian = ?, updated_at = ? WHERE pilot_id = ? AND obsidian = ?",
+            )
+            .bind(balanceAfter, now, pilotId, balanceBefore)
+        : db
+            .prepare(
+              `INSERT INTO player_progress (pilot_id, progress_json, updated_at)
            VALUES (?, json_object('v', 1, 'credits', ?), ?)
            ON CONFLICT(pilot_id) DO UPDATE SET
              progress_json = json_set(player_progress.progress_json, '$.credits', ?),
              updated_at = excluded.updated_at
            WHERE CAST(COALESCE(json_extract(player_progress.progress_json, '$.credits'), 0) AS INTEGER) = ?`,
-        ).bind(pilotId, balanceAfter, now, balanceAfter, balanceBefore);
-    const log = currency === "OBS"
-      ? db.prepare(
-          `INSERT INTO admin_economy_logs
+            )
+            .bind(pilotId, balanceAfter, now, balanceAfter, balanceBefore);
+    const log =
+      currency === "OBS"
+        ? db
+            .prepare(
+              `INSERT INTO admin_economy_logs
            (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
            SELECT ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?
            FROM pilots WHERE pilot_id = ? AND obsidian = ?`,
-        ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter)
-      : db.prepare(
-          `INSERT INTO admin_economy_logs
+            )
+            .bind(
+              logId,
+              pilotId,
+              currency,
+              delta,
+              balanceBefore,
+              balanceAfter,
+              reason,
+              account.email,
+              now,
+              pilotId,
+              balanceAfter,
+            )
+        : db
+            .prepare(
+              `INSERT INTO admin_economy_logs
            (id, pilot_id, currency, delta, balance_before, balance_after, reason, admin_email, created_at)
            SELECT ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?
            FROM player_progress
            WHERE pilot_id = ? AND CAST(COALESCE(json_extract(progress_json, '$.credits'), 0) AS INTEGER) = ?`,
-        ).bind(logId, pilotId, currency, delta, balanceBefore, balanceAfter, reason, account.email, now, pilotId, balanceAfter);
+            )
+            .bind(
+              logId,
+              pilotId,
+              currency,
+              delta,
+              balanceBefore,
+              balanceAfter,
+              reason,
+              account.email,
+              now,
+              pilotId,
+              balanceAfter,
+            );
     let results;
     try {
       results = await db.batch([update, log]);
     } catch (error) {
       console.error("No se pudo guardar el ajuste y su registro económico:", error);
-      return json({ error: "No se pudo completar el ajuste económico. El saldo no fue modificado." }, 409);
+      return json(
+        { error: "No se pudo completar el ajuste económico. El saldo no fue modificado." },
+        409,
+      );
     }
     if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1) {
-      return json({ error: "El saldo cambió durante la operación. Actualiza la pantalla e inténtalo de nuevo." }, 409);
+      return json(
+        {
+          error:
+            "El saldo cambió durante la operación. Actualiza la pantalla e inténtalo de nuevo.",
+        },
+        409,
+      );
     }
     return json({ success: true, currency, balanceBefore, balanceAfter, delta });
   }
@@ -3892,16 +4032,27 @@ async function handleMarketRequest(
         )
         .bind(search, pattern, pattern, pattern, pattern, filter, Date.now(), filter, filter)
         .all<{
-          pilot_id: string; callsign: string; obsidian: number; boss_obsidian: number;
-          vip_until: number | null; created_at: number; email: string;
-          display_name: string | null; suspended_at: number | null; progress_json: string | null;
+          pilot_id: string;
+          callsign: string;
+          obsidian: number;
+          boss_obsidian: number;
+          vip_until: number | null;
+          created_at: number;
+          email: string;
+          display_name: string | null;
+          suspended_at: number | null;
+          progress_json: string | null;
         }>();
       const players = (rows.results ?? []).map((row) => {
         let credits = 0;
         try {
-          const progress = row.progress_json ? JSON.parse(row.progress_json) as { credits?: unknown } : {};
+          const progress = row.progress_json
+            ? (JSON.parse(row.progress_json) as { credits?: unknown })
+            : {};
           credits = Number(progress.credits) || 0;
-        } catch { /* Un progreso dañado no debe impedir mostrar el resto del perfil. */ }
+        } catch {
+          /* Un progreso dañado no debe impedir mostrar el resto del perfil. */
+        }
         return {
           pilotId: row.pilot_id,
           name: row.display_name?.trim() || row.callsign,
@@ -3934,35 +4085,65 @@ async function handleMarketRequest(
         )
         .bind(pilotId)
         .first<{
-          pilot_id: string; callsign: string; obsidian: number; boss_obsidian: number;
-          vip_until: number | null; created_at: number; updated_at: number;
-          selected_ship_id: string; email: string; display_name: string | null;
-          suspended_at: number | null; reason: string | null; progress_json: string | null;
+          pilot_id: string;
+          callsign: string;
+          obsidian: number;
+          boss_obsidian: number;
+          vip_until: number | null;
+          created_at: number;
+          updated_at: number;
+          selected_ship_id: string;
+          email: string;
+          display_name: string | null;
+          suspended_at: number | null;
+          reason: string | null;
+          progress_json: string | null;
         }>();
       if (!player) return json({ error: "No se encontró el jugador." }, 404);
       let progress: Record<string, unknown> = {};
-      try { progress = player.progress_json ? JSON.parse(player.progress_json) as Record<string, unknown> : {}; }
-      catch { progress = {}; }
+      try {
+        progress = player.progress_json
+          ? (JSON.parse(player.progress_json) as Record<string, unknown>)
+          : {};
+      } catch {
+        progress = {};
+      }
       const [inventory, referralCount, history, adminActions] = await Promise.all([
-        db.prepare(
-          "SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source FROM pilot_inventory WHERE pilot_id = ? AND quantity > 0 ORDER BY item_type, item_name",
-        ).bind(pilotId).all<{
-          id: string; item_id: string; item_name: string; item_type: string;
-          quantity: number; is_locked: number; grant_source: string;
-        }>(),
-        db.prepare("SELECT COUNT(*) AS total FROM referrals WHERE referrer_pilot_id = ?")
-          .bind(pilotId).first<{ total: number }>(),
-        db.prepare(
-          `SELECT amount, reason, created_at FROM (
+        db
+          .prepare(
+            "SELECT id, item_id, item_name, item_type, quantity, is_locked, grant_source FROM pilot_inventory WHERE pilot_id = ? AND quantity > 0 ORDER BY item_type, item_name",
+          )
+          .bind(pilotId)
+          .all<{
+            id: string;
+            item_id: string;
+            item_name: string;
+            item_type: string;
+            quantity: number;
+            is_locked: number;
+            grant_source: string;
+          }>(),
+        db
+          .prepare("SELECT COUNT(*) AS total FROM referrals WHERE referrer_pilot_id = ?")
+          .bind(pilotId)
+          .first<{ total: number }>(),
+        db
+          .prepare(
+            `SELECT amount, reason, created_at FROM (
              SELECT amount, reason, created_at FROM admin_obsidian_logs WHERE pilot_id = ?
              UNION ALL
              SELECT delta AS amount, reason, created_at FROM admin_economy_logs
              WHERE pilot_id = ? AND currency = 'OBS'
            ) ORDER BY created_at DESC LIMIT 30`,
-        ).bind(pilotId, pilotId).all<{ amount: number; reason: string; created_at: number }>(),
-        db.prepare(
-          "SELECT action, reason, created_at FROM admin_player_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
-        ).bind(pilotId).all<{ action: string; reason: string; created_at: number }>(),
+          )
+          .bind(pilotId, pilotId)
+          .all<{ amount: number; reason: string; created_at: number }>(),
+        db
+          .prepare(
+            "SELECT action, reason, created_at FROM admin_player_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
+          )
+          .bind(pilotId)
+          .all<{ action: string; reason: string; created_at: number }>(),
       ]);
       return json({
         player: {
@@ -4006,21 +4187,27 @@ async function handleMarketRequest(
       const now = Date.now();
       const action = body.suspended ? "SUSPENDIDO" : "REACTIVADO";
       const statements = [
-        db.prepare(
-          `INSERT INTO admin_player_status (pilot_id, suspended_at, reason, updated_at)
+        db
+          .prepare(
+            `INSERT INTO admin_player_status (pilot_id, suspended_at, reason, updated_at)
            VALUES (?, ?, ?, ?)
            ON CONFLICT(pilot_id) DO UPDATE SET
              suspended_at = excluded.suspended_at,
              reason = excluded.reason,
              updated_at = excluded.updated_at`,
-        ).bind(pilotId, body.suspended ? now : null, body.suspended ? reason : null, now),
-        db.prepare(
-          "INSERT INTO admin_player_logs (id, pilot_id, action, reason, created_at) VALUES (?, ?, ?, ?, ?)",
-        ).bind("plog_" + randomHex(8), pilotId, action, reason || "Sin motivo indicado", now),
+          )
+          .bind(pilotId, body.suspended ? now : null, body.suspended ? reason : null, now),
+        db
+          .prepare(
+            "INSERT INTO admin_player_logs (id, pilot_id, action, reason, created_at) VALUES (?, ?, ?, ?, ?)",
+          )
+          .bind("plog_" + randomHex(8), pilotId, action, reason || "Sin motivo indicado", now),
       ];
       if (body.suspended) {
         statements.push(
-          db.prepare("DELETE FROM auth_sessions WHERE wallet_address = ?").bind("google:" + target.google_sub),
+          db
+            .prepare("DELETE FROM auth_sessions WHERE wallet_address = ?")
+            .bind("google:" + target.google_sub),
         );
       }
       await db.batch(statements);
@@ -4033,7 +4220,10 @@ async function handleMarketRequest(
   if (isAdminPath && request.method === "POST") {
     if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
     if (!account) return json({ error: "Inicia sesión con la cuenta administradora." }, 401);
-    if (account.email.toLowerCase() !== ADMIN_EMAIL || !(await hasValidAdminSession(db, request, account.google_sub))) {
+    if (
+      account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub))
+    ) {
       return json({ error: "Acceso administrativo requerido." }, 403);
     }
     const body = await readJson(request);
@@ -4066,7 +4256,15 @@ async function handleMarketRequest(
             ?, obsidian - ?, obsidian, ?, ?, ?
           FROM pilots WHERE pilot_id = ?`,
           )
-          .bind(`econ_${randomHex(10)}`, amount, amount, "PAQUETE_ADMINISTRATIVO", account.email, now, pilotId),
+          .bind(
+            `econ_${randomHex(10)}`,
+            amount,
+            amount,
+            "PAQUETE_ADMINISTRATIVO",
+            account.email,
+            now,
+            pilotId,
+          ),
         db
           .prepare(
             `INSERT INTO admin_obsidian_logs
@@ -4074,7 +4272,11 @@ async function handleMarketRequest(
           )
           .bind(`obs_${randomHex(8)}`, pilotId, amount, "PAQUETE_ADMINISTRATIVO", now),
       ]);
-      if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1 || results[2]?.meta?.changes !== 1) {
+      if (
+        results[0]?.meta?.changes !== 1 ||
+        results[1]?.meta?.changes !== 1 ||
+        results[2]?.meta?.changes !== 1
+      ) {
         return json({ error: "No se pudo acreditar el paquete al piloto." }, 400);
       }
       const pilot = await db

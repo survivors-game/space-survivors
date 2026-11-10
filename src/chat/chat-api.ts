@@ -41,12 +41,14 @@ let adminPlayerStatusSchemaPromise: Promise<void> | undefined;
 async function ensureAdminPlayerStatusSchema(db: ChatDatabase): Promise<void> {
   if (!adminPlayerStatusSchemaPromise) {
     adminPlayerStatusSchemaPromise = db
-      .prepare(`CREATE TABLE IF NOT EXISTS admin_player_status (
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS admin_player_status (
         pilot_id TEXT PRIMARY KEY,
         suspended_at INTEGER,
         reason TEXT,
         updated_at INTEGER NOT NULL
-      )`)
+      )`,
+      )
       .run()
       .then(() => undefined)
       .catch((error) => {

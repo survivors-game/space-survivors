@@ -485,7 +485,8 @@ function AdminLogin({
             setBusy(true);
             setError("");
             const accepted = await onUnlock(pwd);
-            if (!accepted) setError("No se pudo validar el acceso. Revisa la contraseña e inténtalo de nuevo.");
+            if (!accepted)
+              setError("No se pudo validar el acceso. Revisa la contraseña e inténtalo de nuevo.");
             setBusy(false);
           }}
         >
@@ -508,7 +509,11 @@ function AdminLogin({
             {busy ? "Verificando..." : "Desbloquear"}
           </button>
         </form>
-        {error ? <p role="alert" className="mt-3 text-center text-xs text-rose-300">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="mt-3 text-center text-xs text-rose-300">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -551,147 +556,168 @@ function SectionView({
         </div>
       ) : null}
 
-      {def.id === "economia" ? <EconomySection /> : def.id === "jugadores" ? <PlayersSection /> : <>
-      {def.stats ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {def.stats.map((s) => (
-            <div key={s} className="rounded border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-[11px] uppercase tracking-wider text-white/60">{s}</div>
-              <div className="mt-1 font-arcade text-sm text-white/50">--</div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {def.filters ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3">
-            <Search className="size-3.5 text-white/55" />
-            <input
-              placeholder="Buscar..."
-              className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
-            />
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {def.filters.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded px-2.5 py-1.5 text-xs ${filter === f ? "bg-cyan-400/20 text-cyan-200" : "text-white/65 hover:bg-white/5"}`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div
-        className={
-          def.form || def.id === "premios" ? "grid gap-5 lg:grid-cols-[minmax(0,360px)_1fr]" : ""
-        }
-      >
-        {def.id === "premios" ? <RewardForm onAction={onAction} /> : null}
-        {def.form ? (
-          <form
-            className="space-y-3 rounded border border-white/10 bg-white/[0.03] p-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onAction(def.form!.submit);
-            }}
-          >
-            <div className="text-xs uppercase tracking-wider text-cyan-200">{def.form.title}</div>
-            {def.form.fields.map((f) => (
-              <label
-                key={f.label}
-                className={
-                  f.type === "toggle"
-                    ? "flex items-center justify-between text-sm text-white/80"
-                    : "block text-xs text-white/65"
-                }
-              >
-                {f.label}
-                {f.type === "textarea" ? (
-                  <textarea
-                    rows={3}
-                    className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm outline-none focus:border-cyan-400/40"
-                  />
-                ) : f.type === "select" ? (
-                  <select className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-sm outline-none">
-                    {f.options?.map((o) => (
-                      <option key={o}>{o}</option>
-                    ))}
-                  </select>
-                ) : f.type === "toggle" ? (
-                  <input type="checkbox" className="size-4 accent-cyan-400" />
-                ) : (
-                  <input className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-sm outline-none focus:border-cyan-400/40" />
-                )}
-              </label>
-            ))}
-            <button
-              type="submit"
-              className={`w-full rounded py-2 text-sm font-bold uppercase tracking-wider ${def.form.danger ? "bg-amber-400/90 text-black" : "bg-cyan-400/90 text-black"} hover:opacity-90`}
-            >
-              {def.form.submit}
-            </button>
-          </form>
-        ) : null}
-
-        <div className="min-w-0 space-y-5">
-          {def.tables?.map((t) => (
-            <div key={t.title} className="overflow-hidden rounded border border-white/10">
-              <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
-                <FileClock className="size-3" />
-                {t.title}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead>
-                    <tr className="text-white/55">
-                      {t.cols.map((col) => (
-                        <th key={col.key} className="px-3 py-2 font-normal">
-                          {col.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td colSpan={t.cols.length} className="px-3 py-8 text-center text-white/50">
-                        Sin datos · {PENDING.toLowerCase()}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-          {def.actions ? (
-            <div className="flex flex-wrap gap-2">
-              {def.actions.map((a) => (
-                <button
-                  key={a.label}
-                  onClick={() => onAction(a.label)}
-                  className={`rounded border px-3 py-1.5 text-xs uppercase tracking-wider ${a.danger ? "border-rose-400/40 text-rose-300 hover:bg-rose-400/10" : "border-cyan-400/30 text-cyan-200 hover:bg-cyan-400/10"}`}
-                >
-                  {a.label}
-                </button>
+      {def.id === "economia" ? (
+        <EconomySection />
+      ) : def.id === "jugadores" ? (
+        <PlayersSection />
+      ) : (
+        <>
+          {def.stats ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {def.stats.map((s) => (
+                <div key={s} className="rounded border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-[11px] uppercase tracking-wider text-white/60">{s}</div>
+                  <div className="mt-1 font-arcade text-sm text-white/50">--</div>
+                </div>
               ))}
             </div>
           ) : null}
-        </div>
-      </div>
-      </>}
+
+          {def.filters ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3">
+                <Search className="size-3.5 text-white/55" />
+                <input
+                  placeholder="Buscar..."
+                  className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
+                />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {def.filters.map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`rounded px-2.5 py-1.5 text-xs ${filter === f ? "bg-cyan-400/20 text-cyan-200" : "text-white/65 hover:bg-white/5"}`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            className={
+              def.form || def.id === "premios"
+                ? "grid gap-5 lg:grid-cols-[minmax(0,360px)_1fr]"
+                : ""
+            }
+          >
+            {def.id === "premios" ? <RewardForm onAction={onAction} /> : null}
+            {def.form ? (
+              <form
+                className="space-y-3 rounded border border-white/10 bg-white/[0.03] p-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onAction(def.form!.submit);
+                }}
+              >
+                <div className="text-xs uppercase tracking-wider text-cyan-200">
+                  {def.form.title}
+                </div>
+                {def.form.fields.map((f) => (
+                  <label
+                    key={f.label}
+                    className={
+                      f.type === "toggle"
+                        ? "flex items-center justify-between text-sm text-white/80"
+                        : "block text-xs text-white/65"
+                    }
+                  >
+                    {f.label}
+                    {f.type === "textarea" ? (
+                      <textarea
+                        rows={3}
+                        className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm outline-none focus:border-cyan-400/40"
+                      />
+                    ) : f.type === "select" ? (
+                      <select className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-sm outline-none">
+                        {f.options?.map((o) => (
+                          <option key={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : f.type === "toggle" ? (
+                      <input type="checkbox" className="size-4 accent-cyan-400" />
+                    ) : (
+                      <input className="mt-1 h-9 w-full rounded border border-white/10 bg-black/40 px-2 text-sm outline-none focus:border-cyan-400/40" />
+                    )}
+                  </label>
+                ))}
+                <button
+                  type="submit"
+                  className={`w-full rounded py-2 text-sm font-bold uppercase tracking-wider ${def.form.danger ? "bg-amber-400/90 text-black" : "bg-cyan-400/90 text-black"} hover:opacity-90`}
+                >
+                  {def.form.submit}
+                </button>
+              </form>
+            ) : null}
+
+            <div className="min-w-0 space-y-5">
+              {def.tables?.map((t) => (
+                <div key={t.title} className="overflow-hidden rounded border border-white/10">
+                  <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-3 py-2 text-xs uppercase tracking-wider text-white/75">
+                    <FileClock className="size-3" />
+                    {t.title}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead>
+                        <tr className="text-white/55">
+                          {t.cols.map((col) => (
+                            <th key={col.key} className="px-3 py-2 font-normal">
+                              {col.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td
+                            colSpan={t.cols.length}
+                            className="px-3 py-8 text-center text-white/50"
+                          >
+                            Sin datos · {PENDING.toLowerCase()}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+              {def.actions ? (
+                <div className="flex flex-wrap gap-2">
+                  {def.actions.map((a) => (
+                    <button
+                      key={a.label}
+                      onClick={() => onAction(a.label)}
+                      className={`rounded border px-3 py-1.5 text-xs uppercase tracking-wider ${a.danger ? "border-rose-400/40 text-rose-300 hover:bg-rose-400/10" : "border-cyan-400/30 text-cyan-200 hover:bg-cyan-400/10"}`}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function EconomySection() {
   type Movement = {
-    id: string; pilot_id: string; currency: "CR" | "OBS"; delta: number;
-    balance_before: number; balance_after: number; reason: string;
-    admin_email: string; created_at: number; callsign: string; email: string | null;
+    id: string;
+    pilot_id: string;
+    currency: "CR" | "OBS";
+    delta: number;
+    balance_before: number;
+    balance_after: number;
+    reason: string;
+    admin_email: string;
+    created_at: number;
+    callsign: string;
+    email: string | null;
   };
   const [totals, setTotals] = useState({ cr: 0, obs: 0, movementsToday: 0 });
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -724,7 +750,7 @@ function EconomySection() {
       const response = await fetch(`/api/admin/economy?${params.toString()}`, {
         credentials: "same-origin",
       });
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         totals?: { cr: number; obs: number; movementsToday: number };
         movements?: Movement[];
         error?: string;
@@ -746,12 +772,22 @@ function EconomySection() {
   const submitAdjustment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const numericAmount = Number(amount);
-    if (!player.trim() || !Number.isSafeInteger(numericAmount) || numericAmount < 1 || reason.trim().length < 5) {
+    if (
+      !player.trim() ||
+      !Number.isSafeInteger(numericAmount) ||
+      numericAmount < 1 ||
+      reason.trim().length < 5
+    ) {
       setError("Completa jugador, cantidad entera y motivo.");
       return;
     }
     const label = operation === "credit" ? "acreditar" : "descontar";
-    if (!window.confirm(`¿Confirmas ${label} ${numericAmount.toLocaleString()} ${currency} a ${player.trim()}?`)) return;
+    if (
+      !window.confirm(
+        `¿Confirmas ${label} ${numericAmount.toLocaleString()} ${currency} a ${player.trim()}?`,
+      )
+    )
+      return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -768,11 +804,17 @@ function EconomySection() {
           reason: reason.trim(),
         }),
       });
-      const data = await response.json() as {
-        success?: boolean; balanceBefore?: number; balanceAfter?: number; error?: string;
+      const data = (await response.json()) as {
+        success?: boolean;
+        balanceBefore?: number;
+        balanceAfter?: number;
+        error?: string;
       };
-      if (!response.ok || !data.success) throw new Error(data.error || "No se pudo ajustar el saldo.");
-      setNotice(`Operación realizada. Saldo anterior: ${(data.balanceBefore ?? 0).toLocaleString()}; saldo nuevo: ${(data.balanceAfter ?? 0).toLocaleString()} ${currency}.`);
+      if (!response.ok || !data.success)
+        throw new Error(data.error || "No se pudo ajustar el saldo.");
+      setNotice(
+        `Operación realizada. Saldo anterior: ${(data.balanceBefore ?? 0).toLocaleString()}; saldo nuevo: ${(data.balanceAfter ?? 0).toLocaleString()} ${currency}.`,
+      );
       setAmount("");
       setReason("");
       await loadEconomy();
@@ -800,82 +842,201 @@ function EconomySection() {
         ))}
       </div>
 
-      {notice ? <p role="status" className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200">{notice}</p> : null}
-      {error ? <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+      {notice ? (
+        <p
+          role="status"
+          className="rounded border border-emerald-400/30 bg-emerald-400/10 p-3 text-sm text-emerald-200"
+        >
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p
+          role="alert"
+          className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200"
+        >
+          {error}
+        </p>
+      ) : null}
 
-      <form onSubmit={(event) => void submitAdjustment(event)} className="grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2">
-        <div className="text-xs uppercase tracking-wider text-cyan-200 md:col-span-2">Ajustar saldo de un jugador</div>
+      <form
+        onSubmit={(event) => void submitAdjustment(event)}
+        className="grid gap-3 rounded border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2"
+      >
+        <div className="text-xs uppercase tracking-wider text-cyan-200 md:col-span-2">
+          Ajustar saldo de un jugador
+        </div>
         <label className="block text-xs text-white/65">
           Jugador (ID, correo o nombre exacto)
-          <input value={player} onChange={(event) => setPlayer(event.target.value)} maxLength={100} placeholder="plt_... o correo@..." className={inputCls} />
+          <input
+            value={player}
+            onChange={(event) => setPlayer(event.target.value)}
+            maxLength={100}
+            placeholder="plt_... o correo@..."
+            className={inputCls}
+          />
         </label>
         <label className="block text-xs text-white/65">
           Moneda
-          <select value={currency} onChange={(event) => setCurrency(event.target.value as "CR" | "OBS")} className={inputCls}>
-            <option value="CR">CR</option><option value="OBS">OBS</option>
+          <select
+            value={currency}
+            onChange={(event) => setCurrency(event.target.value as "CR" | "OBS")}
+            className={inputCls}
+          >
+            <option value="CR">CR</option>
+            <option value="OBS">OBS</option>
           </select>
         </label>
         <label className="block text-xs text-white/65">
           Operación
-          <select value={operation} onChange={(event) => setOperation(event.target.value as "credit" | "debit")} className={inputCls}>
-            <option value="credit">Acreditar</option><option value="debit">Descontar</option>
+          <select
+            value={operation}
+            onChange={(event) => setOperation(event.target.value as "credit" | "debit")}
+            className={inputCls}
+          >
+            <option value="credit">Acreditar</option>
+            <option value="debit">Descontar</option>
           </select>
         </label>
         <label className="block text-xs text-white/65">
           Cantidad (número entero)
-          <input type="number" min="1" step="1" max="1000000000" value={amount} onChange={(event) => setAmount(event.target.value)} className={inputCls} />
+          <input
+            type="number"
+            min="1"
+            step="1"
+            max="1000000000"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className={inputCls}
+          />
         </label>
         <label className="block text-xs text-white/65 md:col-span-2">
           Motivo obligatorio
-          <textarea rows={2} maxLength={240} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explica por qué se realiza el ajuste..." className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm text-white outline-none focus:border-cyan-400/40" />
+          <textarea
+            rows={2}
+            maxLength={240}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="Explica por qué se realiza el ajuste..."
+            className="mt-1 w-full rounded border border-white/10 bg-black/40 p-2 text-sm text-white outline-none focus:border-cyan-400/40"
+          />
         </label>
-        <button type="submit" disabled={busy || !player.trim() || !Number.isSafeInteger(Number(amount)) || Number(amount) < 1 || reason.trim().length < 5} className="rounded border border-cyan-400/30 px-3 py-2 text-xs font-bold uppercase text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40 md:col-span-2">
+        <button
+          type="submit"
+          disabled={
+            busy ||
+            !player.trim() ||
+            !Number.isSafeInteger(Number(amount)) ||
+            Number(amount) < 1 ||
+            reason.trim().length < 5
+          }
+          className="rounded border border-cyan-400/30 px-3 py-2 text-xs font-bold uppercase text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40 md:col-span-2"
+        >
           {busy ? "Procesando..." : operation === "credit" ? "Acreditar saldo" : "Descontar saldo"}
         </button>
       </form>
 
       <div className="space-y-2">
         <div className="flex flex-col gap-2 sm:flex-row">
-          <form onSubmit={(event) => { event.preventDefault(); void loadEconomy(currencyFilter, direction, search); }} className="flex min-w-0 flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void loadEconomy(currencyFilter, direction, search);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3"
+          >
             <Search className="size-4 shrink-0 text-white/55" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar jugador en movimientos..." className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40" />
-            <button type="submit" className="text-xs font-bold uppercase text-cyan-200">Buscar</button>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar jugador en movimientos..."
+              className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
+            />
+            <button type="submit" className="text-xs font-bold uppercase text-cyan-200">
+              Buscar
+            </button>
           </form>
-          <select value={currencyFilter} onChange={(event) => { setCurrencyFilter(event.target.value); void loadEconomy(event.target.value, direction, search); }} className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white">
-            {["Todos", "CR", "OBS"].map((value) => <option key={value}>{value}</option>)}
+          <select
+            value={currencyFilter}
+            onChange={(event) => {
+              setCurrencyFilter(event.target.value);
+              void loadEconomy(event.target.value, direction, search);
+            }}
+            className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white"
+          >
+            {["Todos", "CR", "OBS"].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
           </select>
-          <select value={direction} onChange={(event) => { setDirection(event.target.value); void loadEconomy(currencyFilter, event.target.value, search); }} className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white">
-            {["Todos", "Entradas", "Salidas"].map((value) => <option key={value}>{value}</option>)}
+          <select
+            value={direction}
+            onChange={(event) => {
+              setDirection(event.target.value);
+              void loadEconomy(currencyFilter, event.target.value, search);
+            }}
+            className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white"
+          >
+            {["Todos", "Entradas", "Salidas"].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
           </select>
         </div>
 
         <div className="overflow-hidden rounded border border-white/10">
           <div className="flex justify-between border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-white/65">
-            <span>Historial de ajustes administrativos</span><span>{loading ? "Cargando..." : movements.length}</span>
+            <span>Historial de ajustes administrativos</span>
+            <span>{loading ? "Cargando..." : movements.length}</span>
           </div>
           {movements.length ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-left text-sm">
-                <thead className="text-white/50"><tr>
-                  <th className="px-3 py-2">Fecha</th><th className="px-3 py-2">Jugador</th><th className="px-3 py-2">Moneda</th>
-                  <th className="px-3 py-2">Movimiento</th><th className="px-3 py-2">Saldo anterior</th>
-                  <th className="px-3 py-2">Saldo nuevo</th><th className="px-3 py-2">Motivo</th><th className="px-3 py-2">Admin</th>
-                </tr></thead>
-                <tbody>{movements.map((item) => (
-                  <tr key={item.id} className="border-t border-white/5">
-                    <td className="whitespace-nowrap px-3 py-2 text-xs text-white/55">{dateLabel(item.created_at)}</td>
-                    <td className="px-3 py-2"><span>{item.callsign}</span><span className="block text-xs text-white/40">{item.email || item.pilot_id}</span></td>
-                    <td className="px-3 py-2">{item.currency}</td>
-                    <td className={`px-3 py-2 font-bold ${item.delta > 0 ? "text-emerald-300" : "text-rose-300"}`}>{item.delta > 0 ? "+" : ""}{item.delta.toLocaleString()}</td>
-                    <td className="px-3 py-2">{item.balance_before.toLocaleString()}</td>
-                    <td className="px-3 py-2">{item.balance_after.toLocaleString()}</td>
-                    <td className="max-w-[220px] whitespace-normal px-3 py-2 text-xs text-white/65">{item.reason}</td>
-                    <td className="px-3 py-2 text-xs text-white/45">{item.admin_email}</td>
+                <thead className="text-white/50">
+                  <tr>
+                    <th className="px-3 py-2">Fecha</th>
+                    <th className="px-3 py-2">Jugador</th>
+                    <th className="px-3 py-2">Moneda</th>
+                    <th className="px-3 py-2">Movimiento</th>
+                    <th className="px-3 py-2">Saldo anterior</th>
+                    <th className="px-3 py-2">Saldo nuevo</th>
+                    <th className="px-3 py-2">Motivo</th>
+                    <th className="px-3 py-2">Admin</th>
                   </tr>
-                ))}</tbody>
+                </thead>
+                <tbody>
+                  {movements.map((item) => (
+                    <tr key={item.id} className="border-t border-white/5">
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-white/55">
+                        {dateLabel(item.created_at)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span>{item.callsign}</span>
+                        <span className="block text-xs text-white/40">
+                          {item.email || item.pilot_id}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{item.currency}</td>
+                      <td
+                        className={`px-3 py-2 font-bold ${item.delta > 0 ? "text-emerald-300" : "text-rose-300"}`}
+                      >
+                        {item.delta > 0 ? "+" : ""}
+                        {item.delta.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2">{item.balance_before.toLocaleString()}</td>
+                      <td className="px-3 py-2">{item.balance_after.toLocaleString()}</td>
+                      <td className="max-w-[220px] whitespace-normal px-3 py-2 text-xs text-white/65">
+                        {item.reason}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-white/45">{item.admin_email}</td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
-          ) : <p className="p-6 text-center text-sm text-white/45">{loading ? "Cargando movimientos..." : "Todavía no hay ajustes administrativos."}</p>}
+          ) : (
+            <p className="p-6 text-center text-sm text-white/45">
+              {loading ? "Cargando movimientos..." : "Todavía no hay ajustes administrativos."}
+            </p>
+          )}
         </div>
       </div>
     </section>
@@ -884,15 +1045,30 @@ function EconomySection() {
 
 function PlayersSection() {
   type Player = {
-    pilotId: string; name: string; email: string; credits: number; obsidian: number;
-    bossObsidian: number; vipUntil: number | null; suspended: boolean; createdAt: number;
+    pilotId: string;
+    name: string;
+    email: string;
+    credits: number;
+    obsidian: number;
+    bossObsidian: number;
+    vipUntil: number | null;
+    suspended: boolean;
+    createdAt: number;
   };
   type PlayerDetail = Player & {
-    selectedShipId: string; updatedAt: number; suspensionReason: string | null; referrals: number;
+    selectedShipId: string;
+    updatedAt: number;
+    suspensionReason: string | null;
+    referrals: number;
   };
   type InventoryItem = {
-    id: string; item_id: string; item_name: string; item_type: string;
-    quantity: number; is_locked: number; grant_source: string;
+    id: string;
+    item_id: string;
+    item_name: string;
+    item_type: string;
+    quantity: number;
+    is_locked: number;
+    grant_source: string;
   };
   type HistoryItem = { amount: number; reason: string; created_at: number };
   type AdminAction = { action: string; reason: string; created_at: number };
@@ -916,7 +1092,7 @@ function PlayersSection() {
       const response = await fetch(`/api/admin/players?${params.toString()}`, {
         credentials: "same-origin",
       });
-      const data = await response.json() as { players?: Player[]; error?: string };
+      const data = (await response.json()) as { players?: Player[]; error?: string };
       if (!response.ok) throw new Error(data.error || "No se pudieron cargar los jugadores.");
       setPlayers(data.players ?? []);
     } catch (cause) {
@@ -933,11 +1109,15 @@ function PlayersSection() {
       const response = await fetch(`/api/admin/players/${encodeURIComponent(pilotId)}`, {
         credentials: "same-origin",
       });
-      const data = await response.json() as {
-        player?: PlayerDetail; inventory?: InventoryItem[]; history?: HistoryItem[];
-        adminActions?: AdminAction[]; error?: string;
+      const data = (await response.json()) as {
+        player?: PlayerDetail;
+        inventory?: InventoryItem[];
+        history?: HistoryItem[];
+        adminActions?: AdminAction[];
+        error?: string;
       };
-      if (!response.ok || !data.player) throw new Error(data.error || "No se pudo abrir el perfil.");
+      if (!response.ok || !data.player)
+        throw new Error(data.error || "No se pudo abrir el perfil.");
       setSelected(data.player);
       setInventory(data.inventory ?? []);
       setHistory(data.history ?? []);
@@ -962,17 +1142,21 @@ function PlayersSection() {
       return;
     }
     const nextSuspended = !selected.suspended;
-    if (!window.confirm(nextSuspended ? "¿Suspender esta cuenta?" : "¿Reactivar esta cuenta?")) return;
+    if (!window.confirm(nextSuspended ? "¿Suspender esta cuenta?" : "¿Reactivar esta cuenta?"))
+      return;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/admin/players/${encodeURIComponent(selected.pilotId)}/status`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ suspended: nextSuspended, reason: reason.trim() }),
-      });
-      const data = await response.json() as { error?: string };
+      const response = await fetch(
+        `/api/admin/players/${encodeURIComponent(selected.pilotId)}/status`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ suspended: nextSuspended, reason: reason.trim() }),
+        },
+      );
+      const data = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(data.error || "No se pudo actualizar la cuenta.");
       await openPlayer(selected.pilotId);
       await loadPlayers(filter, search);
@@ -983,15 +1167,18 @@ function PlayersSection() {
     }
   };
 
-  const dateLabel = (value: number | null) =>
-    value ? new Date(value).toLocaleString() : "—";
+  const dateLabel = (value: number | null) => (value ? new Date(value).toLocaleString() : "—");
 
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row">
         <form
           className="flex min-w-0 flex-1 items-center gap-2 rounded border border-white/10 bg-black/30 px-3"
-          onSubmit={(event) => { event.preventDefault(); setSelected(null); void loadPlayers(filter, search); }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSelected(null);
+            void loadPlayers(filter, search);
+          }}
         >
           <Search className="size-4 shrink-0 text-white/55" />
           <input
@@ -1000,7 +1187,9 @@ function PlayersSection() {
             placeholder="Buscar por piloto, correo o ID..."
             className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-white/40"
           />
-          <button type="submit" className="text-xs font-bold uppercase text-cyan-200">Buscar</button>
+          <button type="submit" className="text-xs font-bold uppercase text-cyan-200">
+            Buscar
+          </button>
         </form>
         <select
           value={filter}
@@ -1012,11 +1201,20 @@ function PlayersSection() {
           }}
           className="h-10 rounded border border-white/10 bg-[#0b0d1c] px-3 text-sm text-white"
         >
-          {["Todos", "Activos", "VIP", "Suspendidos"].map((value) => <option key={value}>{value}</option>)}
+          {["Todos", "Activos", "VIP", "Suspendidos"].map((value) => (
+            <option key={value}>{value}</option>
+          ))}
         </select>
       </div>
 
-      {error ? <p role="alert" className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p> : null}
+      {error ? (
+        <p
+          role="alert"
+          className="rounded border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200"
+        >
+          {error}
+        </p>
+      ) : null}
       {selected ? (
         <div className="space-y-4">
           <button
@@ -1033,7 +1231,9 @@ function PlayersSection() {
                 <p className="text-sm text-white/60">{selected.email}</p>
                 <p className="mt-1 break-all text-xs text-white/40">{selected.pilotId}</p>
               </div>
-              <span className={`rounded border px-2 py-1 text-xs ${selected.suspended ? "border-rose-400/40 text-rose-300" : "border-emerald-400/40 text-emerald-300"}`}>
+              <span
+                className={`rounded border px-2 py-1 text-xs ${selected.suspended ? "border-rose-400/40 text-rose-300" : "border-emerald-400/40 text-emerald-300"}`}
+              >
                 {selected.suspended ? "SUSPENDIDO" : "ACTIVO"}
               </span>
             </div>
@@ -1057,7 +1257,9 @@ function PlayersSection() {
               <p>Última actualización: {dateLabel(selected.updatedAt)}</p>
             </div>
             {selected.suspended ? (
-              <p className="mt-3 text-sm text-rose-200">Motivo: {selected.suspensionReason || "No especificado"}</p>
+              <p className="mt-3 text-sm text-rose-200">
+                Motivo: {selected.suspensionReason || "No especificado"}
+              </p>
             ) : (
               <div className="mt-4">
                 <label className="block text-xs text-white/60">
@@ -1078,73 +1280,140 @@ function PlayersSection() {
               onClick={() => void changeStatus()}
               className={`mt-3 rounded border px-3 py-2 text-xs font-bold uppercase disabled:opacity-40 ${selected.suspended ? "border-emerald-400/40 text-emerald-300" : "border-rose-400/40 text-rose-300"}`}
             >
-              {busy ? "Procesando..." : selected.suspended ? "Reactivar cuenta" : "Suspender cuenta"}
+              {busy
+                ? "Procesando..."
+                : selected.suspended
+                  ? "Reactivar cuenta"
+                  : "Suspender cuenta"}
             </button>
           </div>
 
           <div className="overflow-hidden rounded border border-white/10">
-            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">Inventario</h3>
+            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">
+              Inventario
+            </h3>
             {inventory.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="text-white/50"><tr><th className="px-3 py-2">Artículo</th><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Cantidad</th><th className="px-3 py-2">Estado</th></tr></thead>
-                  <tbody>{inventory.map((item) => (
-                    <tr key={item.id} className="border-t border-white/5">
-                      <td className="px-3 py-2">{item.item_name}</td>
-                      <td className="px-3 py-2">{item.item_type}</td>
-                      <td className="px-3 py-2">{item.quantity}</td>
-                      <td className="px-3 py-2">{item.is_locked ? "En mercado" : "Disponible"}</td>
+                  <thead className="text-white/50">
+                    <tr>
+                      <th className="px-3 py-2">Artículo</th>
+                      <th className="px-3 py-2">Tipo</th>
+                      <th className="px-3 py-2">Cantidad</th>
+                      <th className="px-3 py-2">Estado</th>
                     </tr>
-                  ))}</tbody>
+                  </thead>
+                  <tbody>
+                    {inventory.map((item) => (
+                      <tr key={item.id} className="border-t border-white/5">
+                        <td className="px-3 py-2">{item.item_name}</td>
+                        <td className="px-3 py-2">{item.item_type}</td>
+                        <td className="px-3 py-2">{item.quantity}</td>
+                        <td className="px-3 py-2">
+                          {item.is_locked ? "En mercado" : "Disponible"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
-            ) : <p className="p-4 text-sm text-white/45">Inventario vacío.</p>}
+            ) : (
+              <p className="p-4 text-sm text-white/45">Inventario vacío.</p>
+            )}
           </div>
 
           <div className="overflow-hidden rounded border border-white/10">
-            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">Acciones administrativas</h3>
-            {adminActions.length ? adminActions.map((entry, index) => (
-              <div key={index} className="flex flex-wrap justify-between gap-2 border-t border-white/5 px-3 py-2 text-sm">
-                <span>{entry.action}</span>
-                <span className="text-white/60">{entry.reason}</span>
-                <span className="text-xs text-white/45">{dateLabel(entry.created_at)}</span>
-              </div>
-            )) : <p className="p-4 text-sm text-white/45">Sin acciones administrativas registradas.</p>}
+            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">
+              Acciones administrativas
+            </h3>
+            {adminActions.length ? (
+              adminActions.map((entry, index) => (
+                <div
+                  key={index}
+                  className="flex flex-wrap justify-between gap-2 border-t border-white/5 px-3 py-2 text-sm"
+                >
+                  <span>{entry.action}</span>
+                  <span className="text-white/60">{entry.reason}</span>
+                  <span className="text-xs text-white/45">{dateLabel(entry.created_at)}</span>
+                </div>
+              ))
+            ) : (
+              <p className="p-4 text-sm text-white/45">Sin acciones administrativas registradas.</p>
+            )}
           </div>
 
           <div className="overflow-hidden rounded border border-white/10">
-            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">Historial de OBS acreditadas por administración</h3>
-            {history.length ? history.map((entry, index) => (
-              <div key={index} className="flex flex-wrap justify-between gap-2 border-t border-white/5 px-3 py-2 text-sm">
-                <span>{entry.reason}</span>
-                <span className="text-cyan-200">+{entry.amount} OBS</span>
-                <span className="text-xs text-white/45">{dateLabel(entry.created_at)}</span>
-              </div>
-            )) : <p className="p-4 text-sm text-white/45">Sin movimientos administrativos de OBS.</p>}
+            <h3 className="border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-cyan-200">
+              Historial de OBS acreditadas por administración
+            </h3>
+            {history.length ? (
+              history.map((entry, index) => (
+                <div
+                  key={index}
+                  className="flex flex-wrap justify-between gap-2 border-t border-white/5 px-3 py-2 text-sm"
+                >
+                  <span>{entry.reason}</span>
+                  <span className="text-cyan-200">+{entry.amount} OBS</span>
+                  <span className="text-xs text-white/45">{dateLabel(entry.created_at)}</span>
+                </div>
+              ))
+            ) : (
+              <p className="p-4 text-sm text-white/45">Sin movimientos administrativos de OBS.</p>
+            )}
           </div>
         </div>
       ) : (
         <div className="overflow-hidden rounded border border-white/10">
           <div className="flex justify-between border-b border-white/10 px-3 py-2 text-xs uppercase tracking-wider text-white/65">
-            <span>Jugadores registrados</span><span>{loading ? "Cargando..." : players.length}</span>
+            <span>Jugadores registrados</span>
+            <span>{loading ? "Cargando..." : players.length}</span>
           </div>
           {players.length ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-left text-sm">
-                <thead className="text-white/50"><tr><th className="px-3 py-2">Piloto</th><th className="px-3 py-2">Correo</th><th className="px-3 py-2">CR</th><th className="px-3 py-2">OBS</th><th className="px-3 py-2">Estado</th><th className="px-3 py-2">Perfil</th></tr></thead>
-                <tbody>{players.map((player) => (
-                  <tr key={player.pilotId} className="border-t border-white/5">
-                    <td className="px-3 py-2">{player.name}</td>
-                    <td className="px-3 py-2 text-white/60">{player.email}</td>
-                    <td className="px-3 py-2">{player.credits.toLocaleString()}</td>
-                    <td className="px-3 py-2">{player.obsidian.toLocaleString()}</td>
-                    <td className="px-3 py-2">{player.suspended ? "Suspendido" : player.vipUntil && player.vipUntil > Date.now() ? "VIP" : "Activo"}</td>
-                    <td className="px-3 py-2"><button type="button" onClick={() => void openPlayer(player.pilotId)} className="text-cyan-200 hover:text-white">Ver perfil</button></td>
+                <thead className="text-white/50">
+                  <tr>
+                    <th className="px-3 py-2">Piloto</th>
+                    <th className="px-3 py-2">Correo</th>
+                    <th className="px-3 py-2">CR</th>
+                    <th className="px-3 py-2">OBS</th>
+                    <th className="px-3 py-2">Estado</th>
+                    <th className="px-3 py-2">Perfil</th>
                   </tr>
-                ))}</tbody>
+                </thead>
+                <tbody>
+                  {players.map((player) => (
+                    <tr key={player.pilotId} className="border-t border-white/5">
+                      <td className="px-3 py-2">{player.name}</td>
+                      <td className="px-3 py-2 text-white/60">{player.email}</td>
+                      <td className="px-3 py-2">{player.credits.toLocaleString()}</td>
+                      <td className="px-3 py-2">{player.obsidian.toLocaleString()}</td>
+                      <td className="px-3 py-2">
+                        {player.suspended
+                          ? "Suspendido"
+                          : player.vipUntil && player.vipUntil > Date.now()
+                            ? "VIP"
+                            : "Activo"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => void openPlayer(player.pilotId)}
+                          className="text-cyan-200 hover:text-white"
+                        >
+                          Ver perfil
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
-          ) : <p className="p-6 text-center text-sm text-white/45">{loading ? "Cargando jugadores..." : "No se encontraron jugadores."}</p>}
+          ) : (
+            <p className="p-6 text-center text-sm text-white/45">
+              {loading ? "Cargando jugadores..." : "No se encontraron jugadores."}
+            </p>
+          )}
         </div>
       )}
     </section>

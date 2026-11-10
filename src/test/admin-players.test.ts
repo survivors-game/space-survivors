@@ -33,18 +33,20 @@ function createDatabase(email: string, suspended = false) {
         async all() {
           if (query.includes("FROM pilots p") && query.includes("JOIN player_accounts")) {
             return {
-              results: [{
-                pilot_id: "plt_aaaaaaaaaaaaaaaaaaaaaaaa",
-                callsign: "PILOTO",
-                obsidian: 15,
-                boss_obsidian: 2,
-                vip_until: null,
-                created_at: 1000,
-                email: "player@example.com",
-                display_name: "PLAYER",
-                suspended_at: null,
-                progress_json: JSON.stringify({ credits: 450 }),
-              }],
+              results: [
+                {
+                  pilot_id: "plt_aaaaaaaaaaaaaaaaaaaaaaaa",
+                  callsign: "PILOTO",
+                  obsidian: 15,
+                  boss_obsidian: 2,
+                  vip_until: null,
+                  created_at: 1000,
+                  email: "player@example.com",
+                  display_name: "PLAYER",
+                  suspended_at: null,
+                  progress_json: JSON.stringify({ credits: 450 }),
+                },
+              ],
             };
           }
           return { results: [] };
@@ -68,26 +70,23 @@ function request(path: string, admin = false) {
 
 describe("administrative player management", () => {
   it("rejects player searches without an authenticated admin session", async () => {
-    const response = await server.fetch(
-      request("/api/admin/players"),
-      { DB: createDatabase(ADMIN_EMAIL) },
-    );
+    const response = await server.fetch(request("/api/admin/players"), {
+      DB: createDatabase(ADMIN_EMAIL),
+    });
     expect(response.status).toBe(401);
   });
 
   it("rejects an ordinary Google account even with a panel cookie", async () => {
-    const response = await server.fetch(
-      request("/api/admin/players", true),
-      { DB: createDatabase("player@example.com") },
-    );
+    const response = await server.fetch(request("/api/admin/players", true), {
+      DB: createDatabase("player@example.com"),
+    });
     expect(response.status).toBe(403);
   });
 
   it("blocks a suspended player from using the authenticated profile endpoint", async () => {
-    const response = await server.fetch(
-      request("/api/auth/profile"),
-      { DB: createDatabase("player@example.com", true) },
-    );
+    const response = await server.fetch(request("/api/auth/profile"), {
+      DB: createDatabase("player@example.com", true),
+    });
     expect(response.status).toBe(401);
   });
 
@@ -108,21 +107,22 @@ describe("administrative player management", () => {
   });
 
   it("returns real player profile data to the authenticated administrator", async () => {
-    const response = await server.fetch(
-      request("/api/admin/players?search=player", true),
-      { DB: createDatabase(ADMIN_EMAIL) },
-    );
+    const response = await server.fetch(request("/api/admin/players?search=player", true), {
+      DB: createDatabase(ADMIN_EMAIL),
+    });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      players: [{
-        pilotId: "plt_aaaaaaaaaaaaaaaaaaaaaaaa",
-        name: "PLAYER",
-        email: "player@example.com",
-        credits: 450,
-        obsidian: 15,
-        bossObsidian: 2,
-        suspended: false,
-      }],
+      players: [
+        {
+          pilotId: "plt_aaaaaaaaaaaaaaaaaaaaaaaa",
+          name: "PLAYER",
+          email: "player@example.com",
+          credits: 450,
+          obsidian: 15,
+          bossObsidian: 2,
+          suspended: false,
+        },
+      ],
     });
   });
 });
