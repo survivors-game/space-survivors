@@ -1,6 +1,6 @@
 export const VIP_DURATION_DAYS = 30;
 export const VIP_PRICE_OBSIDIAN = 20;
-export const VIP_DROP_BONUS = 0.35;
+export const VIP_DROP_BONUS = 2; // VIP triplica la probabilidad base de drops.
 export const VIP_CREDIT_BONUS = 0.2;
 
 const HOUR_MS = 60 * 60 * 1000;
