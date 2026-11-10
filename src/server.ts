@@ -3813,7 +3813,7 @@ async function handleAdminChatRequest(
   try {
     await ensureAuthSchema(db);
     await db.prepare("CREATE TABLE IF NOT EXISTS admin_chat_logs (id TEXT PRIMARY KEY, action TEXT NOT NULL, target_pilot_id TEXT, message_id INTEGER, reason TEXT NOT NULL, admin_email TEXT NOT NULL, created_at INTEGER NOT NULL)").run();
-    await db.prepare("CREATE TABLE IF NOT EXISTS chat_reports (id TEXT PRIMARY KEY, message_id INTEGER NOT NULL, language TEXT NOT NULL, reporter_pilot_id TEXT NOT NULL, target_pilot_id TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT (char(79,80,69,78)), created_at INTEGER NOT NULL, reviewed_at INTEGER, reviewed_by TEXT, resolution_note TEXT)").run();
+    await db.prepare("CREATE TABLE IF NOT EXISTS chat_reports (id TEXT PRIMARY KEY, message_id INTEGER NOT NULL, language TEXT NOT NULL, reporter_pilot_id TEXT NOT NULL, target_pilot_id TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'OPEN', created_at INTEGER NOT NULL, reviewed_at INTEGER, reviewed_by TEXT, resolution_note TEXT)").run();
     await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_reports_unique ON chat_reports(message_id, language, reporter_pilot_id)").run();
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_admin_chat_logs_created ON admin_chat_logs(created_at DESC)").run();
   } catch (error) {
