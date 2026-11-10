@@ -4077,7 +4077,7 @@ async function handleAdminSecurityRequest(
   ].sort((a,b)=>Number((b as {created_at?:number}).created_at??0)-Number((a as {created_at?:number}).created_at??0)).slice(0,200);
   const now = Date.now();
   const summary = {
-    failedLogins: attempts.reduce((sum,row)=>sum+Number((row as {attempts?:number}).attempts??0),0),
+    failedLogins: access.filter(row=>["failed","blocked"].includes(String((row as {result?:string}).result))).length,
     blockedIps: attempts.filter(row=>Number((row as {blocked_until?:number}).blocked_until??0)>now).length,
     errors24h: errors.filter(row=>Number((row as {created_at?:number}).created_at??0)>now-86400000).length,
     operations: operations.length,
