@@ -200,7 +200,7 @@ export interface P2PHistoryOrder {
   country: P2PCountry;
   price_minor: number;
   price_currency: P2PCurrency;
-  status: "PENDIENTE" | "COMPLETADA" | "CANCELADA";
+  status: "PENDIENTE" | "PAGO_REPORTADO" | "DISPUTA" | "COMPLETADA" | "CANCELADA";
   created_at: number;
   updated_at: number;
   role: "COMPRADOR" | "VENDEDOR";
