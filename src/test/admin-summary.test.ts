@@ -14,7 +14,7 @@ function database() {
           return { meta: { changes: 1 } };
         },
         async first() {
-          if (query.includes("COUNT(*) AS count FROM pilots")) return { count: 12 };
+          if (query.includes("COUNT(*) AS count FROM pilots p JOIN player_accounts")) return { count: 12 };
           if (query.includes("COUNT(*) AS count FROM auth_sessions")) return { count: 3 };
           if (query.includes("COUNT(*) AS count FROM obsidian_payment_requests")) return { count: 2 };
           if (query.includes("COUNT(*) AS count FROM p2p_disputes")) return { count: 1 };
