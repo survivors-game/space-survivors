@@ -4,6 +4,7 @@ import { hasVip } from "../game/meta/vip";
 interface D1Statement {
   bind(...values: (string | number)[]): D1Statement;
   first<T>(): Promise<T | null>;
+  run(): Promise<unknown>;
 }
 
 interface ChatDatabase {
@@ -35,6 +36,26 @@ interface PlayerAccount {
 const SESSION_COOKIE = "__Host-ss_session";
 const PILOT_ID_PATTERN = /^plt_[0-9a-f]{24}$/;
 const MAX_EVENT_TEXT_LENGTH = 240;
+let adminPlayerStatusSchemaPromise: Promise<void> | undefined;
+
+async function ensureAdminPlayerStatusSchema(db: ChatDatabase): Promise<void> {
+  if (!adminPlayerStatusSchemaPromise) {
+    adminPlayerStatusSchemaPromise = db
+      .prepare(`CREATE TABLE IF NOT EXISTS admin_player_status (
+        pilot_id TEXT PRIMARY KEY,
+        suspended_at INTEGER,
+        reason TEXT,
+        updated_at INTEGER NOT NULL
+      )`)
+      .run()
+      .then(() => undefined)
+      .catch((error) => {
+        adminPlayerStatusSchemaPromise = undefined;
+        throw error;
+      });
+  }
+  await adminPlayerStatusSchemaPromise;
+}
 
 export async function handleChatRequest(
   request: Request,
@@ -46,6 +67,12 @@ export async function handleChatRequest(
     return json({ error: "La base de datos no está disponible en este Worker." }, 503);
   }
   const db = env.DB;
+  try {
+    await ensureAdminPlayerStatusSchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar el estado administrativo de jugadores:", error);
+    return json({ error: "No se pudo comprobar el estado de la cuenta." }, 503);
+  }
 
   if (url.pathname === "/api/chat/ws" && request.method === "GET") {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
