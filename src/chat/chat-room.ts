@@ -64,6 +64,14 @@ export class ChatRoom extends DurableObject {
         timestamp INTEGER NOT NULL
       )`,
     );
+    ctx.storage.sql.exec(
+      `CREATE TABLE IF NOT EXISTS chat_mutes (
+        pilot_id TEXT PRIMARY KEY,
+        expires_at INTEGER,
+        reason TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+    );
     const schema = ctx.storage.sql
       .exec<{ sql: string | null }>(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_messages'",
@@ -98,6 +106,17 @@ export class ChatRoom extends DurableObject {
         return new Response("Missing chat identity or language.", { status: 400 });
       }
 
+      const mute = this.ctx.storage.sql
+        .exec<{ expires_at: number | null }>(
+          "SELECT expires_at FROM chat_mutes WHERE pilot_id = ?",
+          pilotId,
+        )
+        .toArray()[0];
+      if (mute && (mute.expires_at === null || mute.expires_at > Date.now())) {
+        return new Response("El acceso al chat está restringido.", { status: 403 });
+      }
+      if (mute) this.ctx.storage.sql.exec("DELETE FROM chat_mutes WHERE pilot_id = ?", pilotId);
+
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1] as HibernatingWebSocket;
@@ -111,6 +130,101 @@ export class ChatRoom extends DurableObject {
       this.ctx.acceptWebSocket(server);
       this.sendHistory(server, language);
       return new Response(null, { status: 101, webSocket: client });
+    }
+
+    if (url.pathname === "/admin" && request.method === "GET") {
+      const messages = this.ctx.storage.sql
+        .exec(
+          `SELECT id, type, pilot_id, callsign, text, language, alliance_tag, vip, timestamp
+           FROM chat_messages ORDER BY id DESC LIMIT 100`,
+        )
+        .toArray()
+        .map((message) => ({
+          id: Number(message.id),
+          type: String(message.type),
+          pilotId: String(message.pilot_id),
+          callsign: String(message.callsign),
+          text: String(message.text),
+          language: String(message.language),
+          allianceTag: message.alliance_tag ? String(message.alliance_tag) : null,
+          vip: Number(message.vip) === 1,
+          timestamp: Number(message.timestamp),
+        }));
+      const mutes = this.ctx.storage.sql
+        .exec(
+          `SELECT pilot_id, expires_at, reason, created_at
+           FROM chat_mutes ORDER BY created_at DESC LIMIT 100`,
+        )
+        .toArray()
+        .map((mute) => ({
+          pilotId: String(mute.pilot_id),
+          expiresAt: mute.expires_at === null ? null : Number(mute.expires_at),
+          reason: String(mute.reason),
+          createdAt: Number(mute.created_at),
+        }));
+      return Response.json({ messages, mutes });
+    }
+
+    if (url.pathname === "/admin" && request.method === "POST") {
+      const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+      const action = payload?.["action"];
+      const now = Date.now();
+      if (action === "delete-message") {
+        const messageId = Number(payload?.["messageId"]);
+        if (!Number.isSafeInteger(messageId) || messageId <= 0) {
+          return Response.json({ error: "Identificador de mensaje no válido." }, { status: 400 });
+        }
+        const deleted = this.ctx.storage.sql.exec(
+          "DELETE FROM chat_messages WHERE id = ?",
+          messageId,
+        );
+        if ((deleted as { changes?: number }).changes === 0) {
+          return Response.json({ error: "El mensaje ya no existe." }, { status: 404 });
+        }
+        const notice = JSON.stringify({ type: "deleted", messageId });
+        for (const socket of this.ctx.getWebSockets()) {
+          try {
+            socket.send(notice);
+          } catch {
+            socket.close(1011, "Chat delivery failed");
+          }
+        }
+        return Response.json({ success: true });
+      }
+
+      if (action === "mute" || action === "ban" || action === "unmute") {
+        const pilotId =
+          typeof payload?.["pilotId"] === "string" ? payload["pilotId"].trim() : "";
+        const reason =
+          typeof payload?.["reason"] === "string" ? payload["reason"].trim().slice(0, 240) : "";
+        if (!/^plt_[0-9a-f]{24}$/.test(pilotId)) {
+          return Response.json({ error: "Identificador de jugador no válido." }, { status: 400 });
+        }
+        if (action !== "unmute" && reason.length < 5) {
+          return Response.json({ error: "Escribe un motivo de al menos 5 caracteres." }, { status: 400 });
+        }
+        if (action === "unmute") {
+          this.ctx.storage.sql.exec("DELETE FROM chat_mutes WHERE pilot_id = ?", pilotId);
+        } else {
+          const expiresAt = action === "mute" ? now + 24 * 60 * 60 * 1000 : null;
+          this.ctx.storage.sql.exec(
+            `INSERT INTO chat_mutes (pilot_id, expires_at, reason, created_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(pilot_id) DO UPDATE SET expires_at = excluded.expires_at,
+               reason = excluded.reason, created_at = excluded.created_at`,
+            pilotId,
+            expiresAt,
+            reason,
+            now,
+          );
+          for (const socket of this.ctx.getWebSockets()) {
+            const attachment = (socket as HibernatingWebSocket).deserializeAttachment();
+            if (attachment.pilotId === pilotId) socket.close(1008, "Chat access restricted");
+          }
+        }
+        return Response.json({ success: true });
+      }
+      return Response.json({ error: "Acción de moderación no válida." }, { status: 400 });
     }
 
     if (url.pathname === "/event" && request.method === "POST") {
@@ -149,6 +263,17 @@ export class ChatRoom extends DurableObject {
     }
     const client = socket as HibernatingWebSocket;
     const attachment = client.deserializeAttachment();
+    const mute = this.ctx.storage.sql
+      .exec<{ expires_at: number | null }>(
+        "SELECT expires_at FROM chat_mutes WHERE pilot_id = ?",
+        attachment.pilotId,
+      )
+      .toArray()[0];
+    if (mute && (mute.expires_at === null || mute.expires_at > Date.now())) {
+      socket.close(1008, "Chat access restricted");
+      return;
+    }
+    if (mute) this.ctx.storage.sql.exec("DELETE FROM chat_mutes WHERE pilot_id = ?", attachment.pilotId);
     const text = typeof message === "string" ? message : new TextDecoder().decode(message);
     let payload: IncomingChat;
     try {
