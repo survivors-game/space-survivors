@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
   Flame,
   Rocket,
-  ShoppingCart,
+  ShoppingCart,\n  MessageSquare,
   Shield,
   Trophy,
   TriangleAlert,
@@ -276,7 +276,7 @@ export function PilotHub({
             color={VIOLET}
             onClick={onOpenAlliance}
           />
-          <MenuRow label="Mercado P2P" Icon={ShoppingCart} color={MAGENTA} onClick={onOpenMarket} />
+          <MenuRow label="Mercado P2P" Icon={ShoppingCart} color={MAGENTA} onClick={onOpenMarket} />\n          <SupportAccess />
 
           <div className="mt-1 border border-cyan-500/20 bg-[#0b0d1c]/80 p-2.5">
             <p className="mb-1.5 text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">
@@ -314,6 +314,23 @@ export function PilotHub({
       </footer>
     </div>
   );
+}
+
+
+function SupportAccess() {
+  type Ticket={id:string;subject:string;category:string;status:string;updated_at:number};
+  const [open,setOpen]=useState(false),[tickets,setTickets]=useState<Ticket[]>([]),[subject,setSubject]=useState(""),[category,setCategory]=useState("TECNICO"),[description,setDescription]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+  const load=async()=>{try{const r=await fetch("/api/support/tickets",{credentials:"same-origin"});const d=await r.json() as {tickets?:Ticket[];error?:string};if(!r.ok)throw new Error(d.error||"No se pudieron cargar tus solicitudes.");setTickets(d.tickets??[]);}catch(e){setError(e instanceof Error?e.message:"No se pudieron cargar tus solicitudes.");}};
+  useEffect(()=>{if(open)void load();},[open]);
+  const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setBusy(true);setError("");setNotice("");try{const r=await fetch("/api/support/tickets",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({subject,category,description})});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error||"No se pudo enviar la solicitud.");setSubject("");setDescription("");setNotice("Solicitud enviada. Podrás consultar aquí su estado y las respuestas.");await load();}catch(e){setError(e instanceof Error?e.message:"No se pudo enviar la solicitud.");}finally{setBusy(false);}};
+  return <>
+    <button type="button" onClick={()=>setOpen(true)} className="group flex h-8 w-full items-center gap-2.5 border border-cyan-500/20 bg-[#0b0d1c]/80 px-2.5 text-left transition hover:border-cyan-300/60 hover:bg-cyan-400/5"><MessageSquare className="size-3.5 shrink-0 text-cyan-300"/><span className="flex-1 text-[11px] font-bold uppercase tracking-wider text-white">Soporte técnico</span><ChevronRight className="size-3 text-white/35"/></button>
+    {open?<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3"><section className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto border border-cyan-400/30 bg-[#080a18] p-4 text-white shadow-2xl"><div className="flex items-center justify-between"><h2 className="font-arcade text-xs text-cyan-200">SOPORTE TÉCNICO</h2><button onClick={()=>setOpen(false)} className="text-white/60">Cerrar</button></div>
+      <form onSubmit={submit} className="space-y-2"><input required minLength={4} maxLength={100} value={subject} onChange={e=>setSubject(e.target.value)} placeholder="Asunto" className="w-full border border-white/15 bg-black/30 px-3 py-2 text-sm"/><select value={category} onChange={e=>setCategory(e.target.value)} className="w-full border border-white/15 bg-[#101326] px-3 py-2 text-sm"><option value="TECNICO">Problema técnico</option><option value="CUENTA">Cuenta</option><option value="PAGOS">Pagos</option><option value="MERCADO">Mercado P2P</option><option value="OTRO">Otro</option></select><textarea required minLength={10} maxLength={2000} rows={4} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Describe el problema..." className="w-full border border-white/15 bg-black/30 px-3 py-2 text-sm"/><button disabled={busy} className="border border-cyan-300/50 bg-cyan-300 px-4 py-2 text-xs font-bold text-black disabled:opacity-40">{busy?"Enviando...":"Enviar solicitud"}</button></form>
+      {error?<p role="alert" className="text-xs text-rose-300">{error}</p>:null}{notice?<p className="text-xs text-emerald-300">{notice}</p>:null}
+      <div className="space-y-2 border-t border-white/10 pt-3"><h3 className="text-[10px] uppercase tracking-widest text-white/60">Mis solicitudes</h3>{tickets.map(t=><article key={t.id} className="border border-white/10 p-3"><p className="text-sm text-white">{t.subject}</p><p className="mt-1 text-xs text-white/50">{t.category} · {t.status==="OPEN"?"Abierto":t.status==="IN_PROGRESS"?"En proceso":"Resuelto"} · {new Date(t.updated_at).toLocaleString("es-CO")}</p></article>)}{!tickets.length?<p className="text-xs text-white/40">Todavía no has enviado solicitudes.</p>:null}</div>
+    </section></div>:null}
+  </>;
 }
 
 export default PilotHub;
