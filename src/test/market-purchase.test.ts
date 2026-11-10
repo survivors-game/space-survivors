@@ -90,6 +90,7 @@ async function createListing(
   country = "CO",
 ) {
   const now = Date.now();
+  const listingId = `ad_${createHash("sha256").update(itemId).digest("hex").slice(0, 16)}`;
   db.prepare(
     `INSERT OR IGNORE INTO pilots (pilot_id, callsign, obsidian, created_at, updated_at)
     VALUES (?, 'SELLER', 5, ?, ?)`,
@@ -113,8 +114,8 @@ async function createListing(
     VALUES (?, ?, ?, ?, 'BOSS SHIP', 'nave', 100, 10000, 'COP', 'COP', ?,
       '["NEQUI"]', 'seller private payment data', '{"NEQUI":"seller private payment data"}',
       ?, 1, ?, ?)`,
-  ).run(`listing-${itemId}`, sellerId, `inv-${itemId}`, itemId, country, status, now, now);
-  return `listing-${itemId}`;
+  ).run(listingId, sellerId, `inv-${itemId}`, itemId, country, status, now, now);
+  return listingId;
 }
 
 describe("P2P purchase flow", () => {
