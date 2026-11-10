@@ -2326,7 +2326,7 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
               )
               OR EXISTS (
                 SELECT 1 FROM p2p_orders
-                WHERE ad_id = OLD.id AND status IN ('ABIERTA', 'PENDIENTE', 'OPEN')
+                WHERE ad_id = OLD.id AND status IN ('ABIERTA', 'PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA', 'OPEN')
               )
               THEN RAISE(ABORT, 'market ad cannot be cancelled') END;
           END`,
@@ -3980,7 +3980,7 @@ async function handleMarketRequest(
          WHERE id = ? AND status IN ('ACTIVO', 'PAUSADO')
            AND NOT EXISTS (
              SELECT 1 FROM p2p_orders o WHERE o.ad_id = p2p_ads.id
-               AND o.status IN ('PENDIENTE', 'DISPUTA')
+               AND o.status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')
            )`,
       ).bind(now, adId).run();
       if (result.meta?.changes !== 1) {
