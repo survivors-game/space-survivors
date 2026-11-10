@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { SeasonAdminSection } from "./SeasonAdminSection";
 import { SHIPS } from "@/game/data/ships";
 import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
@@ -570,6 +571,8 @@ function SectionView({
         <AnnouncementsAdminSection />
       ) : def.id === "soporte" ? (
         <SupportAdminSection />
+      ) : def.id === "misiones" ? (
+        <SeasonAdminSection />
       ) : (
         <>
           {def.stats ? (
