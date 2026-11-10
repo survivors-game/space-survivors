@@ -47,7 +47,9 @@ export interface MarketActions {
     sort: "newest" | "price_asc" | "price_desc",
   ) => Promise<void>;
   onBuy: (listingId: string, method: P2PPayMethod, network?: string) => Promise<P2PPurchaseOrder>;
-  onConfirmOrder: (orderId: string) => Promise<void>;
+  onReportPayment: (orderId: string) => Promise<void>;
+  onReleaseOrder: (orderId: string) => Promise<void>;
+  onOpenDispute: (orderId: string, reason: string, evidenceUrl: string) => Promise<void>;
   onCancelOrder: (orderId: string) => Promise<void>;
 }
 
@@ -103,7 +105,9 @@ export function MarketSection({ actions }: { actions: MarketActions }) {
           isLoading={actions.isLoading}
           onLoadListings={actions.onLoadListings}
           onBuy={actions.onBuy}
-          onConfirm={actions.onConfirmOrder}
+          onReportPayment={actions.onReportPayment}
+          onReleaseOrder={actions.onReleaseOrder}
+          onOpenDispute={actions.onOpenDispute}
           onCancel={actions.onCancelOrder}
         />
       ) : null}
@@ -128,7 +132,9 @@ export function MarketSection({ actions }: { actions: MarketActions }) {
         <MarketHistory
           orders={actions.history}
           isLoading={actions.isLoading}
-          onConfirm={actions.onConfirmOrder}
+          onReportPayment={actions.onReportPayment}
+          onReleaseOrder={actions.onReleaseOrder}
+          onOpenDispute={actions.onOpenDispute}
           onCancel={actions.onCancelOrder}
         />
       ) : null}
