@@ -1,4 +1,4 @@
- import { defineConfig } from "nitro";
+import { defineConfig } from "nitro";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
