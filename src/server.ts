@@ -1,4 +1,4 @@
- import "./lib/error-capture";
+import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -3748,7 +3748,12 @@ async function handleBossRequest(
           account.pilot_id,
           reward.bossId,
           reward.obsidian,
-          JSON.stringify(drops.map((drop) => ({ type: drop.itemType === "nave" ? "nave" : "objeto", name: drop.itemName }))),
+          JSON.stringify(
+            drops.map((drop) => ({
+              type: drop.itemType === "nave" ? "nave" : "objeto",
+              name: drop.itemName,
+            })),
+          ),
           now,
           account.pilot_id,
           reward.bossId,
@@ -5388,7 +5393,8 @@ async function handlePilotRewardsRequest(
   env: WorkerEnv | undefined,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/api/pilot/rewards" && url.pathname !== "/api/pilot/rewards/ws") return null;
+  if (url.pathname !== "/api/pilot/rewards" && url.pathname !== "/api/pilot/rewards/ws")
+    return null;
   if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
 
