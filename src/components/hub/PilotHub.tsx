@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
@@ -128,10 +128,10 @@ function Bar({ label, value, color, Icon }: BarProps) {
         {Array.from({ length: SEGMENTS }, (_, i) => (
           <span
             key={i}
-            className="h-2.5 flex-1"
+            className="h-2 flex-1"
             style={
               i < filled
-                ? { background: color, boxShadow: `0 0 6px ${color}88` }
+                ? { background: color, boxShadow: `0 0 3px ${color}55` }
                 : { background: "rgba(255,255,255,0.08)" }
             }
           />
@@ -160,7 +160,7 @@ function Readout({ label, value, color, Icon }: ReadoutProps) {
       </span>
       <span
         className="font-arcade text-[12px] tabular-nums"
-        style={{ color, textShadow: `0 0 10px ${color}aa` }}
+        style={{ color, textShadow: `0 0 4px ${color}66` }}
       >
         {value}
       </span>
@@ -181,7 +181,7 @@ function NavButton({ title, subtitle, Icon, accent, onClick }: NavButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex min-h-[84px] flex-col justify-between overflow-hidden border p-3 text-left transition hover:brightness-125 active:translate-y-px"
+      className="group flex min-h-[62px] flex-col justify-between overflow-hidden border p-3 text-left transition hover:brightness-125 active:translate-y-px"
       style={{
         borderColor: `${accent}55`,
         background: `linear-gradient(160deg, ${accent}1f 0%, #0b0d1c 70%)`,
@@ -189,7 +189,7 @@ function NavButton({ title, subtitle, Icon, accent, onClick }: NavButtonProps) {
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <Icon className="size-5 shrink-0" style={{ color: accent }} />
+        <Icon className="size-4 shrink-0" style={{ color: accent }} />
         <ChevronRight className="size-3.5 shrink-0 text-white/30 transition group-hover:text-white/70" />
       </div>
       <div className="mt-2">
@@ -231,10 +231,7 @@ export function PilotHub({
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
   const rank = rankFor(runs);
-  const plateId = `PLT-${pilotId
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 8)
-    .toUpperCase()}`;
+  const plateId = `PLT-${pilotId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
   const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
 
   return (
@@ -242,10 +239,10 @@ export function PilotHub({
       {/* 1. CABECERA MILITAR Y CREDENCIAL */}
       <header className="flex flex-col gap-3 border border-cyan-500/30 bg-[#0b0d1c]/90 p-3 backdrop-blur-md lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="relative flex size-12 shrink-0 items-center justify-center">
+          <div className="relative flex size-9 shrink-0 items-center justify-center">
             <Hexagon
               className="absolute inset-0 size-full"
-              style={{ color: CYAN, filter: `drop-shadow(0 0 6px ${CYAN}88)` }}
+              style={{ color: CYAN, filter: `drop-shadow(0 0 2px ${CYAN}55)` }}
               strokeWidth={1.5}
             />
             <span className="font-arcade text-[11px] text-cyan-100">
@@ -275,14 +272,14 @@ export function PilotHub({
             type="button"
             onClick={() => onOpenVip?.()}
             disabled={!onOpenVip}
-            className="h-9 border px-3 text-[10px] font-bold uppercase tracking-wider transition enabled:hover:brightness-125 disabled:cursor-default"
+            className="h-7 border px-3 text-[10px] font-bold uppercase tracking-wider transition enabled:hover:brightness-125 disabled:cursor-default"
             style={
               vipActive
                 ? {
                     color: GOLD,
                     borderColor: `${GOLD}aa`,
                     background: `linear-gradient(180deg, ${GOLD}22, ${GOLD}08)`,
-                    boxShadow: `0 0 14px ${GOLD}55, inset 0 0 12px ${GOLD}22`,
+                    boxShadow: `0 0 6px ${GOLD}33, inset 0 0 8px ${GOLD}15`,
                   }
                 : {
                     color: "rgba(0,240,255,0.6)",
@@ -296,11 +293,11 @@ export function PilotHub({
           <button
             type="button"
             onClick={onOpenProfile}
-            className="h-9 px-4 text-[10px] font-bold uppercase tracking-wider text-amber-200 transition hover:brightness-125"
+            className="h-7 px-3 text-[10px] font-bold uppercase tracking-wider text-amber-200 transition hover:brightness-125"
             style={{
               border: `1px solid ${AMBER}`,
               background: "linear-gradient(180deg, rgba(251,191,36,0.25), rgba(120,53,15,0.35))",
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 0 rgba(0,0,0,0.45), 0 0 10px ${AMBER}44`,
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 0 rgba(0,0,0,0.45), 0 0 4px ${AMBER}33`,
             }}
           >
             [ PERFIL ]
@@ -318,10 +315,10 @@ export function PilotHub({
             </div>
 
             <div
-              className="relative h-[290px] overflow-hidden sm:h-[330px]"
+              className="relative h-[200px] overflow-hidden sm:h-[220px]"
               style={{
                 background:
-                  "radial-gradient(ellipse at 50% 85%, rgba(0,240,255,0.22) 0%, rgba(124,58,237,0.14) 45%, transparent 75%)",
+                  "radial-gradient(ellipse at 50% 85%, rgba(0,240,255,0.12) 0%, rgba(124,58,237,0.08) 45%, transparent 75%)",
               }}
             >
               {/* Cuadrícula técnica de fondo */}
@@ -340,7 +337,7 @@ export function PilotHub({
                 style={{
                   background: "linear-gradient(180deg, #2a3142 0%, #141826 100%)",
                   border: `1px solid ${CYAN}66`,
-                  boxShadow: `0 0 18px ${CYAN}55, inset 0 1px 0 rgba(255,255,255,0.15)`,
+                  boxShadow: `0 0 8px ${CYAN}33, inset 0 1px 0 rgba(255,255,255,0.15)`,
                 }}
               />
 
@@ -351,20 +348,21 @@ export function PilotHub({
                   className="absolute bottom-7 h-16 w-5"
                   style={{
                     [side]: "15%",
-                    background: "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
+                    background:
+                      "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
                     border: "1px solid rgba(253,224,71,0.6)",
-                    boxShadow: "0 0 10px rgba(253,224,71,0.3)",
+                    boxShadow: "0 0 4px rgba(253,224,71,0.15)",
                   }}
                 />
               ))}
 
               {/* Nave activa */}
-              <div className="absolute inset-x-0 bottom-0 flex items-end justify-center pb-[38px]">
+              <div className="absolute inset-x-0 bottom-0 flex items-end justify-center pb-[30px]">
                 <img
                   src={shipImage}
                   alt={selectedShip.name}
                   draggable={false}
-                  className="relative z-10 h-[190px] w-auto max-w-[70%] object-contain drop-shadow-[0_0_10px_rgba(0,240,255,0.55)] sm:h-[230px]"
+                  className="relative z-10 h-[118px] w-auto max-w-[70%] object-contain drop-shadow-[0_0_4px_rgba(0,240,255,0.3)] sm:h-[136px]"
                   style={{ imageRendering: "pixelated" }}
                 />
               </div>
@@ -372,7 +370,7 @@ export function PilotHub({
 
             <div className="space-y-3 border-t border-cyan-500/20 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="font-arcade text-xs uppercase leading-relaxed text-cyan-100 [text-shadow:0_0_10px_rgba(0,240,255,0.6)]">
+                <h2 className="font-arcade text-[10px] uppercase leading-relaxed text-cyan-100 [text-shadow:0_0_4px_rgba(0,240,255,0.35)]">
                   {selectedShip.name}
                 </h2>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/60">
@@ -392,9 +390,7 @@ export function PilotHub({
                     key={row.label}
                     className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
                   >
-                    <dt className="text-[10px] uppercase tracking-wide text-white/55">
-                      {row.label}
-                    </dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-white/55">{row.label}</dt>
                     <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
                   </div>
                 ))}
@@ -408,13 +404,13 @@ export function PilotHub({
           <button
             type="button"
             onClick={onDeploy}
-            className="flex h-[56px] w-full items-center justify-center gap-3 border-2 border-cyan-100 bg-[#00f0ff] font-arcade text-[11px] uppercase tracking-[0.12em] text-[#05060f] transition hover:brightness-110 active:translate-y-px"
+            className="flex h-[40px] w-full items-center justify-center gap-2 border border-cyan-100/70 bg-[#00c2d1] font-arcade text-[9px] uppercase tracking-[0.12em] text-[#05060f] transition hover:brightness-105 active:translate-y-px"
             style={{
               boxShadow:
-                "inset 0 -4px 0 rgba(0,0,0,0.35), inset 0 2px 0 rgba(255,255,255,0.6), 0 0 25px rgba(0,240,255,0.4)",
+                "inset 0 -3px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.4), 0 0 10px rgba(0,240,255,0.2)",
             }}
           >
-            <Rocket className="size-5" />
+            <Rocket className="size-4" />
             DESPLEGAR AL COMBATE
           </button>
 
@@ -434,12 +430,12 @@ export function PilotHub({
                 {Array.from({ length: 5 }, (_, i) => (
                   <Star
                     key={i}
-                    className="size-3.5"
+                    className="size-3"
                     strokeWidth={1.5}
                     style={{
                       color: MAGENTA,
                       fill: i < pips ? MAGENTA : "none",
-                      filter: i < pips ? `drop-shadow(0 0 4px ${MAGENTA})` : "none",
+                      filter: i < pips ? `drop-shadow(0 0 2px ${MAGENTA}99)` : "none",
                     }}
                   />
                 ))}
@@ -511,7 +507,7 @@ export function PilotHub({
               style={{
                 width: `${seasonPct}%`,
                 background: `linear-gradient(90deg, ${GOLD}55, ${GOLD})`,
-                boxShadow: `0 0 12px ${GOLD}88`,
+                boxShadow: `0 0 4px ${GOLD}55`,
               }}
             />
             <div
@@ -545,7 +541,7 @@ export function PilotHub({
               </span>
               <span
                 className="font-arcade text-[11px] tabular-nums"
-                style={{ color: item.color, textShadow: `0 0 8px ${item.color}aa` }}
+                style={{ color: item.color, textShadow: `0 0 3px ${item.color}66` }}
               >
                 {item.value}
               </span>
