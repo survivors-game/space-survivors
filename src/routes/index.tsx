@@ -641,16 +641,44 @@ function Index() {
     }
   };
 
-  const confirmMarketOrder = async (orderId: string) => {
+  const reportMarketPayment = async (orderId: string) => {
     setMarketError("");
     try {
-      await marketRequest<{ success: boolean }>("/api/market/confirm", {
+      await marketRequest<{ success: boolean }>("/api/market/report-payment", {
         method: "POST",
         body: JSON.stringify({ order_id: orderId }),
       });
       setMarketRefresh((version) => version + 1);
     } catch (error) {
-      setMarketError(error instanceof Error ? error.message : "No se pudo confirmar la compra.");
+      setMarketError(error instanceof Error ? error.message : "No se pudo reportar el pago.");
+      throw error;
+    }
+  };
+
+  const releaseMarketOrder = async (orderId: string) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/release", {
+        method: "POST",
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo liberar el artículo.");
+      throw error;
+    }
+  };
+
+  const openMarketDispute = async (orderId: string, reason: string, evidenceUrl: string) => {
+    setMarketError("");
+    try {
+      await marketRequest<{ success: boolean }>("/api/market/dispute", {
+        method: "POST",
+        body: JSON.stringify({ order_id: orderId, reason, evidence_url: evidenceUrl }),
+      });
+      setMarketRefresh((version) => version + 1);
+    } catch (error) {
+      setMarketError(error instanceof Error ? error.message : "No se pudo abrir la disputa.");
       throw error;
     }
   };
@@ -2541,7 +2569,9 @@ function Index() {
                     onCancelAd: cancelMarketAd,
                     onLoadListings: loadMarketListings,
                     onBuy: buyMarketListing,
-                    onConfirmOrder: confirmMarketOrder,
+                    onReportPayment: reportMarketPayment,
+                    onReleaseOrder: releaseMarketOrder,
+                    onOpenDispute: openMarketDispute,
                     onCancelOrder: cancelMarketOrder,
                   }}
                 />
