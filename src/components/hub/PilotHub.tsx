@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
+  Coins,
+  Crown,
   Flame,
+  Gem,
   Hexagon,
   Medal,
   MessageSquare,
@@ -231,10 +234,7 @@ export function PilotHub({
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
   const rank = rankFor(runs);
-  const plateId = `PLT-${pilotId
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 8)
-    .toUpperCase()}`;
+  const plateId = `PLT-${pilotId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
   const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
 
   return (
@@ -351,7 +351,8 @@ export function PilotHub({
                   className="absolute bottom-7 h-16 w-5"
                   style={{
                     [side]: "15%",
-                    background: "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
+                    background:
+                      "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
                     border: "1px solid rgba(253,224,71,0.6)",
                     boxShadow: "0 0 4px rgba(253,224,71,0.15)",
                   }}
@@ -392,9 +393,7 @@ export function PilotHub({
                     key={row.label}
                     className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
                   >
-                    <dt className="text-[10px] uppercase tracking-wide text-white/55">
-                      {row.label}
-                    </dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-white/55">{row.label}</dt>
                     <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
                   </div>
                 ))}
@@ -490,6 +489,7 @@ export function PilotHub({
           </div>
 
           <SupportAccess />
+          <RewardsFeed />
         </div>
       </div>
 
@@ -554,6 +554,135 @@ export function PilotHub({
         </div>
       </footer>
     </div>
+  );
+}
+
+type RewardEntry = {
+  id: string;
+  source: "ADMIN" | "BOSS";
+  kind: string;
+  label: string;
+  detail: string;
+  quantity: number;
+  created_at: number;
+};
+
+const REWARD_STYLE: Record<string, { Icon: LucideIcon; color: string; tag: string }> = {
+  ship: { Icon: Rocket, color: CYAN, tag: "NAVE" },
+  item: { Icon: Gem, color: VIOLET, tag: "OBJETO" },
+  CR: { Icon: Coins, color: CYAN, tag: "CR" },
+  OBS: { Icon: Star, color: MAGENTA, tag: "OBS" },
+  VIP: { Icon: Crown, color: GOLD, tag: "VIP" },
+};
+
+/** Premios recibidos de la administración y de jefes. Se actualiza cada 5 segundos. */
+function RewardsFeed() {
+  const [rewards, setRewards] = useState<RewardEntry[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/pilot/rewards", { credentials: "same-origin" });
+        if (!response.ok) throw new Error("rewards");
+        const data = (await response.json()) as { rewards?: RewardEntry[] };
+        if (!active) return;
+        setRewards(data.rewards ?? []);
+        setFailed(false);
+      } catch {
+        if (active) setFailed(true);
+      } finally {
+        if (active) setLoaded(true);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void load(), 5000);
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  return (
+    <section className="flex flex-col border border-amber-400/30 bg-[#0b0d1c]/90 backdrop-blur-md">
+      <div className="flex items-center justify-between gap-2 border-b border-amber-400/20 px-3 py-2">
+        <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.15em] text-amber-200">
+          <Trophy className="size-3.5" />
+          Premios recibidos
+        </span>
+        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-emerald-300">
+          <span className="size-1.5 rounded-full bg-emerald-400" />
+          En vivo
+        </span>
+      </div>
+      <div className="max-h-[260px] overflow-y-auto">
+        {!loaded ? (
+          <p className="px-3 py-3 text-xs text-white/50">Cargando premios...</p>
+        ) : failed ? (
+          <p className="px-3 py-3 text-xs text-rose-300">No se pudieron cargar los premios.</p>
+        ) : rewards.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-white/50">
+            Aún no has recibido premios. Derrota jefes o espera anuncios de la administración.
+          </p>
+        ) : (
+          <ul className="divide-y divide-white/5">
+            {rewards.map((reward) => {
+              const style = REWARD_STYLE[reward.kind] ?? {
+                Icon: Gem,
+                color: VIOLET,
+                tag: reward.kind,
+              };
+              const amount =
+                reward.kind === "CR" || reward.kind === "OBS"
+                  ? `+${fmt(reward.quantity)}`
+                  : reward.quantity > 1
+                    ? `×${fmt(reward.quantity)}`
+                    : "";
+              return (
+                <li key={reward.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <style.Icon className="size-4 shrink-0" style={{ color: style.color }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
+                      <span
+                        className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: style.color, border: `1px solid ${style.color}66` }}
+                      >
+                        {style.tag}
+                      </span>
+                      <span className="truncate">{reward.label}</span>
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-white/55">
+                      {reward.source === "BOSS" ? "" : "Administración · "}
+                      {reward.detail}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {amount ? (
+                      <p className="text-sm font-bold tabular-nums" style={{ color: style.color }}>
+                        {amount}
+                      </p>
+                    ) : null}
+                    <p className="text-[11px] tabular-nums text-white/45">
+                      {new Date(reward.created_at).toLocaleString("es-CO", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 

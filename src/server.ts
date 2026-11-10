@@ -1,4 +1,4 @@
-import "./lib/error-capture";
+ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -3671,6 +3671,7 @@ async function handleBossRequest(
     const shipDropChance = vipActive ? 0.15 : reward.shipChance;
     const itemDropChance = vipActive ? 0.2 : reward.itemChance;
     const rewardId = claimId;
+    await ensurePilotRewardLogs(db);
     const drops: { itemId: string; itemName: string; itemType: "nave" | "objeto" }[] = [];
     if (rollChance(shipDropChance)) {
       drops.push({
@@ -3729,6 +3730,26 @@ async function handleBossRequest(
           )`,
         )
         .bind(reward.obsidian, now, account.pilot_id, account.pilot_id, reward.bossId, rewardId),
+      db
+        .prepare(
+          `INSERT INTO boss_reward_logs (reward_id, pilot_id, boss_id, obsidian, drops_json, created_at)
+          SELECT ?, ?, ?, ?, ?, ?
+          WHERE EXISTS (
+            SELECT 1 FROM boss_cooldowns
+            WHERE pilot_id = ? AND boss_id = ? AND last_reward_id = ?
+          )`,
+        )
+        .bind(
+          rewardId,
+          account.pilot_id,
+          reward.bossId,
+          reward.obsidian,
+          JSON.stringify(drops.map((drop) => ({ type: drop.itemType === "nave" ? "nave" : "objeto", name: drop.itemName }))),
+          now,
+          account.pilot_id,
+          reward.bossId,
+          rewardId,
+        ),
       ...drops.map((drop) =>
         db
           .prepare(
@@ -5315,6 +5336,139 @@ async function handleAdminRewardsRequest(
     quantity,
     event_name: eventName,
   });
+}
+
+let pilotRewardLogsReady = false;
+
+/** Tabla de premios de jefes: un registro por reclamo validado (OBS y objetos/naves). */
+async function ensurePilotRewardLogs(db: NonNullable<WorkerEnv["DB"]>) {
+  if (pilotRewardLogsReady) return;
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS boss_reward_logs (
+        reward_id TEXT PRIMARY KEY, pilot_id TEXT NOT NULL, boss_id TEXT NOT NULL,
+        obsidian INTEGER NOT NULL, drops_json TEXT NOT NULL, created_at INTEGER NOT NULL
+      )`,
+    )
+    .run();
+  await db
+    .prepare(
+      "CREATE INDEX IF NOT EXISTS idx_boss_reward_logs_pilot ON boss_reward_logs(pilot_id, created_at DESC)",
+    )
+    .run();
+  pilotRewardLogsReady = true;
+}
+
+/** Historial de premios del jugador: administración y jefes. Solo lectura. */
+async function handlePilotRewardsRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/pilot/rewards") return null;
+  if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await ensurePilotRewardLogs(db);
+  } catch (error) {
+    console.error("No se pudo preparar el historial de premios:", error);
+    return json({ error: "No se pudo preparar el historial de premios." }, 503);
+  }
+
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión para ver tus premios." }, 401);
+
+  type RewardEntry = {
+    id: string;
+    source: "ADMIN" | "BOSS";
+    kind: string;
+    label: string;
+    detail: string;
+    quantity: number;
+    created_at: number;
+  };
+  const entries: RewardEntry[] = [];
+
+  try {
+    const admin = await db
+      .prepare(
+        "SELECT id, reward_type, reward_name, quantity, reason, event_name, created_at FROM admin_reward_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
+      )
+      .bind(account.pilot_id)
+      .all<{
+        id: string;
+        reward_type: string;
+        reward_name: string;
+        quantity: number;
+        reason: string;
+        event_name: string;
+        created_at: number;
+      }>();
+    for (const row of admin.results ?? []) {
+      entries.push({
+        id: `admin_${row.id}`,
+        source: "ADMIN",
+        kind: row.reward_type,
+        label: row.reward_name,
+        detail: row.event_name ? `${row.event_name} · ${row.reason}` : row.reason,
+        quantity: row.quantity,
+        created_at: row.created_at,
+      });
+    }
+  } catch {
+    // Aún no hay premios de administración registrados.
+  }
+
+  const bossRows = await db
+    .prepare(
+      "SELECT reward_id, boss_id, obsidian, drops_json, created_at FROM boss_reward_logs WHERE pilot_id = ? ORDER BY created_at DESC LIMIT 30",
+    )
+    .bind(account.pilot_id)
+    .all<{
+      reward_id: string;
+      boss_id: string;
+      obsidian: number;
+      drops_json: string;
+      created_at: number;
+    }>();
+  for (const row of bossRows.results ?? []) {
+    const bossName = bossById(row.boss_id)?.name ?? row.boss_id;
+    const detail = `Jefe ${bossName}`;
+    if (row.obsidian > 0) {
+      entries.push({
+        id: `boss_${row.reward_id}_obs`,
+        source: "BOSS",
+        kind: "OBS",
+        label: "OBSIDIANA",
+        detail,
+        quantity: row.obsidian,
+        created_at: row.created_at,
+      });
+    }
+    let drops: { type: string; name: string }[] = [];
+    try {
+      drops = JSON.parse(row.drops_json) as { type: string; name: string }[];
+    } catch {
+      drops = [];
+    }
+    drops.forEach((drop, index) => {
+      entries.push({
+        id: `boss_${row.reward_id}_${index}`,
+        source: "BOSS",
+        kind: drop.type === "nave" ? "ship" : "item",
+        label: drop.name,
+        detail,
+        quantity: 1,
+        created_at: row.created_at,
+      });
+    });
+  }
+
+  entries.sort((a, b) => b.created_at - a.created_at);
+  return json({ rewards: entries.slice(0, 40) });
 }
 
 async function handleSupportRequest(
@@ -7761,6 +7915,8 @@ export default {
       if (seasonsResponse) return seasonsResponse;
       const rewardsResponse = await handleAdminRewardsRequest(request, workerEnv);
       if (rewardsResponse) return rewardsResponse;
+      const rewardsFeedResponse = await handlePilotRewardsRequest(request, workerEnv);
+      if (rewardsFeedResponse) return rewardsFeedResponse;
       const supportResponse = await handleSupportRequest(request, workerEnv);
       if (supportResponse) return supportResponse;
       const announcementsResponse = await handleAnnouncementsRequest(request, workerEnv);
