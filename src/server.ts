@@ -8639,12 +8639,6 @@ async function handleMarketRequest(
       const results = await db.batch([
         db
           .prepare(
-            `INSERT INTO market_publish_attempts
-          (id, pilot_id, inventory_id, created_at) VALUES (?, ?, ?, ?)`,
-          )
-          .bind(`pub_${randomHex(8)}`, pilotId, inventoryId, now),
-        db
-          .prepare(
             `UPDATE pilots SET obsidian = obsidian - 1, updated_at = ?
           WHERE pilot_id = ? AND obsidian >= 1`,
           )
@@ -8689,14 +8683,9 @@ async function handleMarketRequest(
             now,
             now,
           ),
-        db
-          .prepare(
-            "DELETE FROM market_publish_attempts WHERE pilot_id = ? AND inventory_id = ? AND created_at = ?",
-          )
-          .bind(pilotId, inventoryId, now),
       ]);
-      if (results.some((result) => result.meta?.changes !== 1)) {
-        throw new Error("Una operación de publicación no afectó exactamente una fila.");
+      if (results.length !== 3 || results.some((result) => result.meta?.changes !== 1)) {
+        throw new Error("La publicación no pudo descontar OBS, reservar el artículo y crear el anuncio.");
       }
     } catch (error) {
       console.error("Transacción de publicación rechazada:", error);
