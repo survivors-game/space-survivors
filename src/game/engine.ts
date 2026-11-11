@@ -192,6 +192,7 @@ export class Engine {
   private bossAttemptToken: string | null = null;
   private bossAttemptSeed = "";
   private bossAttemptIssuedAt = 0;
+  private bossAttemptExpiresAt = 0;
   private bossFightStartedAt = 0;
   private bossDamageDealt = 0;
   private bossDamageReceived = 0;
@@ -1178,6 +1179,7 @@ export class Engine {
     this.bossAttemptToken = attempt.token;
     this.bossAttemptSeed = attempt.seed;
     this.bossAttemptIssuedAt = attempt.issued_at;
+    this.bossAttemptExpiresAt = attempt.expires_at;
     this.bossFightStartedAt = Date.now();
     this.bossDamageDealt = 0;
     this.bossDamageReceived = 0;
@@ -1738,6 +1740,15 @@ export class Engine {
         this.end(this.state === "WINNING");
         return;
       }
+    }
+    if (this.state === "PLAYING" && this.bossAttemptToken && this.bossAttemptExpiresAt > 0 && Date.now() >= this.bossAttemptExpiresAt) {
+      if (this.boss) this.boss.alive = false;
+      this.boss = null;
+      this.settleBossAttempt("defeat");
+      this.banner("TIEMPO AGOTADO", "Leviatán sigue vivo · DERROTA", "bad");
+      this.state = "DYING";
+      this.endTimer = 1.2;
+      return;
     }
     if (this.state === "PLAYING") {
       this.elapsed += dt;
