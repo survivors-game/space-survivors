@@ -64,7 +64,11 @@ type Payload = {
 const money = (cents: number) => "$" + (cents / 100).toFixed(2) + " USDT";
 const date = (value: number) => new Date(value).toLocaleString("es-CO");
 const statusLabel = (value: string) =>
-  value === "PENDING" ? "Pendiente" : value === "PAID" || value === "APPROVED" ? "Pagado / aprobado" : "Rechazado";
+  value === "PENDING"
+    ? "Pendiente"
+    : value === "PAID" || value === "APPROVED"
+      ? "Pagado / aprobado"
+      : "Rechazado";
 
 export function RealEconomyAdminSection() {
   const [data, setData] = useState<Payload | null>(null);
@@ -81,7 +85,7 @@ export function RealEconomyAdminSection() {
         credentials: "same-origin",
         cache: "no-store",
       });
-      const payload = await response.json() as Payload & { error?: string };
+      const payload = (await response.json()) as Payload & { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "No se pudo cargar la economía real.");
       setData(payload);
     } catch (cause) {
@@ -112,8 +116,9 @@ export function RealEconomyAdminSection() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: operation, id, ...extra }),
       });
-      const result = await response.json() as { error?: string; success?: boolean };
-      if (!response.ok || !result.success) throw new Error(result.error ?? "No se pudo completar la operación.");
+      const result = (await response.json()) as { error?: string; success?: boolean };
+      if (!response.ok || !result.success)
+        throw new Error(result.error ?? "No se pudo completar la operación.");
       setNotice("Operación registrada correctamente.");
       await load();
     } catch (cause) {
@@ -142,13 +147,31 @@ export function RealEconomyAdminSection() {
         <p className="text-xs text-white/55">
           Control privado de ventas VIP, tickets, fondos y pagos de premios.
         </p>
-        <button onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 border border-cyan-400/30 px-3 py-2 text-xs text-cyan-200 disabled:opacity-40">
+        <button
+          onClick={() => void load()}
+          disabled={loading}
+          className="inline-flex items-center gap-2 border border-cyan-400/30 px-3 py-2 text-xs text-cyan-200 disabled:opacity-40"
+        >
           <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} /> Actualizar
         </button>
       </div>
 
-      {error ? <p role="alert" className="border border-rose-400/30 bg-rose-400/5 p-3 text-xs text-rose-200">{error}</p> : null}
-      {notice ? <p role="status" className="border border-emerald-400/30 bg-emerald-400/5 p-3 text-xs text-emerald-200">{notice}</p> : null}
+      {error ? (
+        <p
+          role="alert"
+          className="border border-rose-400/30 bg-rose-400/5 p-3 text-xs text-rose-200"
+        >
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p
+          role="status"
+          className="border border-emerald-400/30 bg-emerald-400/5 p-3 text-xs text-emerald-200"
+        >
+          {notice}
+        </p>
+      ) : null}
 
       {data ? (
         <>
@@ -177,11 +200,15 @@ export function RealEconomyAdminSection() {
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="border border-white/10 p-3">
                 <p className="text-[10px] uppercase text-white/50">Ranking de Bosses</p>
-                <p className="mt-1 text-lg font-bold text-emerald-300">{money(currentPool("BOSSES"))}</p>
+                <p className="mt-1 text-lg font-bold text-emerald-300">
+                  {money(currentPool("BOSSES"))}
+                </p>
               </div>
               <div className="border border-white/10 p-3">
                 <p className="text-[10px] uppercase text-white/50">Ranking de Invitaciones</p>
-                <p className="mt-1 text-lg font-bold text-emerald-300">{money(currentPool("REFERRALS"))}</p>
+                <p className="mt-1 text-lg font-bold text-emerald-300">
+                  {money(currentPool("REFERRALS"))}
+                </p>
               </div>
             </div>
           </section>
@@ -193,27 +220,68 @@ export function RealEconomyAdminSection() {
             <div className="overflow-x-auto border border-white/10">
               <table className="w-full min-w-[760px] text-left text-xs">
                 <thead className="bg-white/5 text-white/55">
-                  <tr><th className="p-2">Jugador</th><th className="p-2">Fecha</th><th className="p-2">Monto</th><th className="p-2">TX Polygon</th><th className="p-2">Estado</th><th className="p-2">Acciones</th></tr>
+                  <tr>
+                    <th className="p-2">Jugador</th>
+                    <th className="p-2">Fecha</th>
+                    <th className="p-2">Monto</th>
+                    <th className="p-2">TX Polygon</th>
+                    <th className="p-2">Estado</th>
+                    <th className="p-2">Acciones</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {data.vip_payments.map((payment) => (
                     <tr key={payment.id} className="border-t border-white/10">
-                      <td className="p-2">{payment.callsign}<span className="block text-[10px] text-white/40">{payment.email ?? payment.pilot_id}</span></td>
+                      <td className="p-2">
+                        {payment.callsign}
+                        <span className="block text-[10px] text-white/40">
+                          {payment.email ?? payment.pilot_id}
+                        </span>
+                      </td>
                       <td className="p-2 whitespace-nowrap">{date(payment.created_at)}</td>
                       <td className="p-2">{money(payment.amount_cents)}</td>
-                      <td className="p-2"><a className="font-mono text-cyan-200 underline" href={`https://polygonscan.com/tx/${payment.tx_hash}`} target="_blank" rel="noreferrer">{payment.tx_hash.slice(0, 12)}…</a></td>
+                      <td className="p-2">
+                        <a
+                          className="font-mono text-cyan-200 underline"
+                          href={`https://polygonscan.com/tx/${payment.tx_hash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {payment.tx_hash.slice(0, 12)}…
+                        </a>
+                      </td>
                       <td className="p-2">{statusLabel(payment.status)}</td>
                       <td className="p-2">
                         {payment.status === "PENDING" ? (
                           <div className="flex gap-1">
-                            <button disabled={busyId === payment.id} onClick={() => void action(payment.id, "approve-vip")} className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40">Aprobar</button>
-                            <button disabled={busyId === payment.id} onClick={() => reject(payment.id, "reject-vip")} className="border border-rose-400/30 px-2 py-1 text-rose-200 disabled:opacity-40">Rechazar</button>
+                            <button
+                              disabled={busyId === payment.id}
+                              onClick={() => void action(payment.id, "approve-vip")}
+                              className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40"
+                            >
+                              Aprobar
+                            </button>
+                            <button
+                              disabled={busyId === payment.id}
+                              onClick={() => reject(payment.id, "reject-vip")}
+                              className="border border-rose-400/30 px-2 py-1 text-rose-200 disabled:opacity-40"
+                            >
+                              Rechazar
+                            </button>
                           </div>
-                        ) : <span className="text-white/35">—</span>}
+                        ) : (
+                          <span className="text-white/35">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
-                  {!data.vip_payments.length ? <tr><td colSpan={6} className="p-5 text-center text-white/40">No hay compras VIP registradas.</td></tr> : null}
+                  {!data.vip_payments.length ? (
+                    <tr>
+                      <td colSpan={6} className="p-5 text-center text-white/40">
+                        No hay compras VIP registradas.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -226,27 +294,72 @@ export function RealEconomyAdminSection() {
             <div className="overflow-x-auto border border-white/10">
               <table className="w-full min-w-[760px] text-left text-xs">
                 <thead className="bg-white/5 text-white/55">
-                  <tr><th className="p-2">Jugador</th><th className="p-2">Monto</th><th className="p-2">Wallet Polygon</th><th className="p-2">Fecha</th><th className="p-2">Estado</th><th className="p-2">Acciones</th></tr>
+                  <tr>
+                    <th className="p-2">Jugador</th>
+                    <th className="p-2">Monto</th>
+                    <th className="p-2">Wallet Polygon</th>
+                    <th className="p-2">Fecha</th>
+                    <th className="p-2">Estado</th>
+                    <th className="p-2">Acciones</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {data.ticket_requests.map((request) => (
                     <tr key={request.id} className="border-t border-white/10">
-                      <td className="p-2">{request.callsign}<span className="block text-[10px] text-white/40">{request.email ?? request.pilot_id}</span></td>
-                      <td className="p-2 font-bold text-emerald-200">{money(request.amount_cents)}</td>
-                      <td className="max-w-48 break-all p-2 font-mono text-[10px] text-white/60">{request.wallet_address}</td>
+                      <td className="p-2">
+                        {request.callsign}
+                        <span className="block text-[10px] text-white/40">
+                          {request.email ?? request.pilot_id}
+                        </span>
+                      </td>
+                      <td className="p-2 font-bold text-emerald-200">
+                        {money(request.amount_cents)}
+                      </td>
+                      <td className="max-w-48 break-all p-2 font-mono text-[10px] text-white/60">
+                        {request.wallet_address}
+                      </td>
                       <td className="p-2 whitespace-nowrap">{date(request.created_at)}</td>
                       <td className="p-2">{statusLabel(request.status)}</td>
                       <td className="p-2">
                         {request.status === "PENDING" ? (
                           <div className="flex gap-1">
-                            <button disabled={busyId === request.id} onClick={() => pay(request.id, "pay-ticket")} className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40">Pagado</button>
-                            <button disabled={busyId === request.id} onClick={() => reject(request.id, "reject-ticket")} className="border border-rose-400/30 px-2 py-1 text-rose-200 disabled:opacity-40">Rechazar</button>
+                            <button
+                              disabled={busyId === request.id}
+                              onClick={() => pay(request.id, "pay-ticket")}
+                              className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40"
+                            >
+                              Pagado
+                            </button>
+                            <button
+                              disabled={busyId === request.id}
+                              onClick={() => reject(request.id, "reject-ticket")}
+                              className="border border-rose-400/30 px-2 py-1 text-rose-200 disabled:opacity-40"
+                            >
+                              Rechazar
+                            </button>
                           </div>
-                        ) : request.tx_hash ? <a className="font-mono text-cyan-200 underline" href={`https://polygonscan.com/tx/${request.tx_hash}`} target="_blank" rel="noreferrer">Ver TX</a> : <span className="text-white/35">—</span>}
+                        ) : request.tx_hash ? (
+                          <a
+                            className="font-mono text-cyan-200 underline"
+                            href={`https://polygonscan.com/tx/${request.tx_hash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Ver TX
+                          </a>
+                        ) : (
+                          <span className="text-white/35">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
-                  {!data.ticket_requests.length ? <tr><td colSpan={6} className="p-5 text-center text-white/40">No hay solicitudes de tickets.</td></tr> : null}
+                  {!data.ticket_requests.length ? (
+                    <tr>
+                      <td colSpan={6} className="p-5 text-center text-white/40">
+                        No hay solicitudes de tickets.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -259,29 +372,68 @@ export function RealEconomyAdminSection() {
             <div className="overflow-x-auto border border-white/10">
               <table className="w-full min-w-[720px] text-left text-xs">
                 <thead className="bg-white/5 text-white/55">
-                  <tr><th className="p-2">Ciclo</th><th className="p-2">Ranking</th><th className="p-2">Puesto</th><th className="p-2">Jugador</th><th className="p-2">Premio</th><th className="p-2">Estado</th><th className="p-2">Acción</th></tr>
+                  <tr>
+                    <th className="p-2">Ciclo</th>
+                    <th className="p-2">Ranking</th>
+                    <th className="p-2">Puesto</th>
+                    <th className="p-2">Jugador</th>
+                    <th className="p-2">Premio</th>
+                    <th className="p-2">Estado</th>
+                    <th className="p-2">Acción</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {data.payouts.map((payout) => (
                     <tr key={payout.id} className="border-t border-white/10">
                       <td className="p-2 font-mono text-[10px] text-white/45">{payout.cycle_id}</td>
-                      <td className="p-2">{payout.ranking_type === "BOSSES" ? "Bosses" : "Invitaciones"}</td>
+                      <td className="p-2">
+                        {payout.ranking_type === "BOSSES" ? "Bosses" : "Invitaciones"}
+                      </td>
                       <td className="p-2">{payout.position}.º</td>
                       <td className="p-2">{payout.callsign}</td>
-                      <td className="p-2 font-bold text-emerald-200">{money(payout.prize_cents)}</td>
+                      <td className="p-2 font-bold text-emerald-200">
+                        {money(payout.prize_cents)}
+                      </td>
                       <td className="p-2">{statusLabel(payout.status)}</td>
                       <td className="p-2">
-                        {payout.status === "PENDING" ? <button disabled={busyId === payout.id} onClick={() => pay(payout.id, "pay-prize")} className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40">Registrar pago</button> : payout.tx_hash ? <a className="font-mono text-cyan-200 underline" href={`https://polygonscan.com/tx/${payout.tx_hash}`} target="_blank" rel="noreferrer">Ver TX</a> : "Pagado"}
+                        {payout.status === "PENDING" ? (
+                          <button
+                            disabled={busyId === payout.id}
+                            onClick={() => pay(payout.id, "pay-prize")}
+                            className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40"
+                          >
+                            Registrar pago
+                          </button>
+                        ) : payout.tx_hash ? (
+                          <a
+                            className="font-mono text-cyan-200 underline"
+                            href={`https://polygonscan.com/tx/${payout.tx_hash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Ver TX
+                          </a>
+                        ) : (
+                          "Pagado"
+                        )}
                       </td>
                     </tr>
                   ))}
-                  {!data.payouts.length ? <tr><td colSpan={7} className="p-5 text-center text-white/40">Todavía no hay premios cerrados.</td></tr> : null}
+                  {!data.payouts.length ? (
+                    <tr>
+                      <td colSpan={7} className="p-5 text-center text-white/40">
+                        Todavía no hay premios cerrados.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
           </section>
         </>
-      ) : loading ? <p className="py-8 text-center text-xs text-white/50">Cargando economía real...</p> : null}
+      ) : loading ? (
+        <p className="py-8 text-center text-xs text-white/50">Cargando economía real...</p>
+      ) : null}
     </section>
   );
 }
