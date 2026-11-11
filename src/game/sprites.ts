@@ -47,7 +47,11 @@ export function expandRows(def: ArtDef): string[] {
 }
 
 /** Build from a pixel colour grid (null = transparent) */
-function buildFromGrid(grid: (string | null)[][], shadeMask: boolean[][] | null): Sprite {
+function buildFromGrid(
+  grid: (string | null)[][],
+  shadeMask: boolean[][] | null,
+  brightness = 1,
+): Sprite {
   const h = grid.length;
   const w = grid[0]?.length ?? 1;
   const W = w + 2,
@@ -73,6 +77,9 @@ function buildFromGrid(grid: (string | null)[][], shadeMask: boolean[][] | null)
         g = Math.min(255, g * k);
         b = Math.min(255, b * k);
       }
+      r = Math.min(255, Math.round(r * brightness));
+      g = Math.min(255, Math.round(g * brightness));
+      b = Math.min(255, Math.round(b * brightness));
       const i = ((y + 1) * W + (x + 1)) * 4;
       img.data[i] = r;
       img.data[i + 1] = g;
@@ -113,7 +120,8 @@ function buildArt(def: ArtDef): Sprite {
     def.shade === false
       ? rows.map((r) => r.split("").map(() => false))
       : rows.map((r) => r.split("").map((ch) => !EMISSIVE.has(ch)));
-  return buildFromGrid(grid, mask);
+  // Lift pixel-art sprites without changing procedural planets or world backgrounds.
+  return buildFromGrid(grid, mask, 1.14);
 }
 
 /* ---------------- Procedural sprites ---------------- */

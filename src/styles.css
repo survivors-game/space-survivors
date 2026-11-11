@@ -273,3 +273,19 @@ body *::after {
 [class*="text-[9px]"] {
   font-size: 11px;
 }
+
+/* Realce selectivo: mantener la paleta y levantar solo elementos de énfasis. */
+button:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.14);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  text-shadow: 0 0 10px rgb(122 166 221 / 22%);
+}
