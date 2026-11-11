@@ -27,7 +27,12 @@ function createD1Adapter() {
           return statement;
         },
         async run() {
-          const result = db.prepare(query).run(...(values as never[]));
+          const prepared = db.prepare(query);
+          if (/\\bRETURNING\\b/i.test(query)) {
+            const results = prepared.all(...(values as never[]) as never[]);
+            return { meta: { changes: results.length }, results };
+          }
+          const result = prepared.run(...(values as never[]));
           return { meta: { changes: Number(result.changes) } };
         },
         async first<T>() {
@@ -39,12 +44,13 @@ function createD1Adapter() {
       };
       return statement;
     },
-    async batch(statements: Array<{ run(): Promise<{ meta: { changes: number } }> }>) {
+    async batch(statements: Array<{ run(): Promise<{ meta: { changes: number }; results?: unknown[] }> }>) {
       db.exec("BEGIN");
       try {
-        for (const statement of statements) await statement.run();
+        const results = [];
+        for (const statement of statements) results.push(await statement.run());
         db.exec("COMMIT");
-        return statements.map(() => ({ meta: { changes: 1 } }));
+        return results;
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;
