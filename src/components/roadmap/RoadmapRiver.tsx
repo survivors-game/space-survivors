@@ -235,6 +235,17 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
       aria-labelledby="roadmap-river-title"
       className="fixed inset-0 z-[90] overflow-y-auto bg-[#070814] text-white"
     >
+      <style>{`
+        @keyframes roadmap-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-12px) rotate(2deg); } }
+        @keyframes roadmap-sway { 0%, 100% { transform: translateX(0) scale(1); } 50% { transform: translateX(8px) scale(1.04); } }
+        @keyframes roadmap-pulse { 0%, 100% { transform: scale(1); opacity: 0.3; } 50% { transform: scale(1.1); opacity: 0.7; } }
+        .roadmap-ship { animation: roadmap-float 4s ease-in-out infinite; }
+        .roadmap-boss { animation: roadmap-sway 5s ease-in-out infinite; }
+        .roadmap-ring { animation: roadmap-pulse 3s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .roadmap-ship, .roadmap-boss, .roadmap-ring { animation: none; }
+        }
+      `}</style>
       <div className="mx-auto w-full max-w-4xl space-y-6 p-4 font-sans sm:p-6">
         <header className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="space-y-1">
@@ -266,18 +277,65 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
             const isLeft = index % 2 === 0;
             const sectorId = phase.playSectorId;
             const sprite = phase.spriteKey ? spriteUrl(phase.spriteKey, 4) : null;
+            const animClass = phase.spriteKey?.startsWith("boss_") ? "roadmap-boss" : "roadmap-ship";
+            const delay = `${index * 0.6}s`;
             return (
-              <li key={phase.number} className="relative pb-6 last:pb-0 md:grid md:grid-cols-2 md:gap-4">
+              <li key={phase.number} className="relative pb-8 last:pb-0 md:grid md:grid-cols-2 md:gap-4">
                 <span
                   aria-hidden="true"
                   className={`absolute left-4 top-6 size-3 -translate-x-1/2 rounded-full border-2 bg-[#070814] md:left-1/2 ${tone.node}`}
                 />
                 <article
-                  className={`ml-10 flex gap-4 border p-4 md:ml-0 ${tone.card} ${
+                  className={`ml-10 space-y-2 border p-4 md:ml-0 ${tone.card} ${
                     isLeft ? "md:col-start-1 md:mr-8" : "md:col-start-2 md:ml-8"
                   }`}
                 >
-                  <div className={`grid size-14 shrink-0 place-items-center border bg-black/30 ${tone.badge}`}>
+                  <span
+                    className={`inline-flex items-center border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${tone.badge}`}
+                  >
+                    Fase {phase.number} · {phase.status}
+                  </span>
+                  <h3 className="text-sm font-bold uppercase leading-snug tracking-wide sm:text-base">
+                    {phase.title}
+                  </h3>
+                  {phase.sector ? (
+                    <p className={`text-xs font-semibold ${tone.text}`}>{phase.sector}</p>
+                  ) : null}
+
+                  <ul className="space-y-1.5 pt-1">
+                    {phase.features.map((feature) => (
+                      <li key={feature.text} className="flex gap-2 text-sm leading-relaxed text-white/75">
+                        <feature.Icon className={`mt-0.5 size-3.5 shrink-0 ${tone.text}`} />
+                        <span>{feature.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {sectorId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectStage?.(sectorId);
+                        onClose();
+                      }}
+                      className={`mt-2 border px-3 py-2 text-xs font-bold uppercase tracking-wide ${tone.button}`}
+                    >
+                      Jugar sector 01
+                    </button>
+                  ) : null}
+                </article>
+
+                <div
+                  aria-hidden="true"
+                  className={`hidden md:flex md:items-center md:justify-center ${
+                    isLeft ? "md:col-start-2 md:ml-8" : "md:col-start-1 md:mr-8"
+                  }`}
+                >
+                  <div className="relative grid size-48 place-items-center">
+                    <span
+                      className={`roadmap-ring absolute inset-0 rounded-full border ${tone.node}`}
+                      style={{ animationDelay: delay }}
+                    />
                     {sprite ? (
                       <img
                         src={sprite}
@@ -285,50 +343,17 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
                         loading="lazy"
                         decoding="async"
                         draggable={false}
-                        className="size-12 object-contain"
-                        style={{ imageRendering: "pixelated" }}
+                        className={`relative size-40 object-contain ${animClass}`}
+                        style={{ imageRendering: "pixelated", animationDelay: delay }}
                       />
                     ) : (
-                      <phase.StatusIcon className="size-6" />
+                      <phase.StatusIcon
+                        className={`roadmap-ring relative size-16 ${tone.text}`}
+                        style={{ animationDelay: delay }}
+                      />
                     )}
                   </div>
-
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <span
-                      className={`inline-flex items-center gap-1.5 border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${tone.badge}`}
-                    >
-                      Fase {phase.number} · {phase.status}
-                    </span>
-                    <h3 className="text-sm font-bold uppercase leading-snug tracking-wide sm:text-base">
-                      {phase.title}
-                    </h3>
-                    {phase.sector ? (
-                      <p className={`text-xs font-semibold ${tone.text}`}>{phase.sector}</p>
-                    ) : null}
-
-                    <ul className="space-y-1.5 pt-1">
-                      {phase.features.map((feature) => (
-                        <li key={feature.text} className="flex gap-2 text-sm leading-relaxed text-white/75">
-                          <feature.Icon className={`mt-0.5 size-3.5 shrink-0 ${tone.text}`} />
-                          <span>{feature.text}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {sectorId ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onSelectStage?.(sectorId);
-                          onClose();
-                        }}
-                        className={`mt-2 border px-3 py-2 text-xs font-bold uppercase tracking-wide ${tone.button}`}
-                      >
-                        Jugar sector 01
-                      </button>
-                    ) : null}
-                  </div>
-                </article>
+                </div>
               </li>
             );
           })}
