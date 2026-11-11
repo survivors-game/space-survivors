@@ -154,14 +154,8 @@
 }
 
 
-/* Reduce visual intensity across the game without changing its palette. */
-#root::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  pointer-events: none;
-  background: rgba(5, 7, 14, 0.12);
-  -webkit-backdrop-filter: saturate(0.62) brightness(0.88);
-  backdrop-filter: saturate(0.62) brightness(0.88);
+/* Apply the same softer color and brightness treatment to every screen,
+   including portals, dialogs, menus, the game canvas and admin sections. */
+html {
+  filter: saturate(0.55) brightness(0.82);
 }
