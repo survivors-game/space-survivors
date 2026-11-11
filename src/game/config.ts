@@ -40,6 +40,6 @@ export const CONFIG = {
     dmgNumbers: 60,
     pickups: 20,
   },
-  visuals: { dprCap: 1.5 },
+  visuals: { dprCap: 1.25 },
   frame: { maxDt: 0.05 },
 } as const;
