@@ -159,6 +159,22 @@ describe("real-money VIP and ranking economy", () => {
     expect(approved.response.status).toBe(200);
     expect(approved.payload).toEqual({ success: true, status: "APPROVED" });
 
+    const repeatedApproval = await call<{ error?: string }>(
+      "/api/admin/real-economy",
+      ADMIN_TOKEN,
+      "POST",
+      { action: "approve-vip", id: paymentId },
+      true,
+    );
+    expect(repeatedApproval.response.status).toBe(409);
+    const reusedTx = await call<{ error?: string }>(
+      "/api/vip/purchases",
+      INVITEE_TOKEN,
+      "POST",
+      { tx_hash: txHash },
+    );
+    expect(reusedTx.response.status).toBe(409);
+
     const vip = db.prepare("SELECT vip_until FROM pilots WHERE pilot_id=?").get(INVITEE_ID) as {
       vip_until: number;
     };
@@ -302,5 +318,14 @@ describe("real-money VIP and ranking economy", () => {
       REFERRER_TOKEN,
     );
     expect(after.payload).toMatchObject({ balance_cents: 0, available_cents: 0 });
+
+    const repeatedPayout = await call<{ error?: string }>(
+      "/api/admin/real-economy",
+      ADMIN_TOKEN,
+      "POST",
+      { action: "pay-ticket", id: created.payload.id, tx_hash: "0x" + "d".repeat(64) },
+      true,
+    );
+    expect(repeatedPayout.response.status).toBe(409);
   });
 });
