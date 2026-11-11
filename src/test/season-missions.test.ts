@@ -63,7 +63,7 @@ describe("misiones de temporada: calendario y selección", () => {
   it("elige 15 semanales únicas", () => {
     const w = getActiveWeeklyMissions("2026-11-02");
     expect(w).toHaveLength(15);
-    expect(new Set(w.map((m) => m.id)).size).toBe(8);
+    expect(new Set(w.map((m) => m.id)).size).toBe(15);
   });
 
   it("calcula reinicios en UTC", () => {
@@ -119,7 +119,23 @@ describe("misiones de temporada: avance y reclamos", () => {
   });
 
   it("reclama una diaria completada una sola vez, con PT y CR de la plantilla", () => {
-    const out = applyRun(defaultProgress(), run({ victory: true }), NOON_SUNDAY).progress;
+    let out = defaultProgress();
+    for (let i = 0; i < 4; i++) {
+      out = applyRun(
+        out,
+        run({
+          victory: true,
+          stageId: "ash",
+          time: 700,
+          kills: 1000,
+          level: 35,
+          damageDealt: 200000,
+          bossesDefeated: ["leviathan", "nemesis"],
+          evolutions: 6,
+        }),
+        NOON_SUNDAY,
+      ).progress;
+    }
     const done = getSeasonBoard(out, NOON_SUNDAY).daily.find((e) => e.completed && !e.claimed);
     expect(done).toBeDefined();
     const id = done!.template.id;
@@ -142,7 +158,23 @@ describe("misiones de temporada: avance y reclamos", () => {
   });
 
   it("al cambiar de día vacía contadores y reclamos, pero conserva el PT", () => {
-    const out = applyRun(defaultProgress(), run({ victory: true }), NOON_SUNDAY).progress;
+    let out = defaultProgress();
+    for (let i = 0; i < 4; i++) {
+      out = applyRun(
+        out,
+        run({
+          victory: true,
+          stageId: "ash",
+          time: 700,
+          kills: 1000,
+          level: 35,
+          damageDealt: 200000,
+          bossesDefeated: ["leviathan", "nemesis"],
+          evolutions: 6,
+        }),
+        NOON_SUNDAY,
+      ).progress;
+    }
     const done = getSeasonBoard(out, NOON_SUNDAY).daily.find((e) => e.completed)!;
     const claimed = claimPeriodMission(out, "DAILY", done.template.id, NOON_SUNDAY);
     if (!claimed.ok) throw new Error(claimed.reason);
