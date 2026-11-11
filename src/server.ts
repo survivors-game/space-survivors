@@ -2008,9 +2008,16 @@ async function handleRealEconomyRequest(
           .bind(`ticket_${randomHex(10)}`, id, now, id),
         log(id, "Solicitud de tickets pagada · TX " + txHash),
       ]);
-      if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1 || result[2]?.meta?.changes !== 1)
+      if (
+        result[0]?.meta?.changes !== 1 ||
+        result[1]?.meta?.changes !== 1 ||
+        result[2]?.meta?.changes !== 1
+      )
         return json(
-          { error: "La solicitud ya fue procesada, el TX ya fue usado o no se pudo descontar el saldo." },
+          {
+            error:
+              "La solicitud ya fue procesada, el TX ya fue usado o no se pudo descontar el saldo.",
+          },
           409,
         );
       return json({ success: true, status: "PAID" });
@@ -2035,12 +2042,16 @@ async function handleRealEconomyRequest(
       if (!/^0x[a-f0-9]{64}$/.test(txHash))
         return json({ error: "Introduce el TX hash del premio." }, 400);
       const result = await db.batch([
-        db.prepare(
-          "INSERT OR IGNORE INTO real_economy_payout_txs (tx_hash,payout_type,payout_id,created_at) SELECT ?,'RANKING',?,? WHERE EXISTS (SELECT 1 FROM ranking_prize_payouts WHERE id=? AND status='PENDING')",
-        ).bind(txHash, id, now, id),
-        db.prepare(
-          "UPDATE ranking_prize_payouts SET status='PAID',tx_hash=?,paid_at=?,paid_by=? WHERE id=? AND status='PENDING' AND EXISTS (SELECT 1 FROM real_economy_payout_txs WHERE tx_hash=? AND payout_type='RANKING' AND payout_id=?)",
-        ).bind(txHash, now, account.email, id, txHash, id),
+        db
+          .prepare(
+            "INSERT OR IGNORE INTO real_economy_payout_txs (tx_hash,payout_type,payout_id,created_at) SELECT ?,'RANKING',?,? WHERE EXISTS (SELECT 1 FROM ranking_prize_payouts WHERE id=? AND status='PENDING')",
+          )
+          .bind(txHash, id, now, id),
+        db
+          .prepare(
+            "UPDATE ranking_prize_payouts SET status='PAID',tx_hash=?,paid_at=?,paid_by=? WHERE id=? AND status='PENDING' AND EXISTS (SELECT 1 FROM real_economy_payout_txs WHERE tx_hash=? AND payout_type='RANKING' AND payout_id=?)",
+          )
+          .bind(txHash, now, account.email, id, txHash, id),
         log(id, "Premio de ranking pagado · TX " + txHash),
       ]);
       if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1)
