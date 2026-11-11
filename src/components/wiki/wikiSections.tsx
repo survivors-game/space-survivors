@@ -589,8 +589,8 @@ const misiones: WikiSection = {
     <>
       <H>Misiones diarias</H>
       <P>
-        Cada día se eligen {DAILY_MISSION_COUNT} misiones: 2 básicas, 2 de piloto y 1 de élite.
-        Se reinician a medianoche UTC.
+        Cada día se eligen {DAILY_MISSION_COUNT} misiones: 2 básicas, 2 de piloto y 1 de élite. Se
+        reinician a medianoche UTC.
       </P>
       <Grid>
         {DAILY_MISSION_TEMPLATES.map((m) => (
@@ -601,8 +601,8 @@ const misiones: WikiSection = {
         ))}
       </Grid>
       <Tip>
-        Completar {DAILY_CHEST.threshold} de {DAILY_MISSION_COUNT} misiones diarias desbloquea el cofre diario:{" "}
-        {fmt(DAILY_CHEST.reward)} CR y {DAILY_CHEST.pt} PT extra.
+        Completar {DAILY_CHEST.threshold} de {DAILY_MISSION_COUNT} misiones diarias desbloquea el
+        cofre diario: {fmt(DAILY_CHEST.reward)} CR y {DAILY_CHEST.pt} PT extra.
       </Tip>
       <H>Misiones semanales</H>
       <P>
@@ -633,9 +633,9 @@ const misiones: WikiSection = {
       </Grid>
       <H>Pase de temporada</H>
       <P>
-        Cada temporada dura {Math.round(SEASON_LENGTH_MS / 86_400_000)} días. El pase está equilibrado
-        para que un jugador activo necesite aproximadamente 30 días para completar sus 20 niveles.
-        Los PT de misiones y desafíos suben el pase. Actualmente estás en{" "}
+        Cada temporada dura {Math.round(SEASON_LENGTH_MS / 86_400_000)} días. El pase está
+        equilibrado para que un jugador activo necesite aproximadamente 30 días para completar sus
+        20 niveles. Los PT de misiones y desafíos suben el pase. Actualmente estás en{" "}
         <strong>{getSeasonName()}</strong>.
       </P>
       <Bullets

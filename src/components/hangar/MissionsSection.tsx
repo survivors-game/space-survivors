@@ -188,7 +188,11 @@ export function MissionsSection({
   const tabs: { id: SeasonTab; label: string; count: string }[] = [
     { id: "DAILY", label: "DIARIAS", count: `${board.dailyClaimedCount}/${DAILY_MISSION_COUNT}` },
     { id: "WEEKLY", label: "SEMANALES", count: `${board.weeklyClaimedCount}/${WEEKLY_PICK_COUNT}` },
-    { id: "CHALLENGES", label: "DESAFÍOS", count: `${board.challengeClaimedCount}/${SEASON_CHALLENGES.length}` },
+    {
+      id: "CHALLENGES",
+      label: "DESAFÍOS",
+      count: `${board.challengeClaimedCount}/${SEASON_CHALLENGES.length}`,
+    },
     { id: "PASS", label: "PASE", count: `NV ${bar.level}/${SEASON_MAX_LEVEL}` },
   ];
 
@@ -310,8 +314,8 @@ export function MissionsSection({
                 COFRE DIARIO
               </p>
               <p className="mt-0.5 text-xs text-white/50">
-                Reclama {DAILY_CHEST.threshold} de {DAILY_MISSION_COUNT} misiones · +{fmt(DAILY_CHEST.reward)} CR · +
-                {DAILY_CHEST.pt} PT
+                Reclama {DAILY_CHEST.threshold} de {DAILY_MISSION_COUNT} misiones · +
+                {fmt(DAILY_CHEST.reward)} CR · +{DAILY_CHEST.pt} PT
               </p>
               <div
                 className="mt-2 flex gap-0.5"

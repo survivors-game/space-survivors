@@ -520,8 +520,8 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
 /* ---------------- Pase de Temporada: 20 niveles ---------------- */
 // requiredPt es el PT acumulado necesario para alcanzar cada nivel.
 const LEVEL_REQUIRED_PT = [
-  0, 30, 70, 120, 180, 250, 330, 420, 530, 650, 780, 920, 1070, 1230, 1400, 1580, 1770, 1970,
-  2180, 2350,
+  0, 30, 70, 120, 180, 250, 330, 420, 530, 650, 780, 920, 1070, 1230, 1400, 1580, 1770, 1970, 2180,
+  2350,
 ] as const;
 
 const FREE_REWARDS: SeasonRewardNode["freeReward"][] = [
