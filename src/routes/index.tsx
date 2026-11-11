@@ -1921,7 +1921,7 @@ function Index() {
               </Button>
             ) : null}
             {googlePlayer ? (
-              <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
+              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-[#c9b66b] sm:gap-2 sm:text-[8px]">
                 <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
                 {progress.credits.toLocaleString()} CR
                 <span className="ml-2 inline-flex items-center gap-1 text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
@@ -2078,8 +2078,6 @@ function Index() {
               }
               pilotId={googlePlayer.playerId}
               vipActive={hasVip}
-              credits={progress.credits}
-              obsidian={marketPilot?.obsidian ?? 0}
               runs={progress.stats.runs}
               kills={progress.stats.kills}
               season={progress.season}
@@ -2431,25 +2429,12 @@ function Index() {
               claimableCount={claimableCount}
               onTabChange={setHangarTab}
             />
-            <div className="mt-7 flex flex-wrap items-end justify-between gap-4 border-y border-cyan-500/20 py-5 lg:col-start-2">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">
-                  CRÉDITOS DISPONIBLES
-                </p>
-                <p className="font-arcade mt-1 text-base tabular-nums text-[#ffd700] drop-shadow-[0_0_12px_#ffd70030] sm:text-xl">
-                  {progress.credits.toLocaleString()}{" "}
-                  <span className="text-sm tracking-widest">CR</span>
-                </p>
-                <p className="mt-1 flex items-center gap-1 font-arcade text-[10px] tabular-nums text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
-                  <Gem className="size-3" />
-                  {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
-                </p>
-              </div>
-              <div className="text-right text-[10px] uppercase leading-5 tracking-widest text-white/45">
-                <span className="text-cyan-200">NAVE ACTIVA</span>
+            <div className="mt-7 flex justify-end border-y border-cyan-500/15 py-4 lg:col-start-2">
+              <p className="text-right text-[10px] uppercase leading-5 tracking-widest text-white/45">
+                <span className="text-cyan-200/75">NAVE ACTIVA</span>
                 <br />
                 {selectedShip.name}
-              </div>
+              </p>
             </div>
             <div className="lg:col-start-2">
               {notice ? (
@@ -3021,17 +3006,7 @@ function Index() {
           <span>
             SPACE SURVIVORS <span className="text-cyan-300/70">//</span> PROTOCOLO DE DEFENSA ACTIVO
           </span>
-          {googlePlayer ? (
-            <span>
-              CRÉDITOS{" "}
-              <span className="font-arcade text-[8px] text-[#ffd700]/80">
-                {progress.credits.toLocaleString()} CR
-              </span>
-              <span className="ml-3 font-arcade text-[8px] text-[#d946ef]">
-                {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
-              </span>
-            </span>
-          ) : null}
+
         </footer>
       </div>
       {bossHelpInvite ? (
