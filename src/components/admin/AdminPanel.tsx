@@ -4,6 +4,7 @@ import { AlliancesAdminSection } from "./AlliancesAdminSection";
 import { VipAdminSection } from "./VipAdminSection";
 import { SecurityAdminSection } from "./SecurityAdminSection";
 import { ConfigAdminSection } from "./ConfigAdminSection";
+import { RealEconomyAdminSection } from "./RealEconomyAdminSection";
 import { SHIPS } from "@/game/data/ships";
 import { INVENTORY_CATALOG } from "@/game/data/items";
 import type { LucideIcon } from "lucide-react";
@@ -51,7 +52,8 @@ type SectionId =
   | "alianzas"
   | "vip"
   | "seguridad"
-  | "config";
+  | "config"
+  | "economia-real";
 
 interface Col {
   key: string;
@@ -273,6 +275,12 @@ const SECTIONS: SectionDef[] = [
       submit: "Guardar ajustes",
       danger: true,
     },
+  },
+  {
+    id: "economia-real",
+    label: "Economía real",
+    icon: Wallet,
+    desc: "Compras VIP, tickets de referidos y premios USDT",
   },
 ];
 
@@ -566,6 +574,8 @@ function SectionView({
         <PlayersSection />
       ) : def.id === "pagos" ? (
         <PaymentsSection />
+      ) : def.id === "economia-real" ? (
+        <RealEconomyAdminSection />
       ) : def.id === "mercado" ? (
         <MarketAdminSection />
       ) : def.id === "chat" ? (
