@@ -30,7 +30,6 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
   const [redeeming, setRedeeming] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [ticketBalance, setTicketBalance] = useState(0);
   const [ticketAvailable, setTicketAvailable] = useState(0);
   const [ticketRequests, setTicketRequests] = useState<TicketRequest[]>([]);
   const [ticketAmount, setTicketAmount] = useState("1");
@@ -101,7 +100,6 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
         };
         if (!response.ok) return;
         if (active) {
-          setTicketBalance(data.balance_cents ?? 0);
           setTicketAvailable(data.available_cents ?? 0);
           setTicketRequests(data.requests ?? []);
         }
@@ -186,7 +184,6 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
         requests?: TicketRequest[];
       };
       if (refresh.ok) {
-        setTicketBalance(current.balance_cents ?? 0);
         setTicketAvailable(current.available_cents ?? 0);
         setTicketRequests(current.requests ?? []);
       }
@@ -342,18 +339,9 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
       </section>
 
       <section className="border border-emerald-400/25 bg-[#0b0d1c]/75 p-4 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">
-            Tickets de recompensa
-          </h2>
-          <span className="text-sm font-bold tabular-nums text-emerald-300">
-            ${(ticketBalance / 100).toFixed(2)} USD
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-white/55">
-          Disponible para solicitar: ${(ticketAvailable / 100).toFixed(2)} USD. Cada ticket equivale
-          a 1 USD.
-        </p>
+        <h2 className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">
+          Tickets de recompensa
+        </h2>
         <form
           onSubmit={(event) => void requestTicketPayout(event)}
           className="mt-4 grid gap-2 sm:grid-cols-[110px_1fr_auto]"
