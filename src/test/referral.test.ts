@@ -91,15 +91,16 @@ describe("referral system", () => {
       expect(initialized.status).toBe(401);
     }
 
-    db.exec(`
-      DELETE FROM referrals;
-      DELETE FROM pilot_inventory;
-      DELETE FROM player_progress;
-      DELETE FROM player_profiles;
-      DELETE FROM auth_sessions;
-      DELETE FROM player_accounts;
-      DELETE FROM pilots;
-    `);
+    // Reset all in-memory test rows, including dependent economy records.
+    db.exec("PRAGMA foreign_keys = OFF;");
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .all() as Array<{ name: string }>;
+    for (const table of tables) {
+      const safeName = table.name.replace(/"/g, '""');
+      db.exec(`DELETE FROM "${safeName}"`);
+    }
+    db.exec("PRAGMA foreign_keys = ON;");
     const now = Date.now();
     db.prepare(
       `INSERT INTO pilots
