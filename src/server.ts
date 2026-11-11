@@ -1891,7 +1891,13 @@ async function handleRealEconomyRequest(
             (SELECT COALESCE(SUM(amount_cents),0) FROM ranking_pool_contributions) AS ranking_funded_cents,
             (SELECT COALESCE(SUM(delta_cents),0) FROM real_money_ticket_ledger WHERE kind='REFERRAL_VIP') AS tickets_issued_cents,
             (SELECT COALESCE(SUM(delta_cents),0) FROM real_money_ticket_ledger) AS tickets_outstanding_cents`,
-        ).first(),
+        ).first<{
+          approved_sales: number;
+          referral_paid_cents: number;
+          ranking_funded_cents: number;
+          tickets_issued_cents: number;
+          tickets_outstanding_cents: number;
+        }>(),
       ]);
       return json({
         distribution: {
