@@ -26,8 +26,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const BENEFITS: Benefit[] = [
   {
-    label: "+35% drops en combate",
-    detail: "Más reparaciones, imanes y PEM.",
+    label: "×35 drops en combate",
+    detail: "Multiplica por 35 la probabilidad de obtener reparaciones, imanes y PEM.",
     Icon: Zap,
     color: CYAN,
   },
