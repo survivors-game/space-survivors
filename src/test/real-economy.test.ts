@@ -214,6 +214,28 @@ describe("real-money VIP and ranking economy", () => {
       INVITEE_TOKEN,
     );
     expect(deniedAdminData.response.status).toBe(403);
+
+    const adminData = await call<{
+      distribution: { vip_price_usd: number; admin_usd: number; referral_usd: number; bosses_pool_usd: number; referrals_pool_usd: number };
+      totals: { approved_sales: number; admin_earned_cents: number; ranking_funded_cents: number };
+      ticket_balances: Array<{ pilot_id: string; balance_cents: number }>;
+    }>("/api/admin/real-economy", ADMIN_TOKEN, "GET", undefined, true);
+    expect(adminData.response.status).toBe(200);
+    expect(adminData.payload.distribution).toEqual({
+      vip_price_usd: 10,
+      admin_usd: 6,
+      referral_usd: 1,
+      bosses_pool_usd: 1.5,
+      referrals_pool_usd: 1.5,
+    });
+    expect(adminData.payload.totals).toMatchObject({
+      approved_sales: 1,
+      admin_earned_cents: 600,
+      ranking_funded_cents: 300,
+    });
+    expect(adminData.payload.ticket_balances).toContainEqual(
+      expect.objectContaining({ pilot_id: REFERRER_ID, balance_cents: 100 }),
+    );
   });
 
   it("records boss-rank progress only within the active 15-day cycle", async () => {
