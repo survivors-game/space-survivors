@@ -1,25 +1,25 @@
-@import "tailwindcss" source(none);
+ @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap");
+@import "tailwindcss";
 @source "../src";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design system definition.
+ * Tema "Espacio Profundo" (v2)
+ * - Fondo neutro azul grisáceo, serio pero no apagado.
+ * - Acento azul acero para lo interactivo.
+ * - Oro, rojo, verde y cian solo para estados y recompensas.
+ * - Títulos en Orbitron, texto de trabajo en Inter.
  *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ * Los colores de Tailwind de tonos chillones (cian, rosa, esmeralda, ámbar
+ * y fucsia) se redirigen a la misma paleta sobria, así los menús quedan
+ * armónicos sin editar cada componente.
  */
 
 @theme inline {
-  --font-arcade: "Press Start 2P", monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-arcade: "Orbitron", "Inter", sans-serif;
   --font-pixel: "Silkscreen", monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -61,77 +61,135 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Redirección de tonos Tailwind hacia la paleta sobria */
+
+  /* cian -> azul acero (información, acento) */
+  --color-cyan-100: #dbe9f6;
+  --color-cyan-200: #b9d3ec;
+  --color-cyan-300: #8fb6e0;
+  --color-cyan-400: #5b8fd1;
+  --color-cyan-500: #3f74b8;
+  --color-cyan-600: #2f5f99;
+  --color-cyan-700: #244a78;
+  --color-cyan-800: #1b3a5e;
+  --color-cyan-900: #142c47;
+
+  /* rosa / rojo -> rojo apagado (peligro, alertas) */
+  --color-rose-100: #f8dcdd;
+  --color-rose-200: #efb8ba;
+  --color-rose-300: #e89599;
+  --color-rose-400: #e06b70;
+  --color-rose-500: #c2545a;
+  --color-rose-600: #a04045;
+  --color-rose-700: #7d3237;
+  --color-rose-800: #5e2629;
+  --color-rose-900: #431c1e;
+
+  /* esmeralda -> verde sobrio (salud, éxito) */
+  --color-emerald-100: #d8f2e6;
+  --color-emerald-200: #b3e4cc;
+  --color-emerald-300: #8ed3b2;
+  --color-emerald-400: #6cc09a;
+  --color-emerald-500: #55a582;
+  --color-emerald-600: #43845f;
+  --color-emerald-700: #346849;
+  --color-emerald-800: #264e37;
+  --color-emerald-900: #1b3828;
+
+  /* ámbar -> oro (créditos, recompensas) */
+  --color-amber-100: #f5ecd2;
+  --color-amber-200: #ebd9a5;
+  --color-amber-300: #e0c57f;
+  --color-amber-400: #d4af5a;
+  --color-amber-500: #b8934a;
+  --color-amber-600: #94743a;
+  --color-amber-700: #735a2e;
+  --color-amber-800: #54421f;
+  --color-amber-900: #3c2f16;
+
+  /* fucsia -> violeta apagado (decorativo, facciones) */
+  --color-fuchsia-100: #ece8f6;
+  --color-fuchsia-200: #d9d0ec;
+  --color-fuchsia-300: #bfb2de;
+  --color-fuchsia-400: #9a8bc2;
+  --color-fuchsia-500: #7d6fa8;
+  --color-fuchsia-600: #635789;
+  --color-fuchsia-700: #4c4369;
+  --color-fuchsia-800: #373050;
+  --color-fuchsia-900: #262037;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --radius: 0.375rem;
+  --background: #0c1222;
+  --foreground: #e6edf7;
+  --card: #141e33;
+  --card-foreground: #e6edf7;
+  --popover: #141e33;
+  --popover-foreground: #e6edf7;
+  --primary: #2f6fb5;
+  --primary-foreground: #f8fafc;
+  --secondary: #1b2740;
+  --secondary-foreground: #9fb0c8;
+  --muted: #1b2740;
+  --muted-foreground: #7d8ca8;
+  --accent: #1b2740;
+  --accent-foreground: #7aa6dd;
+  --destructive: #c2545a;
+  --destructive-foreground: #f8fafc;
+  --border: #2a3a5c;
+  --input: #2a3a5c;
+  --ring: #5b8fd1;
+  --chart-1: #5b8fd1;
+  --chart-2: #6cc09a;
+  --chart-3: #d4af5a;
+  --chart-4: #9a8bc2;
+  --chart-5: #e06b70;
+  --sidebar: #0f1729;
+  --sidebar-foreground: #e6edf7;
+  --sidebar-primary: #2f6fb5;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #1b2740;
+  --sidebar-accent-foreground: #7aa6dd;
+  --sidebar-border: #2a3a5c;
+  --sidebar-ring: #5b8fd1;
 }
 
+/* El modo oscuro usa la misma paleta: la interfaz es siempre oscura. */
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --background: #0c1222;
+  --foreground: #e6edf7;
+  --card: #141e33;
+  --card-foreground: #e6edf7;
+  --popover: #141e33;
+  --popover-foreground: #e6edf7;
+  --primary: #2f6fb5;
+  --primary-foreground: #f8fafc;
+  --secondary: #1b2740;
+  --secondary-foreground: #9fb0c8;
+  --muted: #1b2740;
+  --muted-foreground: #7d8ca8;
+  --accent: #1b2740;
+  --accent-foreground: #7aa6dd;
+  --destructive: #c2545a;
+  --destructive-foreground: #f8fafc;
+  --border: #2a3a5c;
+  --input: #2a3a5c;
+  --ring: #5b8fd1;
+  --chart-1: #5b8fd1;
+  --chart-2: #6cc09a;
+  --chart-3: #d4af5a;
+  --chart-4: #9a8bc2;
+  --chart-5: #e06b70;
+  --sidebar: #0f1729;
+  --sidebar-foreground: #e6edf7;
+  --sidebar-primary: #2f6fb5;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #1b2740;
+  --sidebar-accent-foreground: #7aa6dd;
+  --sidebar-border: #2a3a5c;
+  --sidebar-ring: #5b8fd1;
 }
 
 @layer base {
@@ -142,13 +200,27 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
 }
 
+/* Títulos y elementos de marca: Orbitron (ciencia ficción, en tamaños grandes). */
 .font-arcade {
-  font-family: "Press Start 2P", monospace;
+  font-family: "Orbitron", "Inter", sans-serif;
 }
 
+/* Marcadores de juego pixel (uso puntual). */
 .font-pixel {
   font-family: "Silkscreen", monospace;
+}
+
+/*
+ * Legibilidad: los textos de 7 a 9 px son ilegibles en pantalla.
+ * Se sube a un mínimo de 11 px. Para revertirlo, borra este bloque.
+ */
+[class*="text-[7px]"],
+[class*="text-[8px]"],
+[class*="text-[9px]"] {
+  font-size: 11px;
 }
