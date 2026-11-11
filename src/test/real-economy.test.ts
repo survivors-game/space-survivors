@@ -206,6 +206,14 @@ describe("real-money VIP and ranking economy", () => {
     expect(ranking.referrals).toEqual([
       { position: 1, pilot_id: REFERRER_ID, callsign: "REFERRER", prize_usdt: 0.6 },
     ]);
+    expect(ranking).not.toHaveProperty("pools");
+    expect(ranking).not.toHaveProperty("distribution");
+
+    const deniedAdminData = await call<{ error?: string }>(
+      "/api/admin/real-economy",
+      INVITEE_TOKEN,
+    );
+    expect(deniedAdminData.response.status).toBe(403);
   });
 
   it("records boss-rank progress only within the active 15-day cycle", async () => {
