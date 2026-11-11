@@ -432,7 +432,7 @@ describe("P2P purchase flow", () => {
     ).toBe(0);
   });
 
-  it("cancels a pending order without refunding the commission", async () => {
+  it("refunds the buyer commission when a pending order is cancelled", async () => {
     const listingId = await createListing();
     const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
       listing_id: listingId,
@@ -446,7 +446,7 @@ describe("P2P purchase flow", () => {
     expect(cancelled.payload.status).toBe("CANCELADA");
     expect(
       db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"],
-    ).toBe(4);
+    ).toBe(5);
     expect(db.prepare("SELECT status FROM p2p_ads WHERE id = ?").get(listingId)?.["status"]).toBe(
       "ACTIVO",
     );
