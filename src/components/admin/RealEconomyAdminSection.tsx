@@ -227,10 +227,13 @@ export function RealEconomyAdminSection() {
 
           <section className="border border-cyan-400/20 bg-black/20 p-4">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-200">
-              <Wallet className="size-4" /> Fondos del ciclo actual · 15 días
+              <Wallet className="size-4" /> Fondos disponibles de rankings · ciclo de 15 días
             </div>
             <p className="mt-1 text-[10px] text-white/45">
               {date(data.cycle.starts_at)} — {date(data.cycle.ends_at)}
+            </p>
+            <p className="text-[10px] text-white/45">
+              Incluye los aportes del ciclo y los saldos no repartidos de ciclos anteriores.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="border border-white/10 p-3">
