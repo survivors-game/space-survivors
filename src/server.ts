@@ -3598,6 +3598,14 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
       if (!(orderColumns.results ?? []).some((column) => column.name === "buyer_paid_at")) {
         await db.prepare("ALTER TABLE p2p_orders ADD COLUMN buyer_paid_at INTEGER").run();
       }
+      const orderColumnNames = new Set((await db.prepare("PRAGMA table_info(p2p_orders)").all<{ name: string }>()).results?.map((column) => column.name) ?? []);
+      for (const [name, definition] of [["payment_reference", "TEXT"], ["payment_proof_url", "TEXT"], ["payment_deadline_at", "INTEGER"], ["release_deadline_at", "INTEGER"]] as const) {
+        if (!orderColumnNames.has(name)) await db.prepare(`ALTER TABLE p2p_orders ADD COLUMN ${name} ${definition}`).run();
+      }
+      await db.prepare("UPDATE p2p_orders SET payment_deadline_at = created_at + 1800000 WHERE status = 'PENDIENTE' AND payment_deadline_at IS NULL").run();
+      await db.prepare("UPDATE p2p_orders SET release_deadline_at = COALESCE(buyer_paid_at, updated_at) + 1800000 WHERE status = 'PAGO_REPORTADO' AND release_deadline_at IS NULL").run();
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_p2p_orders_payment_deadline ON p2p_orders(status, payment_deadline_at)").run();
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_p2p_orders_release_deadline ON p2p_orders(status, release_deadline_at)").run();
       await db
         .prepare(
           "CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')",
@@ -6813,6 +6821,20 @@ async function handleMarketRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
 
+  if (url.pathname.startsWith("/api/market/")) {
+    const now = Date.now();
+    await db.prepare("UPDATE p2p_orders SET status = 'CANCELADA', updated_at = ? WHERE status = 'PENDIENTE' AND payment_deadline_at <= ?").bind(now, now).run();
+    const overdue = await db.prepare("SELECT id, buyer_pilot_id FROM p2p_orders WHERE status = 'PAGO_REPORTADO' AND release_deadline_at <= ? LIMIT 25").bind(now).all<{ id: string; buyer_pilot_id: string }>();
+    for (const order of overdue.results ?? []) {
+      const disputeId = "dsp_" + randomHex(12);
+      const results = await db.batch([
+        db.prepare("UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status = 'PAGO_REPORTADO' AND release_deadline_at <= ?").bind(now, order.id, now),
+        db.prepare("INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, status, created_at) SELECT ?, ?, ?, 'El vendedor no liberó el artículo dentro del plazo. Revisión administrativa requerida.', 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA') AND NOT EXISTS (SELECT 1 FROM p2p_disputes WHERE order_id = ?)").bind(disputeId, order.id, order.buyer_pilot_id, now, order.id, order.id),
+      ]);
+      if (results[0]?.meta?.changes === 1 && results[1]?.meta?.changes === 1) await db.prepare("INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, created_at) VALUES (?, ?, ?, ?, ?)").bind("dmsg_" + randomHex(12), disputeId, order.buyer_pilot_id, "El plazo de liberación venció. Se solicita revisión administrativa.", now).run();
+    }
+  }
+
   if (isAdminMarketPath) {
     if (request.method !== "GET" && request.method !== "POST") {
       return json({ error: "Método no permitido." }, 405);
@@ -6860,6 +6882,7 @@ async function handleMarketRequest(
             `SELECT o.id, o.status, o.created_at, o.updated_at, o.payment_method,
             o.buyer_pilot_id, ad.id AS ad_id, ad.seller_pilot_id, ad.item_name,
             ad.item_type, ad.price_minor, ad.currency_code, ad.country_code,
+            o.payment_reference, o.payment_proof_url, o.payment_deadline_at, o.release_deadline_at,
             COALESCE(NULLIF(bp.display_name, ''), buyer.callsign, 'PILOTO') AS buyer_name,
             COALESCE(NULLIF(sp.display_name, ''), seller.callsign, 'PILOTO') AS seller_name
            FROM p2p_orders o
@@ -8111,7 +8134,7 @@ async function handleMarketRequest(
                 ))
             AND NOT EXISTS (
               SELECT 1 FROM p2p_orders pending
-              WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
+              WHERE pending.ad_id = ad.id AND pending.status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')
             )
             ${whereType}
             ${whereCountry}
@@ -8236,11 +8259,11 @@ async function handleMarketRequest(
       const order = await db
         .prepare(
           `INSERT INTO p2p_orders
-          (id, ad_id, buyer_pilot_id, status, payment_method, created_at, updated_at)
-        VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?)
+          (id, ad_id, buyer_pilot_id, status, payment_method, created_at, updated_at, payment_deadline_at)
+        VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?, ?)
         RETURNING id`,
         )
-        .bind(orderId, listingId, pilotId, selectedMethod.key, now, now)
+        .bind(orderId, listingId, pilotId, selectedMethod.key, now, now, now + 30 * 60 * 1000)
         .first<{ id: string }>();
       if (!order) {
         return pilotJson(
@@ -8262,7 +8285,7 @@ async function handleMarketRequest(
 
     const orderDetails = await db
       .prepare(
-        `SELECT ad.price_minor, ad.currency_code
+        `SELECT ad.price_minor, ad.currency_code, order_row.payment_deadline_at
         FROM p2p_orders order_row
         JOIN p2p_ads ad ON ad.id = order_row.ad_id
         WHERE order_row.id = ? AND order_row.buyer_pilot_id = ?
@@ -8272,6 +8295,7 @@ async function handleMarketRequest(
       .first<{
         price_minor: number;
         currency_code: P2PCurrency;
+        payment_deadline_at: number;
       }>();
     if (!orderDetails) {
       throw new Error("La orden recién creada no contiene los datos de pago.");
@@ -8283,22 +8307,26 @@ async function handleMarketRequest(
       price_minor: orderDetails.price_minor,
       price_currency: orderDetails.currency_code,
       commission_obsidian: 1,
+      payment_deadline_at: orderDetails.payment_deadline_at,
     });
   }
 
   if (url.pathname === "/api/market/report-payment" && request.method === "POST") {
     const body = await readJson(request, 2048);
     const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
-    if (!orderId || orderId.length > 64) {
-      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
-    }
+    const reference = typeof body?.["payment_reference"] === "string" ? body["payment_reference"].trim().slice(0, 120) : "";
+    const proofUrl = typeof body?.["payment_proof_url"] === "string" ? body["payment_proof_url"].trim() : "";
+    if (!orderId || orderId.length > 64) return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
+    if (reference.length < 3 && !proofUrl) return pilotJson(request, pilotId, { error: "Debes indicar una referencia de pago o adjuntar el enlace del comprobante." }, 400);
+    if (proofUrl) { try { if (proofUrl.length > 2048 || new URL(proofUrl).protocol !== "https:") throw new Error("invalid"); } catch { return pilotJson(request, pilotId, { error: "El comprobante debe tener un enlace HTTPS válido." }, 400); } }
+    const now = Date.now();
     const result = await db
       .prepare(
-        `UPDATE p2p_orders SET status = 'PAGO_REPORTADO', buyer_paid_at = ?, updated_at = ?
-       WHERE id = ? AND buyer_pilot_id = ? AND status = 'PENDIENTE'
+        `UPDATE p2p_orders SET status = 'PAGO_REPORTADO', buyer_paid_at = ?, updated_at = ?, payment_reference = ?, payment_proof_url = ?, release_deadline_at = ?
+       WHERE id = ? AND buyer_pilot_id = ? AND status = 'PENDIENTE' AND payment_deadline_at > ?
        RETURNING id`,
       )
-      .bind(Date.now(), Date.now(), orderId, pilotId)
+      .bind(now, now, reference || null, proofUrl || null, now + 30 * 60 * 1000, orderId, pilotId, now)
       .first<{ id: string }>();
     if (!result)
       return pilotJson(
@@ -8338,9 +8366,9 @@ async function handleMarketRequest(
       const result = await db
         .prepare(
           `UPDATE p2p_orders SET status = 'COMPLETADA', updated_at = ?
-         WHERE id = ? AND status = 'PAGO_REPORTADO' RETURNING id`,
+         WHERE id = ? AND status = 'PAGO_REPORTADO' AND release_deadline_at > ? RETURNING id`,
         )
-        .bind(Date.now(), orderId)
+        .bind(Date.now(), orderId, Date.now())
         .first<{ id: string }>();
       if (!result)
         return pilotJson(
@@ -8425,6 +8453,8 @@ async function handleMarketRequest(
           ad.price, ad.price_minor, ad.currency, ad.currency_code AS price_currency,
           ad.country_code AS country, ad.payment_methods, ad.payment_details,
           ad.payment_data_json, order_row.payment_method, order_row.status,
+          order_row.payment_reference, order_row.payment_proof_url,
+          order_row.payment_deadline_at, order_row.release_deadline_at,
           order_row.created_at, order_row.updated_at,
           CASE WHEN order_row.buyer_pilot_id = ? THEN 'COMPRADOR' ELSE 'VENDEDOR' END AS role,
           CASE WHEN order_row.buyer_pilot_id = ?
@@ -8456,6 +8486,10 @@ async function handleMarketRequest(
         payment_details: string;
         payment_data_json: string | null;
         payment_method: string | null;
+        payment_reference: string | null;
+        payment_proof_url: string | null;
+        payment_deadline_at: number | null;
+        release_deadline_at: number | null;
         status: string;
         created_at: number;
         updated_at: number;
@@ -8493,6 +8527,10 @@ async function handleMarketRequest(
                     : (details[selectedKey] ?? order.payment_details),
                 )
               : null,
+          payment_reference: order.payment_reference,
+          payment_proof_url: order.payment_proof_url,
+          payment_deadline_at: order.payment_deadline_at,
+          release_deadline_at: order.release_deadline_at,
         };
       }),
     });
