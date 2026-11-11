@@ -8640,7 +8640,8 @@ async function handleMarketRequest(
         db
           .prepare(
             `UPDATE pilots SET obsidian = obsidian - 1, updated_at = ?
-          WHERE pilot_id = ? AND obsidian >= 1`,
+          WHERE pilot_id = ? AND obsidian >= 1
+          RETURNING pilot_id`,
           )
           .bind(now, pilotId),
         db
@@ -8649,7 +8650,8 @@ async function handleMarketRequest(
           WHERE id = ? AND pilot_id = ? AND is_locked = 0 AND quantity > 0
             AND item_id != 'obsidian'
             AND (item_type != 'nave' OR (item_id != 'falcon'
-              AND item_id != (SELECT selected_ship_id FROM pilots WHERE pilot_id = ?)))`,
+              AND item_id != (SELECT selected_ship_id FROM pilots WHERE pilot_id = ?)))
+          RETURNING id`,
           )
           .bind(now, inventoryId, pilotId, pilotId),
         db
@@ -8659,7 +8661,8 @@ async function handleMarketRequest(
             price, price_minor, currency, currency_code, country_code,
             payment_methods, payment_details, payment_data_json,
             status, fee_paid, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', 1, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', 1, ?, ?)
+          RETURNING id`,
           )
           .bind(
             adId,
@@ -8684,8 +8687,11 @@ async function handleMarketRequest(
             now,
           ),
       ]);
-      if (results.length !== 3 || results.some((result) => result.meta?.changes !== 1)) {
-        throw new Error("La publicación no pudo descontar OBS, reservar el artículo y crear el anuncio.");
+      if (
+        results.length !== 3 ||
+        results.some((result) => result.results?.length !== 1)
+      ) {
+        throw new Error("La publicación no pudo confirmar el descuento, la reserva y el anuncio.");
       }
     } catch (error) {
       console.error("Transacción de publicación rechazada:", error);
