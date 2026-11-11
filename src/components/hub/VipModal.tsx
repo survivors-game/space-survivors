@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Coins, Sparkles, Trophy, Users, Zap, X, type LucideIcon } from "lucide-react";
 import { VIP_DURATION_DAYS, formatVipTimeRemaining, hasVip } from "@/game/meta/vip";
 
@@ -75,8 +75,10 @@ export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
-  const loadPurchaseInfo = async () => {
+  const loadPurchaseInfo = useCallback(async () => {
     setLoading(true);
     try {
       const [infoResponse, purchasesResponse] = await Promise.all([
@@ -103,17 +105,17 @@ export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", onKey);
     void loadPurchaseInfo();
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, loadPurchaseInfo]);
 
   if (!open) return null;
 
