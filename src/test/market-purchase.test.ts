@@ -29,8 +29,11 @@ function createD1Adapter() {
         async run() {
           const prepared = db.prepare(query);
           if (/\\bRETURNING\\b/i.test(query)) {
-            const results = prepared.all(...(values as never[]) as never[]);
-            return { meta: { changes: results.length }, results };
+            prepared.all(...(values as never[]) as never[]);
+            const changes = Number(
+              (db.prepare("SELECT changes() AS changes").get() as { changes: number }).changes,
+            );
+            return { meta: { changes }, results: [] };
           }
           const result = prepared.run(...(values as never[]));
           return { meta: { changes: Number(result.changes) } };
