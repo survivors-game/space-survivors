@@ -1903,7 +1903,7 @@ function Index() {
             </nav>
           ) : null}
           <div className="flex items-center gap-2 sm:gap-5">
-            {screen !== "MENU" && screen !== "LANDING" && screen !== "PLAYING" ? (
+            {screen !== "MENU" && screen !== "LANDING" ? (
               <Button
                 variant="outline"
                 size="sm"
