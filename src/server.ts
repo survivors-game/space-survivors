@@ -5245,6 +5245,8 @@ async function handleAdminSecurityRequest(
 
   try {
     await ensureAuthSchema(db);
+    await ensureMarketSchema(db);
+    await ensureRealEconomySchema(db);
     await db
       .prepare(
         `CREATE TABLE IF NOT EXISTS admin_access_logs (
@@ -5299,6 +5301,7 @@ async function handleAdminSecurityRequest(
     alliances,
     vip,
     payments,
+    realEconomy,
   ] = await Promise.all([
     query(
       "SELECT id,event,result,ip_hash,admin_email,created_at FROM admin_access_logs ORDER BY created_at DESC LIMIT 100",
@@ -5342,6 +5345,9 @@ async function handleAdminSecurityRequest(
     query(
       "SELECT id,pilot_id,'payments' AS category,status AS action,COALESCE(rejection_reason,'Revisión de pago') AS reason,COALESCE(reviewed_by,'') AS admin_email,reviewed_at AS created_at FROM obsidian_payment_requests WHERE reviewed_at IS NOT NULL ORDER BY reviewed_at DESC LIMIT 100",
     ),
+    query(
+      "SELECT id,reference_id AS pilot_id,'real_economy' AS category,action,detail AS reason,admin_email,created_at FROM real_economy_admin_logs ORDER BY created_at DESC LIMIT 100",
+    ),
   ]);
   const operations = [
     ...economy,
@@ -5355,6 +5361,7 @@ async function handleAdminSecurityRequest(
     ...alliances,
     ...vip,
     ...payments,
+    ...realEconomy,
   ]
     .sort(
       (a, b) =>
