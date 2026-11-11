@@ -2060,6 +2060,7 @@ function Index() {
               obsidian={marketPilot?.obsidian ?? 0}
               runs={progress.stats.runs}
               kills={progress.stats.kills}
+              season={progress.season}
               shipsCount={progress.ships.length}
               selectedShip={selectedShip}
               selectedStage={selectedStage}
