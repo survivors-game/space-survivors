@@ -124,18 +124,18 @@ export function world1PickupChanceAtHorde(hordeIndex: number, elite = false): nu
   return baseChance + index * increment;
 }
 
-// La presión de combate crece en cada horda avanzada: más enemigos, resistentes y peligrosos.
+// La dificultad aumenta por enemigo: más resistencia y daño, sin acelerar la aparición.
 export const WORLD1_HORDE_PRESSURE = [
   { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1, damage: 1, speed: 1, spawn: 1 },
-  { hp: 1.5, damage: 1.35, speed: 1.1, spawn: 0.72 },
-  { hp: 1.9, damage: 1.65, speed: 1.15, spawn: 0.6 },
-  { hp: 2.4, damage: 2, speed: 1.2, spawn: 0.5 },
-  { hp: 3, damage: 2.4, speed: 1.25, spawn: 0.42 },
+  { hp: 1.1, damage: 1.05, speed: 1, spawn: 1 },
+  { hp: 1.25, damage: 1.1, speed: 1, spawn: 1 },
+  { hp: 1.4, damage: 1.2, speed: 1, spawn: 1 },
+  { hp: 1.6, damage: 1.3, speed: 1, spawn: 1 },
+  { hp: 1.8, damage: 1.4, speed: 1, spawn: 1 },
+  { hp: 2.05, damage: 1.5, speed: 1, spawn: 1 },
+  { hp: 2.3, damage: 1.65, speed: 1, spawn: 1 },
+  { hp: 2.6, damage: 1.8, speed: 1, spawn: 1 },
+  { hp: 3, damage: 2, speed: 1, spawn: 1 },
 ] as const;
 
 export type FormationKind = "vee" | "ring" | "wall" | "squad" | "swarm" | "pincer";
