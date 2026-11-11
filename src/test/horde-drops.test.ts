@@ -28,10 +28,10 @@ describe("World 1 horde pickup progression", () => {
     expect(world1PickupChanceAtHorde(9, true)).toBeCloseTo(0.051);
   });
 
-  it("gives VIP a fifteenfold drop chance at every horde", () => {
-    expect(world1PickupChanceAtHorde(0) * vipDropMultiplier(true)).toBeCloseTo(0.03);
-    expect(world1PickupChanceAtHorde(9) * vipDropMultiplier(true)).toBeCloseTo(0.2325);
-    expect(world1PickupChanceAtHorde(9, true) * vipDropMultiplier(true)).toBeCloseTo(0.765);
+  it("gives VIP a thirty-fivefold drop chance at every horde", () => {
+    expect(world1PickupChanceAtHorde(0) * vipDropMultiplier(true)).toBeCloseTo(0.07);
+    expect(world1PickupChanceAtHorde(9) * vipDropMultiplier(true)).toBeCloseTo(0.5425);
+    expect(world1PickupChanceAtHorde(9, true) * vipDropMultiplier(true)).toBeCloseTo(1);
     expect(vipDropMultiplier(false)).toBe(1);
   });
 
