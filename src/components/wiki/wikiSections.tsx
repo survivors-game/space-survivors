@@ -31,7 +31,7 @@ import {
   DAILY_CHEST,
   DAILY_MISSION_TEMPLATES,
   type MissionIcon,
-  DAILY_PER_TIER,
+  DAILY_MISSION_COUNT,
   SEASON_CHALLENGES,
   SEASON_LENGTH_MS,
   SEASON_LEVELS,
@@ -589,8 +589,8 @@ const misiones: WikiSection = {
     <>
       <H>Misiones diarias</H>
       <P>
-        Cada día se eligen {DAILY_PER_TIER} misiones de cada grupo: básico, piloto y élite, con un
-        total de {DAILY_PER_TIER * 3}. Se reinician a medianoche UTC.
+        Cada día se eligen {DAILY_MISSION_COUNT} misiones: 2 básicas, 2 de piloto y 1 de élite.
+        Se reinician a medianoche UTC.
       </P>
       <Grid>
         {DAILY_MISSION_TEMPLATES.map((m) => (
@@ -601,7 +601,7 @@ const misiones: WikiSection = {
         ))}
       </Grid>
       <Tip>
-        Completar {DAILY_CHEST.threshold} de las 6 misiones diarias desbloquea el cofre diario:{" "}
+        Completar {DAILY_CHEST.threshold} de {DAILY_MISSION_COUNT} misiones diarias desbloquea el cofre diario:{" "}
         {fmt(DAILY_CHEST.reward)} CR y {DAILY_CHEST.pt} PT extra.
       </Tip>
       <H>Misiones semanales</H>
@@ -633,8 +633,9 @@ const misiones: WikiSection = {
       </Grid>
       <H>Pase de temporada</H>
       <P>
-        Cada temporada dura {Math.round(SEASON_LENGTH_MS / 86_400_000)} días. Los PT que ganas con
-        misiones y desafíos suben tu nivel del pase, de 1 a {SEASON_MAX_LEVEL}. Actualmente estás en{" "}
+        Cada temporada dura {Math.round(SEASON_LENGTH_MS / 86_400_000)} días. El pase está equilibrado
+        para que un jugador activo necesite aproximadamente 30 días para completar sus 20 niveles.
+        Los PT de misiones y desafíos suben el pase. Actualmente estás en{" "}
         <strong>{getSeasonName()}</strong>.
       </P>
       <Bullets
