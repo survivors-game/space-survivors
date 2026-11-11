@@ -5,7 +5,7 @@ import { formatP2PPrice, P2P_COUNTRIES, type P2PHistoryOrder } from "@/game/data
 interface MarketHistoryProps {
   orders: P2PHistoryOrder[];
   isLoading: boolean;
-  onReportPayment: (orderId: string) => Promise<void>;
+  onReportPayment: (orderId: string, reference: string, proofUrl: string) => Promise<void>;
   onReleaseOrder: (orderId: string) => Promise<void>;
   onCancel: (orderId: string) => Promise<void>;
   onOpenDispute: (orderId: string, reason: string, evidenceUrl: string) => Promise<void>;
@@ -30,6 +30,7 @@ export function MarketHistory({
 }: MarketHistoryProps) {
   const [busyOrder, setBusyOrder] = useState("");
   const [error, setError] = useState("");
+  const [paymentEvidence, setPaymentEvidence] = useState<Record<string, { reference: string; proofUrl: string }>>({});
   const [disputeForms, setDisputeForms] = useState<
     Record<string, { reason: string; evidence: string }>
   >({});
@@ -149,6 +150,7 @@ export function MarketHistory({
         const active = order.status === "PENDIENTE" || order.status === "PAGO_REPORTADO";
         const form = disputeForms[order.order_id] ?? { reason: "", evidence: "" };
         const messageDraft = messageDrafts[order.order_id] ?? { message: "", evidence: "" };
+        const paymentDraft = paymentEvidence[order.order_id] ?? { reference: "", proofUrl: "" };
         return (
           <article
             key={order.order_id}
@@ -179,14 +181,21 @@ export function MarketHistory({
               </div>
             ) : null}
             {order.role === "COMPRADOR" && order.status === "PENDIENTE" ? (
-              <Button
-                type="button"
-                disabled={isLoading || busyOrder === order.order_id}
-                onClick={() => void act(order.order_id, onReportPayment)}
-                className="rounded-none bg-cyan-300 text-[8px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
-              >
-                YA REALICÉ EL PAGO
-              </Button>
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="text-[8px] uppercase text-amber-100">PAGO ANTES DE: {order.payment_deadline_at ? new Date(order.payment_deadline_at).toLocaleString() : "30 MINUTOS DESDE LA COMPRA"}</p>
+                <input value={paymentDraft.reference} onChange={(event) => setPaymentEvidence((current) => ({ ...current, [order.order_id]: { ...paymentDraft, reference: event.target.value } }))} maxLength={120} placeholder="Referencia / número de transacción" className="w-full border border-white/10 bg-black/40 p-2 text-xs text-white" />
+                <input value={paymentDraft.proofUrl} onChange={(event) => setPaymentEvidence((current) => ({ ...current, [order.order_id]: { ...paymentDraft, proofUrl: event.target.value } }))} maxLength={2048} placeholder="Enlace HTTPS del comprobante (opcional)" className="w-full border border-white/10 bg-black/40 p-2 text-xs text-white" />
+                <Button type="button" disabled={isLoading || busyOrder === order.order_id || (paymentDraft.reference.trim().length < 3 && !paymentDraft.proofUrl.trim())} onClick={() => void act(order.order_id, async (id) => { await onReportPayment(id, paymentDraft.reference.trim(), paymentDraft.proofUrl.trim()); })} className="rounded-none bg-cyan-300 text-[8px] font-bold uppercase text-[#070814] hover:bg-cyan-200">
+                  YA REALICÉ EL PAGO
+                </Button>
+              </div>
+            ) : null}
+            {order.role === "VENDEDOR" && order.status === "PAGO_REPORTADO" ? (
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <p className="text-[8px] uppercase text-amber-100">LIBERAR ANTES DE: {order.release_deadline_at ? new Date(order.release_deadline_at).toLocaleString() : "30 MINUTOS DESDE EL REPORTE"}</p>
+                {order.payment_reference ? <p className="break-all text-xs text-white">REFERENCIA: {order.payment_reference}</p> : null}
+                {order.payment_proof_url ? <a href={order.payment_proof_url} target="_blank" rel="noreferrer" className="text-[9px] text-cyan-200 underline">VER COMPROBANTE</a> : null}
+              </div>
             ) : null}
             {order.role === "VENDEDOR" && order.status === "PAGO_REPORTADO" ? (
               <div className="space-y-2 border-t border-white/10 pt-3">
