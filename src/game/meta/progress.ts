@@ -535,7 +535,7 @@ function grant(p: Progress, credits: number, pt: number) {
 /** Temporada vigente para este progreso, sin mutar nada. */
 export function currentSeason(p: Progress, now: number = Date.now()): SeasonProgress {
   const id = getSeasonId(now);
-  return p.season.seasonId === id ? p.season : freshSeason(id, baselineOf(p.stats));
+  return p.season.seasonId === id ? p.season : freshSeason(id, baselineOf(p));
 }
 
 export interface SeasonBoardEntry {
