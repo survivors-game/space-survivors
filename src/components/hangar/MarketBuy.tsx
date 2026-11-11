@@ -66,6 +66,11 @@ export function MarketBuy({
     void loadPage(1);
   }, [loadPage]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => void loadPage(page), 10000);
+    return () => window.clearInterval(interval);
+  }, [loadPage, page]);
+
   const buy = async (listingId: string) => {
     const listing = listings.find((candidate) => candidate.listing_id === listingId);
     if (!listing) return;
