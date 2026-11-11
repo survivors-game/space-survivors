@@ -120,7 +120,7 @@ const PHASES: Phase[] = [
       { Icon: Shield, text: "Mercado P2P, Alianzas, guerras de clanes y auxilio Boss Help." },
       {
         Icon: Sparkles,
-        text: "Membresía VIP: ×35 de probabilidad de drops, +20% de créditos y chat dorado.",
+        text: "Membresía VIP: ×20 de probabilidad de drops, +20% de créditos y chat dorado.",
       },
       { Icon: CheckCircle2, text: "Misiones diarias y semanales, y Pase de Temporada." },
     ],
