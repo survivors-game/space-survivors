@@ -391,7 +391,7 @@ export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
     reward: 30,
     pt: 18,
     progress: (r) => r.time,
-  },,
+  },
   {
     id: "w_damage_taken",
     title: "BLINDAJE BAJO PRESIÓN",
