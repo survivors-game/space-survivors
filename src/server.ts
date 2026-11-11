@@ -6821,7 +6821,7 @@ async function handleMarketRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
 
-  if (url.pathname.startsWith("/api/market/") || isAdminMarketPath) {
+  if (url.pathname.startsWith("/api/market/") && account) {
     const now = Date.now();
     await db.prepare("UPDATE p2p_orders SET status = 'CANCELADA', updated_at = ? WHERE status = 'PENDIENTE' AND payment_deadline_at <= ?").bind(now, now).run();
     const overdue = await db.prepare("SELECT id, buyer_pilot_id FROM p2p_orders WHERE status = 'PAGO_REPORTADO' AND release_deadline_at <= ? LIMIT 25").bind(now).all<{ id: string; buyer_pilot_id: string }>();
@@ -8313,7 +8313,7 @@ async function handleMarketRequest(
   }
 
   if (url.pathname === "/api/market/report-payment" && request.method === "POST") {
-    const body = await readJson(request, 2048);
+    const body = await readJson(request, 4096);
     const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
     const reference = typeof body?.["payment_reference"] === "string" ? body["payment_reference"].trim().slice(0, 120) : "";
     const proofUrl = typeof body?.["payment_proof_url"] === "string" ? body["payment_proof_url"].trim() : "";
