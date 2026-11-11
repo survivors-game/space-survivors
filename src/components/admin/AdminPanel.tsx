@@ -793,8 +793,12 @@ function TestProgressResetSection() {
         players?: number;
         error?: string;
       };
-      if (!response.ok || !payload.success) throw new Error(payload.error ?? "No se pudo reiniciar el progreso.");
-      setMessage(`Reinicio completado. Pilotos restablecidos: ${payload.players ?? 0}. Las cuentas y los registros económicos se conservaron.`);
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? "No se pudo reiniciar el progreso.");
+      }
+      setMessage(
+        `Reinicio completado. Pilotos restablecidos: ${payload.players ?? 0}. Las cuentas y los registros económicos se conservaron.`,
+      );
       setConfirmation("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo completar el reinicio.");
@@ -820,17 +824,31 @@ function TestProgressResetSection() {
       </p>
       <label className="block text-xs text-white/70">
         Escribe REINICIAR PRUEBAS para habilitar la operación.
-        <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)}
+        <input
+          value={confirmation}
+          onChange={(event) => setConfirmation(event.target.value)}
           className="mt-2 h-10 w-full rounded border border-white/15 bg-black/40 px-3 text-sm text-white outline-none focus:border-rose-400/50"
-          autoComplete="off" />
+          autoComplete="off"
+        />
       </label>
-      <button type="button" disabled={confirmation !== "REINICIAR PRUEBAS" || busy}
+      <button
+        type="button"
+        disabled={confirmation !== "REINICIAR PRUEBAS" || busy}
         onClick={() => void runReset()}
-        className="rounded bg-rose-500 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+        className="rounded bg-rose-500 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+      >
         {busy ? "Reiniciando..." : "Reiniciar progreso de todos los pilotos"}
       </button>
-      {message ? <p role="status" className="text-sm text-emerald-300">{message}</p> : null}
-      {error ? <p role="alert" className="text-sm text-rose-300">{error}</p> : null}
+      {message ? (
+        <p role="status" className="text-sm text-emerald-300">
+          {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-rose-300">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }
