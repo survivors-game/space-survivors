@@ -1523,13 +1523,16 @@ export class Engine {
     else if (Math.random() < 0.3) this.dropGem(e.x, e.y, 1);
     const world1Campaign = this.stage.id === WORLD1_ID && !this.isEndless;
     const hordeIndex = world1Campaign ? hordeIndexAt(this.elapsed) : 0;
+    const isLarva = d.behavior === "spawnling";
     const pk = e.elite
       ? world1Campaign
         ? world1PickupChanceAtHorde(hordeIndex, true)
         : 0.005
       : world1Campaign
-        ? world1PickupChanceAtHorde(hordeIndex)
-        : 0.0005;
+        ? world1PickupChanceAtHorde(hordeIndex, false, isLarva)
+        : isLarva
+          ? 0.00025
+          : 0.0005;
     if (Math.random() < Math.min(1, pk * vipDropMultiplier(this.vipActive)))
       this.dropPickup(e.x, e.y);
     if (d.behavior === "parasite")
