@@ -1687,8 +1687,11 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
     ["REFERRALS", referrals],
   ] as const) {
     const pool = poolByType.get(type) ?? 0;
+    const baseAmounts = RANKING_PRIZE_SHARES.map((share) => Math.floor((pool * share) / 100));
+    const roundingRemainder = pool - baseAmounts.reduce((sum, amount) => sum + amount, 0);
     rows.forEach((row, index) => {
-      const amount = Math.floor((pool * RANKING_PRIZE_SHARES[index]!) / 100);
+      const amount =
+        baseAmounts[index]! + (rows.length === 5 && index === 4 ? roundingRemainder : 0);
       if (amount <= 0) return;
       statements.push(
         db
@@ -1770,15 +1773,18 @@ async function getPublicRankingPayload(db: D1Database): Promise<Record<string, u
   const withPrizes = (
     rows: { pilot_id: string; callsign: string; score: number }[],
     type: "BOSSES" | "REFERRALS",
-  ) =>
-    rows.map((row, index) => ({
+  ) => {
+    const pool = poolByType.get(type) ?? 0;
+    const baseAmounts = RANKING_PRIZE_SHARES.map((share) => Math.floor((pool * share) / 100));
+    const roundingRemainder = pool - baseAmounts.reduce((sum, amount) => sum + amount, 0);
+    return rows.map((row, index) => ({
       position: index + 1,
       pilot_id: row.pilot_id,
       callsign: row.callsign,
-      prize_usdt: Number(
-        (((poolByType.get(type) ?? 0) * RANKING_PRIZE_SHARES[index]!) / 10000).toFixed(2),
-      ),
+      prize_usdt:
+        (baseAmounts[index]! + (rows.length === 5 && index === 4 ? roundingRemainder : 0)) / 100,
     }));
+  };
   return {
     cycle_ends_at: cycle.ends_at,
     bosses: withPrizes(bosses, "BOSSES"),
