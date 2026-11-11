@@ -1472,7 +1472,7 @@ async function ensureRealEconomySchema(db: D1Database): Promise<void> {
   if (!realEconomySchemaPromise) {
     realEconomySchemaPromise = (async () => {
       const statements = [
-        \`CREATE TABLE IF NOT EXISTS vip_payment_requests (
+        `CREATE TABLE IF NOT EXISTS vip_payment_requests (
           id TEXT PRIMARY KEY,
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           amount_cents INTEGER NOT NULL CHECK (amount_cents = 1000),
@@ -1485,32 +1485,32 @@ async function ensureRealEconomySchema(db: D1Database): Promise<void> {
           reviewed_at INTEGER,
           reviewed_by TEXT,
           rejection_reason TEXT
-        )\`,
-        \`CREATE INDEX IF NOT EXISTS idx_vip_payment_status_created
-          ON vip_payment_requests(status, created_at DESC)\`,
-        \`CREATE TABLE IF NOT EXISTS vip_purchase_effects (
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_vip_payment_status_created
+          ON vip_payment_requests(status, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS vip_purchase_effects (
           vip_payment_id TEXT PRIMARY KEY REFERENCES vip_payment_requests(id),
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           vip_applied_at INTEGER
-        )\`,
-        \`CREATE TABLE IF NOT EXISTS referral_vip_rewards (
+        )`,
+        `CREATE TABLE IF NOT EXISTS referral_vip_rewards (
           referred_pilot_id TEXT PRIMARY KEY REFERENCES pilots(pilot_id),
           vip_payment_id TEXT NOT NULL UNIQUE REFERENCES vip_payment_requests(id),
           referrer_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           amount_cents INTEGER NOT NULL CHECK (amount_cents = 100),
           created_at INTEGER NOT NULL
-        )\`,
-        \`CREATE TABLE IF NOT EXISTS real_money_ticket_ledger (
+        )`,
+        `CREATE TABLE IF NOT EXISTS real_money_ticket_ledger (
           id TEXT PRIMARY KEY,
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           delta_cents INTEGER NOT NULL CHECK (delta_cents != 0),
           kind TEXT NOT NULL CHECK (kind IN ('REFERRAL_VIP','TICKET_PAYOUT')),
           reference_id TEXT NOT NULL UNIQUE,
           created_at INTEGER NOT NULL
-        )\`,
-        \`CREATE INDEX IF NOT EXISTS idx_real_money_tickets_pilot
-          ON real_money_ticket_ledger(pilot_id, created_at DESC)\`,
-        \`CREATE TABLE IF NOT EXISTS ticket_payout_requests (
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_real_money_tickets_pilot
+          ON real_money_ticket_ledger(pilot_id, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS ticket_payout_requests (
           id TEXT PRIMARY KEY,
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           amount_cents INTEGER NOT NULL CHECK (amount_cents > 0 AND amount_cents % 100 = 0),
@@ -1521,36 +1521,36 @@ async function ensureRealEconomySchema(db: D1Database): Promise<void> {
           created_at INTEGER NOT NULL,
           reviewed_at INTEGER,
           reviewed_by TEXT
-        )\`,
-        \`CREATE INDEX IF NOT EXISTS idx_ticket_payout_status
-          ON ticket_payout_requests(status, created_at DESC)\`,
-        \`CREATE TABLE IF NOT EXISTS ranking_cycles (
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_ticket_payout_status
+          ON ticket_payout_requests(status, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS ranking_cycles (
           id TEXT PRIMARY KEY,
           starts_at INTEGER NOT NULL,
           ends_at INTEGER NOT NULL,
           status TEXT NOT NULL CHECK (status IN ('OPEN','CLOSED')),
           created_at INTEGER NOT NULL,
           closed_at INTEGER
-        )\`,
-        \`CREATE UNIQUE INDEX IF NOT EXISTS idx_ranking_cycles_one_open
-          ON ranking_cycles(status) WHERE status = 'OPEN'\`,
-        \`CREATE TABLE IF NOT EXISTS ranking_cycle_boss_scores (
+        )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_ranking_cycles_one_open
+          ON ranking_cycles(status) WHERE status = 'OPEN'`,
+        `CREATE TABLE IF NOT EXISTS ranking_cycle_boss_scores (
           cycle_id TEXT NOT NULL REFERENCES ranking_cycles(id),
           pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
           score INTEGER NOT NULL DEFAULT 0 CHECK (score >= 0),
           last_boss_obsidian INTEGER NOT NULL DEFAULT 0 CHECK (last_boss_obsidian >= 0),
           updated_at INTEGER NOT NULL,
           PRIMARY KEY (cycle_id, pilot_id)
-        )\`,
-        \`CREATE TABLE IF NOT EXISTS ranking_pool_contributions (
+        )`,
+        `CREATE TABLE IF NOT EXISTS ranking_pool_contributions (
           id TEXT PRIMARY KEY,
           vip_payment_id TEXT NOT NULL REFERENCES vip_payment_requests(id),
           ranking_type TEXT NOT NULL CHECK (ranking_type IN ('BOSSES','REFERRALS')),
           amount_cents INTEGER NOT NULL CHECK (amount_cents = 150),
           created_at INTEGER NOT NULL,
           UNIQUE(vip_payment_id, ranking_type)
-        )\`,
-        \`CREATE TABLE IF NOT EXISTS ranking_prize_payouts (
+        )`,
+        `CREATE TABLE IF NOT EXISTS ranking_prize_payouts (
           id TEXT PRIMARY KEY,
           cycle_id TEXT NOT NULL REFERENCES ranking_cycles(id),
           ranking_type TEXT NOT NULL CHECK (ranking_type IN ('BOSSES','REFERRALS')),
@@ -1565,15 +1565,15 @@ async function ensureRealEconomySchema(db: D1Database): Promise<void> {
           paid_by TEXT,
           UNIQUE(cycle_id, ranking_type, position),
           UNIQUE(cycle_id, ranking_type, pilot_id)
-        )\`,
-        \`CREATE TABLE IF NOT EXISTS real_economy_admin_logs (
+        )`,
+        `CREATE TABLE IF NOT EXISTS real_economy_admin_logs (
           id TEXT PRIMARY KEY,
           action TEXT NOT NULL,
           reference_id TEXT NOT NULL,
           detail TEXT NOT NULL,
           admin_email TEXT NOT NULL,
           created_at INTEGER NOT NULL
-        )\`,
+        )`,
       ];
       for (const statement of statements) await db.prepare(statement).run();
     })().catch((error) => {
@@ -1588,7 +1588,6 @@ type RankingCycleRow = { id: string; starts_at: number; ends_at: number };
 
 const RANKING_PRIZE_SHARES = [40, 25, 15, 12, 8] as const;
 const RANKING_CYCLE_MS = 15 * 24 * 60 * 60 * 1000;
-const VIP_PRICE_CENTS = 1000;
 const VIP_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 async function createRankingCycle(
@@ -1596,7 +1595,7 @@ async function createRankingCycle(
   startsAt = Date.now(),
 ): Promise<RankingCycleRow> {
   const cycle = {
-    id: \`rank_\${randomHex(10)}\`,
+    id: `rank_${randomHex(10)}`,
     starts_at: startsAt,
     ends_at: startsAt + RANKING_CYCLE_MS,
   };
@@ -1629,14 +1628,14 @@ async function rankingRowsForCycle(
   if (rankingType === "BOSSES") {
     const { results = [] } = await db
       .prepare(
-        \`SELECT s.pilot_id,
+        `SELECT s.pilot_id,
           COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,
           s.score
         FROM ranking_cycle_boss_scores s
         JOIN pilots p ON p.pilot_id=s.pilot_id
         LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
         WHERE s.cycle_id=? AND s.score>0
-        ORDER BY s.score DESC,callsign ASC,s.pilot_id ASC LIMIT 5\`,
+        ORDER BY s.score DESC,callsign ASC,s.pilot_id ASC LIMIT 5`,
       )
       .bind(cycle.id)
       .all<{ pilot_id: string; callsign: string; score: number }>();
@@ -1644,7 +1643,7 @@ async function rankingRowsForCycle(
   }
   const { results = [] } = await db
     .prepare(
-      \`SELECT r.referrer_pilot_id AS pilot_id,
+      `SELECT r.referrer_pilot_id AS pilot_id,
         COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,
         COUNT(*) AS score
       FROM referrals r
@@ -1652,7 +1651,7 @@ async function rankingRowsForCycle(
       LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
       WHERE r.redeemed_at>=? AND r.redeemed_at<?
       GROUP BY r.referrer_pilot_id
-      ORDER BY score DESC,callsign ASC,p.pilot_id ASC LIMIT 5\`,
+      ORDER BY score DESC,callsign ASC,p.pilot_id ASC LIMIT 5`,
     )
     .bind(cycle.starts_at, cycle.ends_at)
     .all<{ pilot_id: string; callsign: string; score: number }>();
@@ -1676,10 +1675,7 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
     const pool = poolByType.get(type) ?? 0;
     let allocated = 0;
     rows.forEach((row, index) => {
-      const amount =
-        index === rows.length - 1
-          ? pool - allocated
-          : Math.floor((pool * RANKING_PRIZE_SHARES[index]!) / 100);
+      const amount = Math.floor((pool * RANKING_PRIZE_SHARES[index]!) / 100);
       allocated += amount;
       if (amount <= 0) return;
       statements.push(
@@ -1688,7 +1684,7 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
             "INSERT OR IGNORE INTO ranking_prize_payouts (id,cycle_id,ranking_type,position,pilot_id,score,prize_cents,status,created_at) VALUES (?,?,?,?,?,?,?,'PENDING',?)",
           )
           .bind(
-            \`prize_\${randomHex(10)}\`,
+            `prize_${randomHex(10)}`,
             cycle.id,
             type,
             index + 1,
@@ -1731,14 +1727,14 @@ async function recordRankingBossProgress(
   const now = Date.now();
   await db
     .prepare(
-      \`INSERT INTO ranking_cycle_boss_scores
+      `INSERT INTO ranking_cycle_boss_scores
         (cycle_id,pilot_id,score,last_boss_obsidian,updated_at)
       VALUES (?,?,0,?,?)
       ON CONFLICT(cycle_id,pilot_id) DO UPDATE SET
         score=ranking_cycle_boss_scores.score +
           MAX(0,excluded.last_boss_obsidian-ranking_cycle_boss_scores.last_boss_obsidian),
         last_boss_obsidian=MAX(ranking_cycle_boss_scores.last_boss_obsidian,excluded.last_boss_obsidian),
-        updated_at=excluded.updated_at\`,
+        updated_at=excluded.updated_at`,
     )
     .bind(cycle.id, pilotId, currentBossObsidian, now)
     .run();
@@ -1823,25 +1819,25 @@ async function handleRealEconomyRequest(
       const cycle = await getCurrentRankingCycle(db);
       const [vipPayments, ticketRequests, cycles, payouts, pools] = await Promise.all([
         db.prepare(
-          \`SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
+          `SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
           FROM vip_payment_requests r JOIN pilots p ON p.pilot_id=r.pilot_id
           LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
           LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
-          ORDER BY CASE WHEN r.status='PENDING' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100\`,
+          ORDER BY CASE WHEN r.status='PENDING' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100`,
         ).all(),
         db.prepare(
-          \`SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
+          `SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
           FROM ticket_payout_requests r JOIN pilots p ON p.pilot_id=r.pilot_id
           LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
           LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
-          ORDER BY CASE WHEN r.status='PENDING' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100\`,
+          ORDER BY CASE WHEN r.status='PENDING' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100`,
         ).all(),
         db.prepare("SELECT * FROM ranking_cycles ORDER BY starts_at DESC LIMIT 10").all(),
         db.prepare(
-          \`SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign
+          `SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign
           FROM ranking_prize_payouts r JOIN pilots p ON p.pilot_id=r.pilot_id
           LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
-          ORDER BY r.created_at DESC LIMIT 100\`,
+          ORDER BY r.created_at DESC LIMIT 100`,
         ).all(),
         db.prepare(
           "SELECT ranking_type,SUM(amount_cents) AS total_cents FROM ranking_pool_contributions WHERE created_at>=? AND created_at<? GROUP BY ranking_type",
@@ -1887,24 +1883,24 @@ async function handleRealEconomyRequest(
           "UPDATE vip_purchase_effects SET vip_applied_at=? WHERE vip_payment_id=? AND vip_applied_at IS NULL AND changes()=1",
         ).bind(now, id),
         db.prepare(
-          \`INSERT OR IGNORE INTO referral_vip_rewards (referred_pilot_id,vip_payment_id,referrer_pilot_id,amount_cents,created_at)
+          `INSERT OR IGNORE INTO referral_vip_rewards (referred_pilot_id,vip_payment_id,referrer_pilot_id,amount_cents,created_at)
           SELECT p.pilot_id,?,p.referred_by,100,? FROM pilots p
           JOIN vip_purchase_effects e ON e.pilot_id=p.pilot_id
           WHERE e.vip_payment_id=? AND e.vip_applied_at=? AND p.referred_by IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM referral_vip_rewards r WHERE r.referred_pilot_id=p.pilot_id)\`,
+            AND NOT EXISTS (SELECT 1 FROM referral_vip_rewards r WHERE r.referred_pilot_id=p.pilot_id)`,
         ).bind(id, now, id, now),
         db.prepare(
-          \`INSERT OR IGNORE INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
-          SELECT ?,referrer_pilot_id,100,'REFERRAL_VIP',?,? FROM referral_vip_rewards WHERE vip_payment_id=?\`,
-        ).bind(\`ticket_\${randomHex(10)}\`, id, now, id),
+          `INSERT OR IGNORE INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
+          SELECT ?,referrer_pilot_id,100,'REFERRAL_VIP',?,? FROM referral_vip_rewards WHERE vip_payment_id=?`,
+        ).bind(`ticket_${randomHex(10)}`, id, now, id),
         db.prepare(
-          \`INSERT OR IGNORE INTO ranking_pool_contributions (id,vip_payment_id,ranking_type,amount_cents,created_at)
+          `INSERT OR IGNORE INTO ranking_pool_contributions (id,vip_payment_id,ranking_type,amount_cents,created_at)
           SELECT ?,?,'BOSSES',150,? WHERE EXISTS (SELECT 1 FROM vip_purchase_effects WHERE vip_payment_id=? AND vip_applied_at=?)
           UNION ALL
-          SELECT ?,?,'REFERRALS',150,? WHERE EXISTS (SELECT 1 FROM vip_purchase_effects WHERE vip_payment_id=? AND vip_applied_at=?)\`,
+          SELECT ?,?,'REFERRALS',150,? WHERE EXISTS (SELECT 1 FROM vip_purchase_effects WHERE vip_payment_id=? AND vip_applied_at=?)`,
         ).bind(
-          \`pool_\${randomHex(10)}\`, id, now, id, now,
-          \`pool_\${randomHex(10)}\`, id, now, id, now,
+          `pool_${randomHex(10)}`, id, now, id, now,
+          `pool_${randomHex(10)}`, id, now, id, now,
         ),
         log(id, "Compra VIP aprobada; membresía, referido y fondos de ranking procesados."),
       ]);
@@ -1934,10 +1930,10 @@ async function handleRealEconomyRequest(
           "UPDATE ticket_payout_requests SET status='PAID',tx_hash=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status='PENDING'",
         ).bind(txHash, now, account.email, id),
         db.prepare(
-          \`INSERT INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
+          `INSERT INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
           SELECT ?,pilot_id,-amount_cents,'TICKET_PAYOUT',?,? FROM ticket_payout_requests
-          WHERE id=? AND status='PAID' AND changes()=1\`,
-        ).bind(\`ticket_\${randomHex(10)}\`, id, now, id),
+          WHERE id=? AND status='PAID' AND changes()=1`,
+        ).bind(`ticket_${randomHex(10)}`, id, now, id),
         log(id, "Solicitud de tickets pagada · TX " + txHash),
       ]);
       if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1)
@@ -1996,7 +1992,7 @@ async function handleRealEconomyRequest(
       "SELECT id FROM obsidian_payment_requests WHERE lower(tx_hash)=? LIMIT 1",
     ).bind(txHash).first<{ id: string }>();
     if (duplicateObs) return json({ error: "Este TX ya fue utilizado en otra solicitud." }, 409);
-    const id = \`vip_\${randomHex(10)}\`;
+    const id = `vip_${randomHex(10)}`;
     try {
       await db.prepare(
         "INSERT INTO vip_payment_requests (id,pilot_id,amount_cents,currency,network,tx_hash,wallet_address,status,created_at) VALUES (?,?,1000,'USDT','POLYGON',?,?,'PENDING',?)",
@@ -2033,13 +2029,13 @@ async function handleRealEconomyRequest(
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount < 1 || amount > 10000)
       return json({ error: "Indica una cantidad entera de al menos 1 USDT." }, 400);
     if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return json({ error: "Introduce una dirección válida de Polygon para recibir el pago." }, 400);
-    const id = \`tpay_\${randomHex(10)}\`;
+    const id = `tpay_${randomHex(10)}`;
     const cents = amount * 100;
     const result = await db.prepare(
-      \`INSERT INTO ticket_payout_requests (id,pilot_id,amount_cents,wallet_address,status,created_at)
+      `INSERT INTO ticket_payout_requests (id,pilot_id,amount_cents,wallet_address,status,created_at)
       SELECT ?,?, ?,?,'PENDING',?
       WHERE (SELECT COALESCE(SUM(delta_cents),0) FROM real_money_ticket_ledger WHERE pilot_id=?)
-        - (SELECT COALESCE(SUM(amount_cents),0) FROM ticket_payout_requests WHERE pilot_id=? AND status='PENDING') >= ?\`,
+        - (SELECT COALESCE(SUM(amount_cents),0) FROM ticket_payout_requests WHERE pilot_id=? AND status='PENDING') >= ?`,
     ).bind(id, account.pilot_id, cents, wallet, Date.now(), account.pilot_id, account.pilot_id, cents).run();
     if (result.meta?.changes !== 1) return json({ error: "No tienes suficientes tickets disponibles para esa solicitud." }, 409);
     return json({ success: true, id, status: "PENDING" });
