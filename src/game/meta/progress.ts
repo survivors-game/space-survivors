@@ -288,6 +288,12 @@ export function sanitize(raw: unknown): Progress {
   };
   if (!p.ships.includes(p.selectedShip)) p.selectedShip = "falcon";
   if (!p.stages.includes(p.selectedStage)) p.selectedStage = "nova";
+  const savedBaseline = (r.season as Partial<SeasonProgress> | undefined)?.baseline as
+    | Partial<SeasonBaseline>
+    | undefined;
+  if (savedBaseline && !Array.isArray(savedBaseline.ships)) p.season.baseline.ships = [...p.ships];
+  if (savedBaseline && !Array.isArray(savedBaseline.weaponsUsed))
+    p.season.baseline.weaponsUsed = [...p.weaponsUsed];
   renewSeason(p, Date.now());
   return p;
 }
