@@ -3062,10 +3062,13 @@ async function handleAdminAuthRequest(
           "UPDATE pilots SET obsidian=0,boss_obsidian=0,selected_ship_id='falcon',updated_at=?",
         ).bind(now),
         db.prepare(
-          "DELETE FROM pilot_inventory WHERE id NOT IN (SELECT inventory_id FROM p2p_ads)",
+          "DELETE FROM pilot_inventory WHERE id NOT IN (SELECT inventory_id FROM p2p_ads) AND NOT (item_id='falcon' AND item_type='nave')",
         ),
         db.prepare(
           "UPDATE pilot_inventory SET quantity=0,updated_at=? WHERE item_type='objeto' AND is_locked=0",
+        ).bind(now),
+        db.prepare(
+          "UPDATE pilot_inventory SET quantity=0,updated_at=? WHERE item_type='nave' AND item_id!='falcon' AND id NOT IN (SELECT inventory_id FROM p2p_ads WHERE status IN ('ACTIVO','PAUSADO'))",
         ).bind(now),
         db.prepare("DELETE FROM boss_cooldowns"),
         db.prepare("DELETE FROM boss_attempts"),
