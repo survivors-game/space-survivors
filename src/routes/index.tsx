@@ -1902,6 +1902,23 @@ function Index() {
             </nav>
           ) : null}
           <div className="flex items-center gap-2 sm:gap-5">
+            {screen !== "MENU" && screen !== "PLAYING" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAdminOpen(false);
+                  setVipModalOpen(false);
+                  setScreen("MENU");
+                }}
+                title="Volver al centro del piloto y los rankings"
+                className="font-arcade h-9 border-cyan-400/40 bg-cyan-400/10 px-3 text-[8px] uppercase tracking-wider text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
+              >
+                <Crosshair className="size-3.5" />
+                <span className="hidden sm:inline">CENTRO DEL PILOTO</span>
+                <span className="sm:hidden">CENTRO</span>
+              </Button>
+            ) : null}
             {googlePlayer ? (
               <span className="font-arcade hidden items-center gap-2 text-[8px] uppercase tracking-widest text-[#ffd700] sm:flex">
                 <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
