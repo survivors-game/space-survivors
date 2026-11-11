@@ -41,23 +41,23 @@ describe("World 1 horde pickup progression", () => {
   });
 });
 
-describe("World 1 advanced horde pressure", () => {
-  it("keeps combat enemies in hordes 7 to 10 instead of using parasite-only waves", () => {
-    for (const horde of WORLD1_HORDES.slice(6)) {
-      expect(horde["hunter"]).toBeGreaterThan(0);
-      expect(horde["destroyer"]).toBeGreaterThan(0);
-      expect(horde["bomber"]).toBeGreaterThan(0);
-      expect(Object.values(horde).reduce((sum, weight) => sum + weight, 0)).toBe(100);
+describe("World 1 individual enemy difficulty progression", () => {
+  it("increases enemy HP and damage in every horde without increasing spawn frequency", () => {
+    expect(WORLD1_HORDE_PRESSURE).toHaveLength(HORDE_COUNT);
+    for (let index = 0; index < WORLD1_HORDE_PRESSURE.length; index++) {
+      const current = WORLD1_HORDE_PRESSURE[index]!;
+      expect(current.spawn).toBe(1);
+      expect(current.speed).toBe(1);
+      if (index > 0) {
+        const previous = WORLD1_HORDE_PRESSURE[index - 1]!;
+        expect(current.hp).toBeGreaterThan(previous.hp);
+        expect(current.damage).toBeGreaterThan(previous.damage);
+      }
     }
-  });
-
-  it("increases enemy durability, damage and spawn pressure through horde 10", () => {
-    const advanced = WORLD1_HORDE_PRESSURE.slice(6);
-    for (let index = 1; index < advanced.length; index++) {
-      expect(advanced[index]!.hp).toBeGreaterThan(advanced[index - 1]!.hp);
-      expect(advanced[index]!.damage).toBeGreaterThan(advanced[index - 1]!.damage);
-      expect(advanced[index]!.spawn).toBeLessThan(advanced[index - 1]!.spawn);
-    }
+    expect(WORLD1_HORDE_PRESSURE[0]!.hp).toBe(1);
+    expect(WORLD1_HORDE_PRESSURE[9]!.hp).toBe(3);
+    expect(WORLD1_HORDE_PRESSURE[0]!.damage).toBe(1);
+    expect(WORLD1_HORDE_PRESSURE[9]!.damage).toBe(2);
     expect(WORLD1_MAX_ENEMIES).toBe(90);
   });
 });
