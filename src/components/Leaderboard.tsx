@@ -26,7 +26,7 @@ export function Leaderboard() {
     const load = async () => {
       try {
         const response = await fetch("/api/rewards/rankings", { cache: "no-store" });
-        const payload = await response.json() as RankingPayload & { error?: string };
+        const payload = (await response.json()) as RankingPayload & { error?: string };
         if (!response.ok || !Array.isArray(payload.bosses) || !Array.isArray(payload.referrals)) {
           throw new Error(payload.error ?? "No se pudieron cargar los premios.");
         }
@@ -46,7 +46,7 @@ export function Leaderboard() {
     };
   }, []);
 
-  const entries = activeTab === "bosses" ? rankings?.bosses ?? [] : rankings?.referrals ?? [];
+  const entries = activeTab === "bosses" ? (rankings?.bosses ?? []) : (rankings?.referrals ?? []);
 
   return (
     <section

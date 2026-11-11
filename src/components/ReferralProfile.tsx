@@ -91,7 +91,7 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
           credentials: "same-origin",
           cache: "no-store",
         });
-        const data = await response.json() as {
+        const data = (await response.json()) as {
           balance_cents?: number;
           available_cents?: number;
           requests?: TicketRequest[];
@@ -130,14 +130,15 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
           wallet_address: ticketWallet.trim(),
         }),
       });
-      const data = await response.json() as { error?: string; success?: boolean };
-      if (!response.ok || !data.success) throw new Error(data.error ?? "No se pudo enviar la solicitud.");
+      const data = (await response.json()) as { error?: string; success?: boolean };
+      if (!response.ok || !data.success)
+        throw new Error(data.error ?? "No se pudo enviar la solicitud.");
       setTicketNotice("Solicitud enviada a administración.");
       const refresh = await fetch("/api/rewards/tickets", {
         credentials: "same-origin",
         cache: "no-store",
       });
-      const current = await refresh.json() as {
+      const current = (await refresh.json()) as {
         balance_cents?: number;
         available_cents?: number;
         requests?: TicketRequest[];
@@ -269,9 +270,13 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
           </span>
         </div>
         <p className="mt-1 text-xs text-white/55">
-          Disponible para solicitar: ${(ticketAvailable / 100).toFixed(2)} USD. Cada ticket equivale a 1 USD.
+          Disponible para solicitar: ${(ticketAvailable / 100).toFixed(2)} USD. Cada ticket equivale
+          a 1 USD.
         </p>
-        <form onSubmit={(event) => void requestTicketPayout(event)} className="mt-4 grid gap-2 sm:grid-cols-[110px_1fr_auto]">
+        <form
+          onSubmit={(event) => void requestTicketPayout(event)}
+          className="mt-4 grid gap-2 sm:grid-cols-[110px_1fr_auto]"
+        >
           <input
             aria-label="Cantidad de tickets a cobrar en USD"
             type="number"
@@ -290,22 +295,55 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
             maxLength={42}
             className="h-10 min-w-0 border border-white/15 bg-[#070814] px-3 font-mono text-xs text-white"
           />
-          <Button type="submit" disabled={ticketBusy || ticketAvailable < 100} className="h-10 rounded-none bg-emerald-300 px-4 text-[9px] font-bold uppercase text-black hover:bg-emerald-200 disabled:opacity-40">
+          <Button
+            type="submit"
+            disabled={ticketBusy || ticketAvailable < 100}
+            className="h-10 rounded-none bg-emerald-300 px-4 text-[9px] font-bold uppercase text-black hover:bg-emerald-200 disabled:opacity-40"
+          >
             {ticketBusy ? "Enviando..." : "Solicitar cobro"}
           </Button>
         </form>
-        {ticketError ? <p role="alert" className="mt-2 text-xs text-rose-300">{ticketError}</p> : null}
-        {ticketNotice ? <p role="status" className="mt-2 text-xs text-emerald-200">{ticketNotice}</p> : null}
+        {ticketError ? (
+          <p role="alert" className="mt-2 text-xs text-rose-300">
+            {ticketError}
+          </p>
+        ) : null}
+        {ticketNotice ? (
+          <p role="status" className="mt-2 text-xs text-emerald-200">
+            {ticketNotice}
+          </p>
+        ) : null}
         {ticketRequests.length ? (
           <div className="mt-4 space-y-2">
-            <p className="text-[10px] uppercase tracking-wider text-white/50">Solicitudes de cobro</p>
+            <p className="text-[10px] uppercase tracking-wider text-white/50">
+              Solicitudes de cobro
+            </p>
             {ticketRequests.map((request) => (
-              <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2 text-xs">
-                <span className="text-white/70">${(request.amount_cents / 100).toFixed(2)} USDT</span>
-                <span className={request.status === "PAID" ? "text-emerald-300" : request.status === "REJECTED" ? "text-rose-300" : "text-amber-200"}>
-                  {request.status === "PAID" ? "Pagado" : request.status === "REJECTED" ? "Rechazado" : "Pendiente"}
+              <div
+                key={request.id}
+                className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2 text-xs"
+              >
+                <span className="text-white/70">
+                  ${(request.amount_cents / 100).toFixed(2)} USDT
                 </span>
-                {request.reason ? <span className="w-full text-rose-300">{request.reason}</span> : null}
+                <span
+                  className={
+                    request.status === "PAID"
+                      ? "text-emerald-300"
+                      : request.status === "REJECTED"
+                        ? "text-rose-300"
+                        : "text-amber-200"
+                  }
+                >
+                  {request.status === "PAID"
+                    ? "Pagado"
+                    : request.status === "REJECTED"
+                      ? "Rechazado"
+                      : "Pendiente"}
+                </span>
+                {request.reason ? (
+                  <span className="w-full text-rose-300">{request.reason}</span>
+                ) : null}
               </div>
             ))}
           </div>
