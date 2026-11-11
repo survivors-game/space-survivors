@@ -1919,7 +1919,8 @@ async function handleRealEconomyRequest(
                 FROM ranking_pool_contributions WHERE created_at>=? AND created_at<?
                 GROUP BY ranking_type
               ) contributions ON contributions.ranking_type=kinds.ranking_type
-              LEFT JOIN ranking_pool_reserves reserves ON reserves.ranking_type=kinds.ranking_type`,
+              LEFT JOIN ranking_pool_reserves reserves ON reserves.ranking_type=kinds.ranking_type
+              ORDER BY kinds.ranking_type`,
             )
             .bind(cycle.starts_at, cycle.ends_at)
             .all(),
