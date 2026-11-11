@@ -2063,7 +2063,7 @@ async function handleRealEconomyRequest(
     }
 
     if (action === "reject-vip") {
-      const reason = typeof body?.["reason"] === "string" ? body.reason.trim().slice(0, 240) : "";
+      const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
       if (reason.length < 5) return json({ error: "Escribe un motivo de rechazo." }, 400);
       const result = await db
         .prepare(
@@ -2077,7 +2077,7 @@ async function handleRealEconomyRequest(
     }
 
     if (action === "pay-ticket") {
-      const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
+      const txHash = typeof body?.["tx_hash"] === "string" ? body["tx_hash"].trim().toLowerCase() : "";
       if (!/^0x[a-f0-9]{64}$/.test(txHash))
         return json({ error: "Introduce el TX hash del pago." }, 400);
       const result = await db.batch([
@@ -2116,7 +2116,7 @@ async function handleRealEconomyRequest(
     }
 
     if (action === "reject-ticket") {
-      const reason = typeof body?.["reason"] === "string" ? body.reason.trim().slice(0, 240) : "";
+      const reason = typeof body?.["reason"] === "string" ? body["reason"].trim().slice(0, 240) : "";
       if (reason.length < 5) return json({ error: "Escribe un motivo de rechazo." }, 400);
       const result = await db
         .prepare(
@@ -2139,7 +2139,7 @@ async function handleRealEconomyRequest(
       if (!payout) return json({ error: "No se encontró el premio pendiente." }, 404);
       if (!/^0x[a-fA-F0-9]{40}$/.test(payout.wallet_address))
         return json({ error: "El ganador todavía no ha registrado su wallet Polygon." }, 409);
-      const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
+      const txHash = typeof body?.["tx_hash"] === "string" ? body["tx_hash"].trim().toLowerCase() : "";
       if (!/^0x[a-f0-9]{64}$/.test(txHash))
         return json({ error: "Introduce el TX hash del premio." }, 400);
       const result = await db.batch([
@@ -2187,7 +2187,7 @@ async function handleRealEconomyRequest(
       return json({ purchases: rows.results ?? [] });
     }
     const body = await readJson(request, 2048);
-    const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
+    const txHash = typeof body?.["tx_hash"] === "string" ? body["tx_hash"].trim().toLowerCase() : "";
     if (!/^0x[a-f0-9]{64}$/.test(txHash))
       return json({ error: "Introduce un TX hash válido de Polygon." }, 400);
     const settings = await db
@@ -2230,7 +2230,7 @@ async function handleRealEconomyRequest(
     }
     const body = await readJson(request, 1024);
     const walletAddress =
-      typeof body?.["wallet_address"] === "string" ? body.wallet_address.trim() : "";
+      typeof body?.["wallet_address"] === "string" ? body["wallet_address"].trim() : "";
     if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress))
       return json({ error: "Introduce una dirección válida de Polygon." }, 400);
     const now = Date.now();
@@ -2283,7 +2283,7 @@ async function handleRealEconomyRequest(
     }
     const body = await readJson(request, 2048);
     const amount = body?.["amount_usd"];
-    const wallet = typeof body?.["wallet_address"] === "string" ? body.wallet_address.trim() : "";
+    const wallet = typeof body?.["wallet_address"] === "string" ? body["wallet_address"].trim() : "";
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount < 1 || amount > 10000)
       return json({ error: "Indica una cantidad entera de al menos 1 USDT." }, 400);
     if (!/^0x[a-fA-F0-9]{40}$/.test(wallet))
