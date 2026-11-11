@@ -43,6 +43,7 @@ type PrizePayout = {
   created_at: number;
   paid_at: number | null;
   callsign: string;
+  wallet_address: string;
 };
 
 type Payload = {
@@ -214,9 +215,12 @@ export function RealEconomyAdminSection() {
           </section>
 
           <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-200">
-              <Crown className="size-4" /> Compras VIP pendientes
-            </h3>
+            <div>
+              <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-200">
+                <Crown className="size-4" /> Compras VIP pendientes
+              </h3>
+              <p className="mt-1 text-[10px] text-white/45">Verifica el TX en PolygonScan y confirma que llegaron 10 USDT a la wallet de cobro antes de aprobar.</p>
+            </div>
             <div className="overflow-x-auto border border-white/10">
               <table className="w-full min-w-[760px] text-left text-xs">
                 <thead className="bg-white/5 text-white/55">
