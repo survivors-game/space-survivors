@@ -253,10 +253,7 @@ export function MarketSell({
           <span className="text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
             {P2P_FEE_OBSIDIAN.publish} OBS
           </span>
-          {" · "}SALDO DISPONIBLE ·{" "}
-          <span className="text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
-            {obsidian === null ? "--" : obsidian.toLocaleString()} OBS
-          </span>
+
         </p>
         <Button
           type="button"
