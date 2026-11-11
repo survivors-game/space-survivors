@@ -192,6 +192,84 @@ describe("real-money VIP and ranking economy", () => {
     ]);
   });
 
+  it("records boss-rank progress only within the active 15-day cycle", async () => {
+    db.prepare("UPDATE pilots SET boss_obsidian=50 WHERE pilot_id=?").run(INVITEE_ID);
+    db.prepare(
+      "INSERT INTO player_progress (pilot_id,progress_json,updated_at) VALUES (?,'{\\"stats\\":{\\"kills\\":123}}',?)",
+    ).run(INVITEE_ID, Date.now());
+    let storedLeaderboard: string | null = null;
+    const leaderboard = {
+      async get() {
+        return storedLeaderboard;
+      },
+      async put(_key: string, value: string) {
+        storedLeaderboard = value;
+      },
+    };
+    const response = await server.fetch(
+      request(
+        "/api/leaderboard/update",
+        INVITEE_TOKEN,
+        "POST",
+        { pilot_id: INVITEE_ID, callsign: "INVITEE", score: 123 },
+      ),
+      { DB: database, LEADERBOARD: leaderboard },
+    );
+    expect(response.status).toBe(200);
+
+    const rankings = await server.fetch(
+      new Request("https://game.example/api/rewards/rankings"),
+      { DB: database },
+    );
+    const payload = await rankings.json() as {
+      bosses: Array<{ pilot_id: string; prize_usdt: number }>;
+    };
+    expect(payload.bosses).toEqual([{ position: 1, pilot_id: INVITEE_ID, callsign: "INVITEE", prize_usdt: 0.6 }]);
+  });
+
+  it("closes the 15-day cycle and creates payable USDT prizes with the registered Polygon wallet", async () => {
+    const wallet = "0x" + "c".repeat(40);
+    const saved = await call<{ success?: boolean }>(
+      "/api/rewards/wallet",
+      REFERRER_TOKEN,
+      "POST",
+      { wallet_address: wallet },
+    );
+    expect(saved.response.status).toBe(200);
+    expect(saved.payload.success).toBe(true);
+
+    const cycle = db.prepare("SELECT id FROM ranking_cycles WHERE status='OPEN'").get() as { id: string };
+    const contribution = db.prepare("SELECT MAX(created_at) AS latest FROM ranking_pool_contributions").get() as { latest: number };
+    db.prepare("UPDATE ranking_cycles SET ends_at=? WHERE id=?").run(contribution.latest + 1, cycle.id);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const closed = await server.fetch(
+      new Request("https://game.example/api/rewards/rankings"),
+      { DB: database },
+    );
+    expect(closed.status).toBe(200);
+    const payouts = db.prepare(
+      "SELECT ranking_type,position,prize_cents,status FROM ranking_prize_payouts ORDER BY ranking_type",
+    ).all();
+    expect(payouts).toEqual([
+      { ranking_type: "BOSSES", position: 1, prize_cents: 60, status: "PENDING" },
+      { ranking_type: "REFERRALS", position: 1, prize_cents: 60, status: "PENDING" },
+    ]);
+
+    const prize = db.prepare(
+      "SELECT id FROM ranking_prize_payouts WHERE ranking_type='REFERRALS' AND status='PENDING'",
+    ).get() as { id: string };
+    const paid = await call<{ success?: boolean; status?: string }>(
+      "/api/admin/real-economy",
+      ADMIN_TOKEN,
+      "POST",
+      { action: "pay-prize", id: prize.id, tx_hash: "0x" + "e".repeat(64) },
+      true,
+    );
+    expect(paid.response.status).toBe(200);
+    expect(paid.payload).toEqual({ success: true, status: "PAID" });
+  });
+
   it("reserves tickets until administration records the USDT payout", async () => {
     const wallet = "0x" + "c".repeat(40);
     const created = await call<{ success?: boolean; id?: string }>(
