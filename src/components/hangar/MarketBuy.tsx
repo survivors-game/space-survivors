@@ -208,7 +208,7 @@ export function MarketBuy({
               onClick={() => void finishOrder(onCancel)}
               className="rounded-none border-[#ff0055]/35 text-[8px] uppercase text-[#ff9ab9]"
             >
-              CANCELAR ORDEN · SIN REEMBOLSO
+              CANCELAR ORDEN
             </Button>
           </div>
         </article>
