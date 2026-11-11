@@ -1921,10 +1921,10 @@ function Index() {
               </Button>
             ) : null}
             {googlePlayer ? (
-              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-[#c9b66b] sm:gap-2 sm:text-[8px]">
-                <span className="size-2 bg-[#ffd700] shadow-[0_0_10px_#ffd700]" />{" "}
-                {progress.credits.toLocaleString()} CR
-                <span className="ml-2 inline-flex items-center gap-1 text-[#d946ef] drop-shadow-[0_0_8px_#d946ef80]">
+              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-[#8d8058] sm:gap-2 sm:text-[8px]">
+                <span className="size-2 bg-[#9b8750]" />{" "}
+                <span className="text-[#9b8750]">{progress.credits.toLocaleString()} CR</span>
+                <span className="ml-2 inline-flex items-center gap-1 text-[#966b91]">
                   <Gem className="size-3" />
                   {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
                 </span>
@@ -1963,7 +1963,8 @@ function Index() {
                 }}
                 disabled={googleConnecting}
                 title={googlePlayer ? "Abrir perfil del piloto" : "Iniciar sesión con Google"}
-                className="font-arcade h-9 border-amber-400/40 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-300 shadow-[0_0_15px_#f59e0b25] hover:bg-amber-400/20 hover:text-amber-200"
+                className="font-arcade h-9 border-amber-400/25 bg-amber-400/5 px-3 text-[8px] uppercase tracking-wider text-amber-200/65 shadow-none hover:bg-amber-400/10 hover:text-amber-200/80"
+                style={{ filter: "brightness(0.84)" }}
               >
                 <Wallet className="size-3.5" />
                 <span className="flex flex-col items-start leading-tight">
@@ -1975,7 +1976,7 @@ function Index() {
                         : "INICIAR SESIÓN CON GOOGLE"}
                   </span>
                   {googlePlayer ? (
-                    <span className="mt-1 text-[7px] normal-case tracking-normal text-cyan-200/70">
+                    <span className="mt-1 text-[7px] normal-case tracking-normal text-cyan-200/45">
                       PERFIL DEL PILOTO
                     </span>
                   ) : null}

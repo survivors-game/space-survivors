@@ -77,9 +77,9 @@ export function Leaderboard() {
         </div>
       </div>
 
-      <p className="mb-3 border-l-2 border-emerald-400/60 bg-emerald-400/5 px-3 py-2 text-[10px] leading-relaxed text-emerald-100/80">
+      <p className="mb-3 border-l-2 border-emerald-400/60 bg-emerald-400/5 px-3 py-3 text-xs leading-relaxed text-emerald-100/80 sm:text-sm">
         Los premios se pagarán en USDT mediante la red Polygon al finalizar el ciclo de 15 días. El
-        monto mostrado es estimado y puede cambiar si cambia tu posición o crece el fondo.
+        monto mostrado es estimado y puede cambiar si cambia tu posición o aumenta la pool de recompensas.
       </p>
 
       {error ? (

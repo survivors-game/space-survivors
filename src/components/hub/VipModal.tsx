@@ -63,7 +63,7 @@ const BENEFITS: Benefit[] = [
 ];
 
 const statusLabel = (status: VipPayment["status"]) =>
-  status === "PENDING" ? "Pendiente de revisión" : status === "APPROVED" ? "Aprobado" : "Rechazado";
+  status === "PENDING" ? "Esperando confirmaciones" : status === "APPROVED" ? "Aprobado" : "Rechazado";
 
 export function VipModal({ open, onClose, vipUntil }: VipModalProps) {
   const [walletAddress, setWalletAddress] = useState("");
@@ -141,7 +141,7 @@ export function VipModal({ open, onClose, vipUntil }: VipModalProps) {
         throw new Error(data.error ?? "No se pudo registrar el pago.");
       setTxHash("");
       setNotice(
-        "Pago registrado. La administración verificará la transferencia y activará tu VIP.",
+        "Pago registrado. El VIP se activará cuando se completen las confirmaciones de la red.",
       );
       await loadPurchaseInfo();
     } catch (cause) {
@@ -228,7 +228,7 @@ export function VipModal({ open, onClose, vipUntil }: VipModalProps) {
               </h3>
               <p className="mt-1 text-[11px] leading-relaxed text-white/65">
                 Envía exactamente 10 USDT por la red Polygon a esta dirección. Después registra el
-                hash de la transferencia. El VIP se activa cuando administración confirma el pago.
+                hash de la transferencia. El VIP se activa cuando se completen las confirmaciones de la red.
               </p>
               {qrUrl ? (
                 <img
