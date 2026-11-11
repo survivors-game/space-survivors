@@ -18,31 +18,31 @@ export interface ArtDef {
 }
 
 export const BASE_PAL: Record<string, string> = {
-  K: "#141e33",
-  W: "#f8fafc",
-  x: "#6fb7c9",
-  X: "#1b2740",
-  E: "#d4af5a",
-  C: "#6fb7c9",
-  c: "#6fb7c9",
-  P: "#8a6aa8",
-  p: "#7d6fa8",
-  Y: "#d4af5a",
-  O: "#d4af5a",
-  R: "#e06b70",
-  r: "#8a6aa8",
-  G: "#6cc09a",
-  g: "#6cc09a",
-  B: "#5b8fd1",
-  b: "#5b8fd1",
-  V: "#7d6fa8",
-  v: "#1b2740",
-  S: "#e6edf7",
-  s: "#5b8fd1",
-  d: "#5b8fd1",
-  L: "#e6edf7",
-  M: "#5b8fd1",
-  D: "#5b8fd1",
+  K: "#140b2e",
+  W: "#ffffff",
+  x: "#a8f7ff",
+  X: "#1b1452",
+  E: "#ffb347",
+  C: "#25f4ff",
+  c: "#0b89b3",
+  P: "#ff3df2",
+  p: "#8f1b96",
+  Y: "#ffd23f",
+  O: "#ff8a1f",
+  R: "#ff2d55",
+  r: "#8a1030",
+  G: "#7dff4f",
+  g: "#2a8a2c",
+  B: "#3d7bff",
+  b: "#1d3690",
+  V: "#a35cff",
+  v: "#3c1a70",
+  S: "#c9d4ea",
+  s: "#7884a8",
+  d: "#363f62",
+  L: "#e6f1ff",
+  M: "#8fa5cf",
+  D: "#45568a",
 };
 
 /** Characters that are emissive (not shaded) */
@@ -78,7 +78,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // ESPECTRO — forward-swept stealth striker, violet/magenta
   ship_spectre: {
-    pal: { L: "#e6edf7", M: "#7d6fa8", D: "#1b2740" },
+    pal: { L: "#f3d6ff", M: "#a35cff", D: "#43207a" },
     rows: [
       "........P",
       "........L",
@@ -101,7 +101,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // BASTIÓN — heavy gunship, amber steel with twin cannons
   ship_bastion: {
-    pal: { L: "#e6edf7", M: "#d4af5a", D: "#1b2740" },
+    pal: { L: "#ffe9b8", M: "#c98a2e", D: "#5e3a12" },
     rows: [
       "..........L",
       ".........LL",
@@ -126,7 +126,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // QUIMERA — bio-tech crescent, green/cyan
   ship_chimera: {
-    pal: { L: "#e6edf7", M: "#6cc09a", D: "#1b2740" },
+    pal: { L: "#dcffd0", M: "#3fbf6a", D: "#155234" },
     rows: [
       ".........G",
       "........GL",
@@ -151,7 +151,7 @@ export const ART: Record<string, ArtDef> = {
   /* ======================= ENEMIES ======================= */
   // INTERCEPTOR — small amber dart
   en_interceptor: {
-    pal: { L: "#d4af5a", M: "#d4af5a", D: "#d4af5a", X: "#141e33", x: "#e6edf7" },
+    pal: { L: "#ffd27a", M: "#ff8a1f", D: "#8a3a0a", X: "#2a0d00", x: "#fff3c4" },
     rows: [
       ".....O",
       ".....Y",
@@ -167,7 +167,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // CAZADOR — crimson claw hunter
   en_hunter: {
-    pal: { L: "#e06b70", M: "#e06b70", D: "#1b2740", X: "#0c1222", x: "#e6edf7" },
+    pal: { L: "#ff8a9a", M: "#d81e4a", D: "#5e0a1e", X: "#200008", x: "#ffd0d8" },
     rows: [
       ".W.....",
       ".LR....",
@@ -185,7 +185,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // DESTRUCTOR — heavy steel-blue cruiser with violet lights
   en_destroyer: {
-    pal: { S: "#5b8fd1", s: "#5b8fd1", d: "#1b2740" },
+    pal: { S: "#9fb4e0", s: "#4c5f96", d: "#1c2650" },
     rows: [
       ".........dS",
       "........dSS",
@@ -210,7 +210,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // BOMBARDERO — magenta flying wing with cyan bomb-bay lights
   en_bomber: {
-    pal: { L: "#8a6aa8", M: "#7d6fa8", D: "#1b2740", P: "#6fb7c9", X: "#141e33", x: "#e6edf7" },
+    pal: { L: "#ffb3f0", M: "#d331c6", D: "#5e0e58", P: "#3dffef", X: "#2a0628", x: "#ffd6fa" },
     rows: [
       ".........L",
       "........LL",
@@ -229,7 +229,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // NAVE PARASITARIA — bulbous bio-organism with an eye and trailing tendrils
   en_parasite: {
-    pal: { G: "#6cc09a", g: "#6cc09a", L: "#6cc09a", X: "#1b2740", x: "#8a6aa8" },
+    pal: { G: "#7dff4f", g: "#24782a", L: "#d6ff9e", X: "#4a0b5e", x: "#ff3df2" },
     rows: [
       "......gG",
       "....gGGL",
@@ -249,7 +249,7 @@ export const ART: Record<string, ArtDef> = {
   },
   // Larva released by parasites
   en_spawnling: {
-    pal: { G: "#6cc09a", g: "#6cc09a", L: "#e6edf7", x: "#8a6aa8" },
+    pal: { G: "#b8ff6a", g: "#3a8f20", L: "#f0ffc8", x: "#ff3df2" },
     rows: ["...G", "..GL", ".gGx", "gGGG", "g.gG", "...g"],
   },
   // Coloso shield generator node
@@ -261,7 +261,7 @@ export const ART: Record<string, ArtDef> = {
   /* ======================= BOSSES ======================= */
   // LEVIATÁN — gigantic carrier with hangar bays and turret mounts
   boss_leviathan: {
-    pal: { L: "#7d6fa8", M: "#7d6fa8", D: "#1b2740", v: "#141e33", K: "#0c1222", E: "#8a6aa8" },
+    pal: { L: "#b48cff", M: "#5b2e9e", D: "#2c1556", v: "#1a0b36", K: "#0d0620", E: "#ff6be8" },
     rows: [
       "..................vV",
       ".................vLL",
@@ -307,12 +307,12 @@ export const ART: Record<string, ArtDef> = {
     ],
   },
   boss_leviathan_turret: {
-    pal: { S: "#7d6fa8", s: "#7d6fa8", d: "#1b2740" },
+    pal: { S: "#d6c4ff", s: "#7a5cc0", d: "#2c1556" },
     rows: ["...Y", "...K", "..dK", ".dSS", "dSPS", "dSSS", ".dSS", "..dd"],
   },
   // NÉMESIS — razor-winged crimson interceptor
   boss_nemesis: {
-    pal: { L: "#e06b70", M: "#e06b70", D: "#141e33", K: "#0c1222", X: "#0c1222", x: "#e6edf7" },
+    pal: { L: "#ff7a8a", M: "#b0113a", D: "#2a0812", K: "#12030a", X: "#1a0008", x: "#ffd0d8" },
     rows: [
       "...............R",
       "...............W",
@@ -348,7 +348,7 @@ export const ART: Record<string, ArtDef> = {
   // COLOSO — armoured orbital fortress with a magenta reactor core
   boss_colossus: {
     mirrorY: true,
-    pal: { S: "#5b8fd1", s: "#5b8fd1", d: "#1b2740" },
+    pal: { S: "#a9c4d4", s: "#5a7488", d: "#1f2c38" },
     rows: [
       "..............dddddddd",
       "...........dddSSSSSSSS",
@@ -378,7 +378,7 @@ export const ART: Record<string, ArtDef> = {
   cell_s: { pal: {}, rows: ["..C", ".CW", "CCW", ".cC", "..c"] },
   cell_m: { pal: {}, rows: ["...P", "..PW", ".PPW", "PPPW", ".pPP", "..pP", "...p"] },
   cell_l: {
-    pal: { p: "#d4af5a" },
+    pal: { p: "#b8560a" },
     rows: ["...Y", "..YW", ".YYW", "YYYW", "OYYW", ".OYY", "..pO", "...p"],
   },
   cell_xl: {
@@ -386,7 +386,7 @@ export const ART: Record<string, ArtDef> = {
     rows: ["....W", "...CW", "..CxW", ".CxWW", "CxWWW", ".CxWW", "..CxW", "...CW", "....W"],
   },
   pk_repair: {
-    pal: { s: "#5b8fd1" },
+    pal: { s: "#6a7f9a" },
     rows: [".sSSS", "sSGGG", "SGGWG", "SGWWW", "SGGWG", "sSGGG", ".sSSS"],
   },
   pk_magnet: {
@@ -406,7 +406,7 @@ export const ART: Record<string, ArtDef> = {
     rows: ["Y...Y", ".Y..Y", "..Y.Y", "...YW", "....W", "...OO", "..OOO", "...O.", "....."],
   },
   ic_missile: {
-    pal: { S: "#e6edf7" },
+    pal: { S: "#e6ecf8" },
     rows: ["....R", "...RW", "...SS", "...SS", "...SS", "..dSS", ".d.ss", "...OY", "....O"],
   },
   ic_drones: {

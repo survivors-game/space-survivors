@@ -110,7 +110,7 @@ function buildFromGrid(
   return { w: W, h: H, canvas: c, flash: f };
 }
 
-function buildArt(def: ArtDef): Sprite {
+function buildArt(def: ArtDef, brightness = 1.14): Sprite {
   const rows = expandRows(def);
   const pal = { ...BASE_PAL, ...(def.pal ?? {}) };
   const grid: (string | null)[][] = rows.map((r) =>
@@ -120,8 +120,8 @@ function buildArt(def: ArtDef): Sprite {
     def.shade === false
       ? rows.map((r) => r.split("").map(() => false))
       : rows.map((r) => r.split("").map((ch) => !EMISSIVE.has(ch)));
-  // Lift pixel-art sprites without changing procedural planets or world backgrounds.
-  return buildFromGrid(grid, mask, 1.14);
+  // Keep combat ships at their original colors; brighten only interface artwork.
+  return buildFromGrid(grid, mask, brightness);
 }
 
 /* ---------------- Procedural sprites ---------------- */
@@ -306,7 +306,8 @@ export function getSprite(id: string): Sprite {
   else {
     const def = ART[id];
     if (!def) throw new Error(`Unknown sprite ${id}`);
-    s = buildArt(def);
+    const isCombatShip = /^(ship_|en_|boss_)/.test(id);
+    s = buildArt(def, isCombatShip ? 1 : 1.14);
   }
   cache.set(id, s);
   return s;
