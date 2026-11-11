@@ -282,7 +282,7 @@ const partida: WikiSection = {
         Al eliminar enemigos, pueden aparecer objetos. La probabilidad comienza en{" "}
         {pct(WORLD1_PICKUP_CHANCE)} por enemigo y aumenta {pct(WORLD1_PICKUP_CHANCE_INCREMENT)} con
         cada horda superada. Las larvas también pueden soltar objetos. VIP multiplica estas
-        probabilidades por 15.
+        probabilidades por 35.
       </P>
       <H>Resultado</H>
       <P>
