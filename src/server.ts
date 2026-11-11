@@ -6900,6 +6900,7 @@ async function handleMarketRequest(
             `SELECT d.id, d.order_id, d.opened_by_pilot_id, d.reason, d.evidence_url,
             d.status, d.created_at, d.resolved_at, d.resolved_by, d.resolution_note,
             o.status AS order_status, o.buyer_pilot_id, ad.seller_pilot_id,
+            o.payment_reference, o.payment_proof_url,
             ad.item_name, ad.price_minor, ad.currency_code, ad.country_code,
             COALESCE(NULLIF(op.display_name, ''), opener.callsign, 'PILOTO') AS opened_by_name,
             COALESCE(NULLIF(bp.display_name, ''), buyer.callsign, 'PILOTO') AS buyer_name,
