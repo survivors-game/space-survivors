@@ -1,4 +1,4 @@
- import { useEffect } from "react";
+import { useEffect } from "react";
 import {
   CheckCircle2,
   Coins,
@@ -20,7 +20,10 @@ export interface RoadmapRiverProps {
 
 type Tone = "cyan" | "amber" | "violet" | "emerald" | "blue" | "fuchsia" | "rose" | "gold";
 
-const TONES: Record<Tone, { card: string; badge: string; node: string; text: string; button: string }> = {
+const TONES: Record<
+  Tone,
+  { card: string; badge: string; node: string; text: string; button: string }
+> = {
   cyan: {
     card: "border-cyan-500/35 bg-cyan-950/15",
     badge: "border-cyan-500/50 text-cyan-200",
@@ -108,7 +111,10 @@ const PHASES: Phase[] = [
     sector: "Sector 01 · Órbita Nova (único sector desbloqueado)",
     playSectorId: "nova",
     features: [
-      { Icon: Flame, text: "Ciclo de 20 minutos con 10 hordas (2 minutos por horda) y Jefe Leviatán al final." },
+      {
+        Icon: Flame,
+        text: "Ciclo de 20 minutos con 10 hordas (2 minutos por horda) y Jefe Leviatán al final.",
+      },
       { Icon: Cpu, text: "Puente de Mando 2187, Hangar 1-10 con módulos de especialización." },
       { Icon: Shield, text: "Mercado P2P, Alianzas, guerras de clanes y auxilio Boss Help." },
       { Icon: Sparkles, text: "Membresía VIP: +35% de drops, +20% de créditos y chat dorado." },
@@ -125,7 +131,10 @@ const PHASES: Phase[] = [
     sector: "Sector 02 · Cinturón de Ceniza",
     features: [
       { Icon: Flame, text: "Lluvia de meteoritos y asteroides destructibles como cobertura." },
-      { Icon: Shield, text: "Jefe Coloso Blindado, con escudos pesados y metralla de fragmentación." },
+      {
+        Icon: Shield,
+        text: "Jefe Coloso Blindado, con escudos pesados y metralla de fragmentación.",
+      },
       { Icon: Cpu, text: "Consumibles manuales: nanorreparación de emergencia y pulso EMP." },
       { Icon: Coins, text: "Rachas de despegue diario con multiplicadores de recursos." },
     ],
@@ -138,7 +147,10 @@ const PHASES: Phase[] = [
     StatusIcon: Lock,
     spriteKey: "ship_bastion",
     features: [
-      { Icon: Shield, text: 'Naves nuevas "Viper" y "Aegis", desbloqueables con méritos en el Cinturón de Ceniza.' },
+      {
+        Icon: Shield,
+        text: 'Naves nuevas "Viper" y "Aegis", desbloqueables con méritos en el Cinturón de Ceniza.',
+      },
       { Icon: Coins, text: "Torneo semanal de guerras de alianzas con pozo de recursos." },
       { Icon: Sparkles, text: "Radar de alerta en el Hub cuando un aliado pide auxilio." },
     ],
@@ -152,9 +164,18 @@ const PHASES: Phase[] = [
     spriteKey: "ship_spectre",
     sector: "Sector 03 · Sector Abisal",
     features: [
-      { Icon: Flame, text: "Esporas corrosivas que reducen la velocidad y drenan escudos; arrecifes alienígenas." },
-      { Icon: Shield, text: "Naves parasitarias en enjambres y bombarderos de ácido teledirigido." },
-      { Icon: Cpu, text: "Drones que orbitan la nave: recolector magnético, dron médico y cobertura láser." },
+      {
+        Icon: Flame,
+        text: "Esporas corrosivas que reducen la velocidad y drenan escudos; arrecifes alienígenas.",
+      },
+      {
+        Icon: Shield,
+        text: "Naves parasitarias en enjambres y bombarderos de ácido teledirigido.",
+      },
+      {
+        Icon: Cpu,
+        text: "Drones que orbitan la nave: recolector magnético, dron médico y cobertura láser.",
+      },
       { Icon: Sparkles, text: "Títulos militares de honor visibles en el chat." },
     ],
   },
@@ -167,7 +188,10 @@ const PHASES: Phase[] = [
     spriteKey: "ship_chimera",
     features: [
       { Icon: Cpu, text: "Desmantelamiento y reciclaje de armas duplicadas." },
-      { Icon: Flame, text: "Núcleos elementales: daño criogénico, plasma ardiente y arcos voltaicos." },
+      {
+        Icon: Flame,
+        text: "Núcleos elementales: daño criogénico, plasma ardiente y arcos voltaicos.",
+      },
       { Icon: Coins, text: "Subastas P2P con puja de planos exóticos en Obsidiana." },
     ],
   },
@@ -196,8 +220,14 @@ const PHASES: Phase[] = [
     sector: "Sector Infinito (Endless Void)",
     features: [
       { Icon: Flame, text: "Sin límite de 20 minutos y dificultad creciente con jefes rotativos." },
-      { Icon: Sparkles, text: "Prestigio militar: reinicio del hangar a cambio de auras cosméticas exclusivas." },
-      { Icon: Shield, text: "Raids de alianza semanales (World Boss) con daño acumulado conjunto." },
+      {
+        Icon: Sparkles,
+        text: "Prestigio militar: reinicio del hangar a cambio de auras cosméticas exclusivas.",
+      },
+      {
+        Icon: Shield,
+        text: "Raids de alianza semanales (World Boss) con daño acumulado conjunto.",
+      },
     ],
   },
   {
@@ -208,9 +238,18 @@ const PHASES: Phase[] = [
     StatusIcon: Sparkles,
     sector: "Meta suprema",
     features: [
-      { Icon: Coins, text: "Contrato inteligente del token OBS en la red Polygon, con bajas comisiones." },
-      { Icon: Shield, text: "Billetera no custodial (MetaMask o WalletConnect) vinculada al perfil." },
-      { Icon: Coins, text: "Retiro de Obsidiana a Polygon para canjear por USDT o dinero real en DEX y P2P." },
+      {
+        Icon: Coins,
+        text: "Contrato inteligente del token OBS en la red Polygon, con bajas comisiones.",
+      },
+      {
+        Icon: Shield,
+        text: "Billetera no custodial (MetaMask o WalletConnect) vinculada al perfil.",
+      },
+      {
+        Icon: Coins,
+        text: "Retiro de Obsidiana a Polygon para canjear por USDT o dinero real en DEX y P2P.",
+      },
       { Icon: Sparkles, text: "Staking de OBS con rendimiento pasivo y cosméticos únicos." },
     ],
   },
@@ -239,7 +278,10 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
         <header className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
           <div className="space-y-1">
             <p className="text-xs uppercase tracking-widest text-cyan-300/80">Hoja de ruta</p>
-            <h2 id="roadmap-river-title" className="text-lg font-bold uppercase tracking-wide sm:text-xl">
+            <h2
+              id="roadmap-river-title"
+              className="text-lg font-bold uppercase tracking-wide sm:text-xl"
+            >
               El Río Cósmico
             </h2>
             <p className="text-sm text-white/60">
@@ -267,7 +309,10 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
             const sectorId = phase.playSectorId;
             const sprite = phase.spriteKey ? spriteUrl(phase.spriteKey, 4) : null;
             return (
-              <li key={phase.number} className="relative pb-6 last:pb-0 md:grid md:grid-cols-2 md:gap-4">
+              <li
+                key={phase.number}
+                className="relative pb-6 last:pb-0 md:grid md:grid-cols-2 md:gap-4"
+              >
                 <span
                   aria-hidden="true"
                   className={`absolute left-4 top-6 size-3 -translate-x-1/2 rounded-full border-2 bg-[#070814] md:left-1/2 ${tone.node}`}
@@ -277,7 +322,9 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
                     isLeft ? "md:col-start-1 md:mr-8" : "md:col-start-2 md:ml-8"
                   }`}
                 >
-                  <div className={`grid size-14 shrink-0 place-items-center border bg-black/30 ${tone.badge}`}>
+                  <div
+                    className={`grid size-14 shrink-0 place-items-center border bg-black/30 ${tone.badge}`}
+                  >
                     {sprite ? (
                       <img
                         src={sprite}
@@ -308,7 +355,10 @@ export function RoadmapRiver({ isOpen, onClose, onSelectStage }: RoadmapRiverPro
 
                     <ul className="space-y-1.5 pt-1">
                       {phase.features.map((feature) => (
-                        <li key={feature.text} className="flex gap-2 text-sm leading-relaxed text-white/75">
+                        <li
+                          key={feature.text}
+                          className="flex gap-2 text-sm leading-relaxed text-white/75"
+                        >
                           <feature.Icon className={`mt-0.5 size-3.5 shrink-0 ${tone.text}`} />
                           <span>{feature.text}</span>
                         </li>
