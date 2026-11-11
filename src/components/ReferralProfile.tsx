@@ -124,7 +124,7 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
       cache: "no-store",
     })
       .then(async (response) => {
-        const data = await response.json() as { wallet_address?: string };
+        const data = (await response.json()) as { wallet_address?: string };
         if (active && response.ok) setTicketWallet(data.wallet_address ?? "");
       })
       .catch(() => undefined);
@@ -145,8 +145,9 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ wallet_address: ticketWallet.trim() }),
       });
-      const data = await response.json() as { error?: string; success?: boolean };
-      if (!response.ok || !data.success) throw new Error(data.error ?? "No se pudo guardar la wallet.");
+      const data = (await response.json()) as { error?: string; success?: boolean };
+      if (!response.ok || !data.success)
+        throw new Error(data.error ?? "No se pudo guardar la wallet.");
       setWalletNotice("Wallet Polygon guardada para recibir premios.");
     } catch (cause) {
       setWalletError(cause instanceof Error ? cause.message : "No se pudo guardar la wallet.");
@@ -308,7 +309,10 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
         <p className="mt-1 text-xs text-white/55">
           Registra la dirección donde quieres recibir los premios de los rankings en USDT.
         </p>
-        <form onSubmit={(event) => void savePayoutWallet(event)} className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <form
+          onSubmit={(event) => void savePayoutWallet(event)}
+          className="mt-3 flex flex-col gap-2 sm:flex-row"
+        >
           <input
             aria-label="Wallet Polygon para premios"
             value={ticketWallet}
@@ -317,12 +321,24 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
             maxLength={42}
             className="h-10 min-w-0 flex-1 border border-white/15 bg-[#070814] px-3 font-mono text-xs text-white"
           />
-          <Button type="submit" disabled={walletSaving} className="h-10 rounded-none bg-emerald-300 px-4 text-[9px] font-bold uppercase text-black hover:bg-emerald-200 disabled:opacity-40">
+          <Button
+            type="submit"
+            disabled={walletSaving}
+            className="h-10 rounded-none bg-emerald-300 px-4 text-[9px] font-bold uppercase text-black hover:bg-emerald-200 disabled:opacity-40"
+          >
             {walletSaving ? "Guardando..." : "Guardar wallet"}
           </Button>
         </form>
-        {walletError ? <p role="alert" className="mt-2 text-xs text-rose-300">{walletError}</p> : null}
-        {walletNotice ? <p role="status" className="mt-2 text-xs text-emerald-200">{walletNotice}</p> : null}
+        {walletError ? (
+          <p role="alert" className="mt-2 text-xs text-rose-300">
+            {walletError}
+          </p>
+        ) : null}
+        {walletNotice ? (
+          <p role="status" className="mt-2 text-xs text-emerald-200">
+            {walletNotice}
+          </p>
+        ) : null}
       </section>
 
       <section className="border border-emerald-400/25 bg-[#0b0d1c]/75 p-4 sm:p-6">

@@ -215,11 +215,17 @@ export function RealEconomyAdminSection() {
           </section>
 
           <section className="space-y-2 border border-white/10 bg-black/20 p-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-200">Historial de ciclos de 15 días</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-200">
+              Historial de ciclos de 15 días
+            </h3>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-xs">
                 <thead className="text-white/45">
-                  <tr><th className="p-2">Inicio</th><th className="p-2">Cierre</th><th className="p-2">Estado</th></tr>
+                  <tr>
+                    <th className="p-2">Inicio</th>
+                    <th className="p-2">Cierre</th>
+                    <th className="p-2">Estado</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {data.cycles.map((cycle) => (
@@ -229,7 +235,13 @@ export function RealEconomyAdminSection() {
                       <td className="p-2">{cycle.status === "OPEN" ? "En curso" : "Cerrado"}</td>
                     </tr>
                   ))}
-                  {!data.cycles.length ? <tr><td colSpan={3} className="p-4 text-center text-white/40">Sin ciclos anteriores.</td></tr> : null}
+                  {!data.cycles.length ? (
+                    <tr>
+                      <td colSpan={3} className="p-4 text-center text-white/40">
+                        Sin ciclos anteriores.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -240,7 +252,10 @@ export function RealEconomyAdminSection() {
               <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-200">
                 <Crown className="size-4" /> Compras VIP pendientes
               </h3>
-              <p className="mt-1 text-[10px] text-white/45">Verifica el TX en PolygonScan y confirma que llegaron 10 USDT a la wallet de cobro antes de aprobar.</p>
+              <p className="mt-1 text-[10px] text-white/45">
+                Verifica el TX en PolygonScan y confirma que llegaron 10 USDT a la wallet de cobro
+                antes de aprobar.
+              </p>
             </div>
             <div className="overflow-x-auto border border-white/10">
               <table className="w-full min-w-[760px] text-left text-xs">
@@ -266,7 +281,9 @@ export function RealEconomyAdminSection() {
                       </td>
                       <td className="p-2 whitespace-nowrap">{date(payment.created_at)}</td>
                       <td className="p-2">{money(payment.amount_cents)}</td>
-                      <td className="max-w-40 break-all p-2 font-mono text-[10px] text-white/55">{payment.wallet_address}</td>
+                      <td className="max-w-40 break-all p-2 font-mono text-[10px] text-white/55">
+                        {payment.wallet_address}
+                      </td>
                       <td className="p-2">
                         <a
                           className="font-mono text-cyan-200 underline"
@@ -284,7 +301,11 @@ export function RealEconomyAdminSection() {
                             <button
                               disabled={busyId === payment.id}
                               onClick={() => {
-                                if (window.confirm("¿Verificaste en PolygonScan que llegaron 10 USDT a la wallet de cobro?")) {
+                                if (
+                                  window.confirm(
+                                    "¿Verificaste en PolygonScan que llegaron 10 USDT a la wallet de cobro?",
+                                  )
+                                ) {
                                   void action(payment.id, "approve-vip");
                                 }
                               }}
@@ -423,7 +444,9 @@ export function RealEconomyAdminSection() {
                       </td>
                       <td className="p-2">{payout.position}.º</td>
                       <td className="p-2">{payout.callsign}</td>
-                      <td className="max-w-40 break-all p-2 font-mono text-[10px] text-white/55">{payout.wallet_address || "Wallet pendiente"}</td>
+                      <td className="max-w-40 break-all p-2 font-mono text-[10px] text-white/55">
+                        {payout.wallet_address || "Wallet pendiente"}
+                      </td>
                       <td className="p-2 font-bold text-emerald-200">
                         {money(payout.prize_cents)}
                       </td>

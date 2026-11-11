@@ -1797,7 +1797,8 @@ async function handleRealEconomyRequest(
   const isPayoutWallet = url.pathname === "/api/rewards/wallet";
   const isRankings = url.pathname === "/api/rewards/rankings";
   const isAdmin = url.pathname === "/api/admin/real-economy";
-  if (!isVipInfo && !isVipPurchases && !isTickets && !isPayoutWallet && !isRankings && !isAdmin) return null;
+  if (!isVipInfo && !isVipPurchases && !isTickets && !isPayoutWallet && !isRankings && !isAdmin)
+    return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
   if (request.method !== "GET" && request.method !== "POST") {
     return json({ error: "Método no permitido." }, 405);
@@ -2046,9 +2047,12 @@ async function handleRealEconomyRequest(
     }
 
     if (action === "pay-prize") {
-      const payout = await db.prepare(
-        "SELECT r.pilot_id,COALESCE(wallet.wallet_address,'') AS wallet_address FROM ranking_prize_payouts r LEFT JOIN player_payout_wallets wallet ON wallet.pilot_id=r.pilot_id WHERE r.id=? AND r.status='PENDING'",
-      ).bind(id).first<{ pilot_id: string; wallet_address: string }>();
+      const payout = await db
+        .prepare(
+          "SELECT r.pilot_id,COALESCE(wallet.wallet_address,'') AS wallet_address FROM ranking_prize_payouts r LEFT JOIN player_payout_wallets wallet ON wallet.pilot_id=r.pilot_id WHERE r.id=? AND r.status='PENDING'",
+        )
+        .bind(id)
+        .first<{ pilot_id: string; wallet_address: string }>();
       if (!payout) return json({ error: "No se encontró el premio pendiente." }, 404);
       if (!/^0x[a-fA-F0-9]{40}$/.test(payout.wallet_address))
         return json({ error: "El ganador todavía no ha registrado su wallet Polygon." }, 409);
@@ -2132,20 +2136,28 @@ async function handleRealEconomyRequest(
 
   if (isPayoutWallet) {
     if (request.method === "GET") {
-      const wallet = await db.prepare(
-        "SELECT wallet_address,updated_at FROM player_payout_wallets WHERE pilot_id=?",
-      ).bind(account.pilot_id).first<{ wallet_address: string; updated_at: number }>();
-      return json({ wallet_address: wallet?.wallet_address ?? "", updated_at: wallet?.updated_at ?? null });
+      const wallet = await db
+        .prepare("SELECT wallet_address,updated_at FROM player_payout_wallets WHERE pilot_id=?")
+        .bind(account.pilot_id)
+        .first<{ wallet_address: string; updated_at: number }>();
+      return json({
+        wallet_address: wallet?.wallet_address ?? "",
+        updated_at: wallet?.updated_at ?? null,
+      });
     }
     const body = await readJson(request, 1024);
-    const walletAddress = typeof body?.["wallet_address"] === "string" ? body.wallet_address.trim() : "";
+    const walletAddress =
+      typeof body?.["wallet_address"] === "string" ? body.wallet_address.trim() : "";
     if (!/^0x[a-fA-F0-9]{40}$/.test(walletAddress))
       return json({ error: "Introduce una dirección válida de Polygon." }, 400);
     const now = Date.now();
-    await db.prepare(
-      `INSERT INTO player_payout_wallets (pilot_id,wallet_address,updated_at) VALUES (?,?,?)
+    await db
+      .prepare(
+        `INSERT INTO player_payout_wallets (pilot_id,wallet_address,updated_at) VALUES (?,?,?)
       ON CONFLICT(pilot_id) DO UPDATE SET wallet_address=excluded.wallet_address,updated_at=excluded.updated_at`,
-    ).bind(account.pilot_id, walletAddress, now).run();
+      )
+      .bind(account.pilot_id, walletAddress, now)
+      .run();
     return json({ success: true, wallet_address: walletAddress, updated_at: now });
   }
 
