@@ -9,35 +9,37 @@ import {
 import { vipDropMultiplier } from "../game/meta/vip";
 
 describe("World 1 horde pickup progression", () => {
-  it("increases normal drops from horde 1 to horde 10", () => {
-    const chances = Array.from({ length: HORDE_COUNT }, (_, index) =>
-      world1PickupChanceAtHorde(index),
-    );
-
-    expect(chances[0]).toBe(0.002);
-    expect(chances[1]).toBeCloseTo(0.0035);
-    expect(chances[9]).toBeCloseTo(0.0155);
+  it("uses the agreed scarce, progressive normal drop probabilities", () => {
+    const expected = [0.0005, 0.0008, 0.0011, 0.0014, 0.0017, 0.002, 0.0023, 0.0026, 0.0029, 0.0032];
+    const chances = Array.from({ length: HORDE_COUNT }, (_, index) => world1PickupChanceAtHorde(index));
+    expect(chances).toEqual(expected);
     for (let index = 1; index < chances.length; index++) {
       expect(chances[index]).toBeGreaterThan(chances[index - 1]!);
     }
   });
 
-  it("gives elite enemies a higher, progressive drop chance", () => {
-    expect(world1PickupChanceAtHorde(0, true)).toBe(0.015);
-    expect(world1PickupChanceAtHorde(1, true)).toBeCloseTo(0.019);
-    expect(world1PickupChanceAtHorde(9, true)).toBeCloseTo(0.051);
+  it("keeps elite drop chances modest and progressive", () => {
+    const expected = [0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005, 0.006];
+    expect(Array.from({ length: HORDE_COUNT }, (_, index) => world1PickupChanceAtHorde(index, true))).toEqual(expected);
   });
 
-  it("gives VIP a thirty-fivefold drop chance at every horde", () => {
-    expect(world1PickupChanceAtHorde(0) * vipDropMultiplier(true)).toBeCloseTo(0.07);
-    expect(world1PickupChanceAtHorde(9) * vipDropMultiplier(true)).toBeCloseTo(0.5425);
-    expect(world1PickupChanceAtHorde(9, true) * vipDropMultiplier(true)).toBeCloseTo(1.785);
+  it("applies VIP x20 while preserving Free probabilities", () => {
+    expect(vipDropMultiplier(true)).toBe(20);
     expect(vipDropMultiplier(false)).toBe(1);
+    expect(world1PickupChanceAtHorde(0) * vipDropMultiplier(true)).toBeCloseTo(0.01);
+    expect(world1PickupChanceAtHorde(9) * vipDropMultiplier(true)).toBeCloseTo(0.064);
+    expect(world1PickupChanceAtHorde(9, true) * vipDropMultiplier(true)).toBeCloseTo(0.12);
+  });
+
+  it("gives larvae half the normal chance, including VIP", () => {
+    expect(world1PickupChanceAtHorde(0, false, true)).toBe(0.00025);
+    expect(world1PickupChanceAtHorde(9, false, true)).toBe(0.0016);
+    expect(world1PickupChanceAtHorde(0, false, true) * vipDropMultiplier(true)).toBeCloseTo(0.005);
   });
 
   it("clamps out-of-range horde indices", () => {
-    expect(world1PickupChanceAtHorde(-1)).toBe(0.002);
-    expect(world1PickupChanceAtHorde(99)).toBe(0.0155);
+    expect(world1PickupChanceAtHorde(-1)).toBe(0.0005);
+    expect(world1PickupChanceAtHorde(99)).toBe(0.0032);
   });
 });
 
