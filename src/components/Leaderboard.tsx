@@ -105,7 +105,15 @@ export function Leaderboard() {
                   <td className="px-2 py-2 font-semibold text-cyan-300">{entry.position}</td>
                   <td className="max-w-40 truncate px-2 py-2 text-white">{entry.callsign}</td>
                   <td className="px-2 py-2 text-right font-bold text-emerald-300">
-                    {formatUsdt(entry.prize_usdt)}
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <span
+                        aria-hidden="true"
+                        className="grid size-4 place-items-center rounded-full border border-emerald-300/60 text-[10px] font-black leading-none"
+                      >
+                        ₮
+                      </span>
+                      {formatUsdt(entry.prize_usdt)}
+                    </span>
                   </td>
                 </tr>
               ))}
