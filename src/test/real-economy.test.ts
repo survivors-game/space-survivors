@@ -301,6 +301,22 @@ describe("real-money VIP and ranking economy", () => {
       { ranking_type: "BOSSES", position: 1, prize_cents: 60, status: "PENDING" },
       { ranking_type: "REFERRALS", position: 1, prize_cents: 60, status: "PENDING" },
     ]);
+    expect(
+      db
+        .prepare("SELECT ranking_type,amount_cents FROM ranking_pool_reserves ORDER BY ranking_type")
+        .all(),
+    ).toEqual([
+      { ranking_type: "BOSSES", amount_cents: 90 },
+      { ranking_type: "REFERRALS", amount_cents: 90 },
+    ]);
+
+    const adminPools = await call<{
+      pools: Array<{ ranking_type: "BOSSES" | "REFERRALS"; total_cents: number }>;
+    }>("/api/admin/real-economy", ADMIN_TOKEN, "GET", undefined, true);
+    expect(adminPools.payload.pools).toEqual([
+      { ranking_type: "BOSSES", total_cents: 90 },
+      { ranking_type: "REFERRALS", total_cents: 90 },
+    ]);
 
     const prize = db.prepare(
       "SELECT id FROM ranking_prize_payouts WHERE ranking_type='REFERRALS' AND status='PENDING'",
