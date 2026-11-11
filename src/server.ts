@@ -3414,32 +3414,9 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
           ON p2p_orders(ad_id) WHERE status = 'PENDIENTE'`,
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_boss_attempts_active
           ON boss_attempts(pilot_id, boss_id) WHERE claimed_at IS NULL`,
-        `CREATE TRIGGER IF NOT EXISTS market_publish_pilot_guard
-          AFTER UPDATE OF obsidian ON pilots
-          WHEN NEW.obsidian = OLD.obsidian - 1
-          BEGIN
-            UPDATE market_publish_attempts SET obsidian_updated = 1
-            WHERE pilot_id = NEW.pilot_id AND created_at = NEW.updated_at;
-          END`,
-        `CREATE TRIGGER IF NOT EXISTS market_publish_inventory_guard
-          AFTER UPDATE OF is_locked ON pilot_inventory
-          WHEN OLD.is_locked = 0 AND NEW.is_locked = 1
-          BEGIN
-            UPDATE market_publish_attempts SET inventory_updated = 1
-            WHERE pilot_id = NEW.pilot_id AND inventory_id = NEW.id
-              AND created_at = NEW.updated_at;
-          END`,
-        `CREATE TRIGGER IF NOT EXISTS market_publish_require_guards
-          BEFORE INSERT ON p2p_ads
-          WHEN NOT EXISTS (
-            SELECT 1 FROM market_publish_attempts
-            WHERE pilot_id = NEW.seller_pilot_id
-              AND inventory_id = NEW.inventory_id
-              AND obsidian_updated = 1 AND inventory_updated = 1
-          )
-          BEGIN
-            SELECT RAISE(ABORT, 'market publication checks failed');
-          END`,
+        `DROP TRIGGER IF EXISTS market_publish_pilot_guard`,
+        `DROP TRIGGER IF EXISTS market_publish_inventory_guard`,
+        `DROP TRIGGER IF EXISTS market_publish_require_guards`,
         `CREATE TRIGGER IF NOT EXISTS market_cancel_require_inventory
           BEFORE UPDATE OF status ON p2p_ads
           WHEN NEW.status = 'CANCELADO' AND OLD.status != 'CANCELADO'
