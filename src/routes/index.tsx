@@ -2066,7 +2066,6 @@ function Index() {
             open={vipModalOpen}
             onClose={() => setVipModalOpen(false)}
             vipUntil={vipUntil}
-            obsidian={marketPilot?.obsidian ?? null}
           />
         ) : null}
 
