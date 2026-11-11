@@ -6821,7 +6821,7 @@ async function handleMarketRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
 
-  if (url.pathname.startsWith("/api/market/")) {
+  if (url.pathname.startsWith("/api/market/") || isAdminMarketPath) {
     const now = Date.now();
     await db.prepare("UPDATE p2p_orders SET status = 'CANCELADA', updated_at = ? WHERE status = 'PENDIENTE' AND payment_deadline_at <= ?").bind(now, now).run();
     const overdue = await db.prepare("SELECT id, buyer_pilot_id FROM p2p_orders WHERE status = 'PAGO_REPORTADO' AND release_deadline_at <= ? LIMIT 25").bind(now).all<{ id: string; buyer_pilot_id: string }>();
