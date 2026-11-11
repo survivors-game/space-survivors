@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -50,6 +50,7 @@ import { ENEMIES } from "@/game/data/enemies";
 import { PASSIVES, passiveById } from "@/game/data/passives";
 import { SHIPS, shipById } from "@/game/data/ships";
 import { STAGES, stageById } from "@/game/data/stages";
+import { RoadmapRiver } from "@/components/roadmap/RoadmapRiver";
 import { WEAPONS } from "@/game/data/weapons";
 import { Engine, type BossAttempt } from "@/game/engine";
 import { createBossCombatProof } from "@/game/meta/boss-combat-proof";
@@ -194,6 +195,9 @@ async function refreshAccountProgress(): Promise<void> {
   ProgressStore.set(sanitize(payload.progress));
 }
 
+/** Fase del roadmap necesaria para desplegar en cada sector. Los sectores no listados están libres. */
+const STAGE_PHASE_LOCK: Record<string, number> = { ash: 2, abyss: 4, omega: 6 };
+
 function Index() {
   const [screen, setScreen] = useState<Screen>("MENU");
   const [returnScreen, setReturnScreen] = useState<Screen>("MENU");
@@ -201,6 +205,7 @@ function Index() {
   const [progress, setProgress] = useState<Progress>(() => defaultProgress());
   const [selectedShipId, setSelectedShipId] = useState("falcon");
   const [selectedStageId, setSelectedStageId] = useState("nova");
+  const [roadmapOpen, setRoadmapOpen] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [hud, setHud] = useState<HudState | null>(null);
   const [choices, setChoices] = useState<UpgradeChoice[]>([]);
@@ -1202,7 +1207,7 @@ function Index() {
   };
 
   const chooseStage = (id: string) => {
-    if (!progress.stages.includes(id)) return;
+    if (!progress.stages.includes(id) || STAGE_PHASE_LOCK[id] !== undefined) return;
     setSelectedStageId(id);
     saveProgress({ ...progress, selectedStage: id });
   };
@@ -2080,6 +2085,7 @@ function Index() {
                 setScreen("HANGAR");
               }}
               onOpenVip={() => setVipModalOpen(true)}
+              onOpenRoadmap={() => setRoadmapOpen(true)}
             />
           </section>
         ) : null}
@@ -2285,7 +2291,8 @@ function Index() {
                 </div>
                 <div className="space-y-2">
                   {STAGES.map((stage, index) => {
-                    const unlocked = progress.stages.includes(stage.id);
+                    const phaseLock = STAGE_PHASE_LOCK[stage.id];
+                    const unlocked = progress.stages.includes(stage.id) && phaseLock === undefined;
                     const active = selectedStageId === stage.id;
                     return (
                       <button
@@ -2293,7 +2300,7 @@ function Index() {
                         type="button"
                         disabled={!unlocked}
                         onClick={() => chooseStage(stage.id)}
-                        className={`flex w-full items-center gap-4 border p-4 text-left transition ${active ? "border-[#ff0055]/60 bg-[#ff0055]/[0.07]" : "border-white/10 bg-white/[0.025] hover:border-white/25"} ${!unlocked ? "cursor-not-allowed opacity-40" : ""}`}
+                        className={`flex w-full items-center gap-4 border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${active ? "border-[#ff0055]/60 bg-[#ff0055]/[0.07]" : "border-white/10 bg-white/[0.025] hover:border-white/25"} ${!unlocked ? "cursor-not-allowed opacity-40" : ""}`}
                       >
                         <span
                           className={`grid size-10 shrink-0 place-items-center border text-xs font-bold ${active ? "border-[#ff0055]/40 bg-[#ff0055]/10 text-[#ff789b]" : "border-white/10 text-white/45"}`}
@@ -2304,8 +2311,16 @@ function Index() {
                           <span className="block truncate text-xs font-bold uppercase tracking-wider">
                             {stage.name}
                           </span>
-                          <span className="mt-1 block text-[9px] uppercase tracking-wider text-white/40">
-                            {stage.hazardName}
+                          <span
+                            className={`mt-1 block uppercase tracking-wider ${
+                              phaseLock !== undefined
+                                ? "text-xs font-semibold text-amber-300"
+                                : "text-[9px] text-white/40"
+                            }`}
+                          >
+                            {phaseLock !== undefined
+                              ? `🔒 DESPLIEGUE EN FASE ${phaseLock}`
+                              : stage.hazardName}
                           </span>
                         </span>
                         <span className="shrink-0 text-right">
@@ -2973,6 +2988,11 @@ function Index() {
           </section>
         ) : null}
 
+        <RoadmapRiver
+          isOpen={roadmapOpen}
+          onClose={() => setRoadmapOpen(false)}
+          onSelectStage={(stageId) => chooseStage(stageId)}
+        />
         {googlePlayer && (screen === "MENU" || screen === "HANGAR" || screen === "SELECT") && (
           <GameChat />
         )}

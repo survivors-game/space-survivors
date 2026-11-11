@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
@@ -8,6 +8,7 @@ import {
   Gem,
   Hexagon,
   Medal,
+  Orbit,
   MessageSquare,
   Radar,
   Rocket,
@@ -46,6 +47,8 @@ export interface PilotHubProps {
   onOpenProfile: () => void;
   /** Abre la membresía VIP. Opcional: sin él, el distintivo no es interactivo. */
   onOpenVip?: () => void;
+  /** Abre el roadmap del Río Cósmico. Opcional. */
+  onOpenRoadmap?: () => void;
 }
 
 const SEGMENTS = 10;
@@ -227,6 +230,7 @@ export function PilotHub({
   onOpenMarket,
   onOpenProfile,
   onOpenVip,
+  onOpenRoadmap,
 }: PilotHubProps) {
   const shipImage = useMemo(() => spriteUrl(selectedShip.sprite, 4), [selectedShip.sprite]);
   const bars = computeShipBars(selectedShip);
@@ -234,10 +238,7 @@ export function PilotHub({
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
   const rank = rankFor(runs);
-  const plateId = `PLT-${pilotId
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 8)
-    .toUpperCase()}`;
+  const plateId = `PLT-${pilotId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
   const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
 
   return (
@@ -354,7 +355,8 @@ export function PilotHub({
                   className="absolute bottom-7 h-16 w-5"
                   style={{
                     [side]: "15%",
-                    background: "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
+                    background:
+                      "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
                     border: "1px solid rgba(253,224,71,0.6)",
                     boxShadow: "0 0 4px rgba(253,224,71,0.15)",
                   }}
@@ -395,9 +397,7 @@ export function PilotHub({
                     key={row.label}
                     className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
                   >
-                    <dt className="text-[10px] uppercase tracking-wide text-white/55">
-                      {row.label}
-                    </dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-white/55">{row.label}</dt>
                     <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
                   </div>
                 ))}
@@ -461,6 +461,15 @@ export function PilotHub({
             </p>
           </section>
 
+          <button
+            type="button"
+            onClick={() => onOpenRoadmap?.()}
+            disabled={!onOpenRoadmap}
+            className="flex w-full items-center justify-center gap-2 border border-cyan-500/30 bg-[#0b0d1c]/90 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-cyan-200 transition enabled:hover:border-cyan-300/60 enabled:hover:bg-cyan-400/5 disabled:cursor-default"
+          >
+            <Orbit className="size-4 shrink-0" />
+            [ RÍO CÓSMICO // ROADMAP ]
+          </button>
           <div className="grid grid-cols-2 gap-2">
             <NavButton
               title="HANGAR"
@@ -652,9 +661,7 @@ function RewardsFeed() {
             connected ? "text-emerald-300" : "text-white/45"
           }`}
         >
-          <span
-            className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/30"}`}
-          />
+          <span className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/30"}`} />
           {connected ? "En vivo" : "Reconectando..."}
         </span>
       </div>
