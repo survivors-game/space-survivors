@@ -3073,7 +3073,7 @@ async function handleAdminAuthRequest(
           "UPDATE ranking_cycle_boss_scores SET score=0,last_boss_obsidian=0,updated_at=?",
         ).bind(now),
         db.prepare(
-          "DELETE FROM auth_sessions WHERE wallet_address != ?",
+          "DELETE FROM auth_sessions WHERE wallet_address LIKE 'google:%' AND wallet_address != ?",
         ).bind("google:" + account.google_sub),
         db.prepare(
           "INSERT INTO admin_access_logs (id,event,result,ip_hash,admin_email,created_at) VALUES (?,?,?,?,?,?)",
