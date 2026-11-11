@@ -1,4 +1,4 @@
- import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ChevronRight,
@@ -234,7 +234,10 @@ export function PilotHub({
   const pips = Math.min(5, Math.max(1, Math.round(selectedStage.difficulty * 2)));
   const hasHazard = selectedStage.hazard !== "none";
   const rank = rankFor(runs);
-  const plateId = `PLT-${pilotId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
+  const plateId = `PLT-${pilotId
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 8)
+    .toUpperCase()}`;
   const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
 
   return (
@@ -351,8 +354,7 @@ export function PilotHub({
                   className="absolute bottom-7 h-16 w-5"
                   style={{
                     [side]: "15%",
-                    background:
-                      "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
+                    background: "repeating-linear-gradient(45deg, #fde047 0 6px, #111827 6px 12px)",
                     border: "1px solid rgba(253,224,71,0.6)",
                     boxShadow: "0 0 4px rgba(253,224,71,0.15)",
                   }}
@@ -393,7 +395,9 @@ export function PilotHub({
                     key={row.label}
                     className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
                   >
-                    <dt className="text-[10px] uppercase tracking-wide text-white/55">{row.label}</dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-white/55">
+                      {row.label}
+                    </dt>
                     <dd className="text-[11px] tabular-nums text-white">{row.value}</dd>
                   </div>
                 ))}
@@ -648,7 +652,9 @@ function RewardsFeed() {
             connected ? "text-emerald-300" : "text-white/45"
           }`}
         >
-          <span className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/30"}`} />
+          <span
+            className={`size-1.5 rounded-full ${connected ? "bg-emerald-400" : "bg-white/30"}`}
+          />
           {connected ? "En vivo" : "Reconectando..."}
         </span>
       </div>
