@@ -190,6 +190,7 @@ export interface P2PPurchaseOrder {
   price_minor: number;
   price_currency: P2PCurrency;
   commission_obsidian: number;
+  payment_deadline_at: number;
 }
 
 export interface P2PHistoryOrder {
@@ -207,4 +208,8 @@ export interface P2PHistoryOrder {
   counterpart: string;
   payment_method: P2PPublicPaymentMethod | null;
   payment_details: string | null;
+  payment_reference: string | null;
+  payment_proof_url: string | null;
+  payment_deadline_at: number | null;
+  release_deadline_at: number | null;
 }
