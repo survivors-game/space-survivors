@@ -1465,6 +1465,589 @@ async function handleSocialRequest(
   }
 }
 
+
+let realEconomySchemaPromise: Promise<void> | undefined;
+
+async function ensureRealEconomySchema(db: D1Database): Promise<void> {
+  if (!realEconomySchemaPromise) {
+    realEconomySchemaPromise = (async () => {
+      const statements = [
+        \`CREATE TABLE IF NOT EXISTS vip_payment_requests (
+          id TEXT PRIMARY KEY,
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents = 1000),
+          currency TEXT NOT NULL CHECK (currency = 'USDT'),
+          network TEXT NOT NULL CHECK (network = 'POLYGON'),
+          tx_hash TEXT NOT NULL UNIQUE,
+          wallet_address TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+          created_at INTEGER NOT NULL,
+          reviewed_at INTEGER,
+          reviewed_by TEXT,
+          rejection_reason TEXT
+        )\`,
+        \`CREATE INDEX IF NOT EXISTS idx_vip_payment_status_created
+          ON vip_payment_requests(status, created_at DESC)\`,
+        \`CREATE TABLE IF NOT EXISTS vip_purchase_effects (
+          vip_payment_id TEXT PRIMARY KEY REFERENCES vip_payment_requests(id),
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          vip_applied_at INTEGER
+        )\`,
+        \`CREATE TABLE IF NOT EXISTS referral_vip_rewards (
+          referred_pilot_id TEXT PRIMARY KEY REFERENCES pilots(pilot_id),
+          vip_payment_id TEXT NOT NULL UNIQUE REFERENCES vip_payment_requests(id),
+          referrer_pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents = 100),
+          created_at INTEGER NOT NULL
+        )\`,
+        \`CREATE TABLE IF NOT EXISTS real_money_ticket_ledger (
+          id TEXT PRIMARY KEY,
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          delta_cents INTEGER NOT NULL CHECK (delta_cents != 0),
+          kind TEXT NOT NULL CHECK (kind IN ('REFERRAL_VIP','TICKET_PAYOUT')),
+          reference_id TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL
+        )\`,
+        \`CREATE INDEX IF NOT EXISTS idx_real_money_tickets_pilot
+          ON real_money_ticket_ledger(pilot_id, created_at DESC)\`,
+        \`CREATE TABLE IF NOT EXISTS ticket_payout_requests (
+          id TEXT PRIMARY KEY,
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents > 0 AND amount_cents % 100 = 0),
+          wallet_address TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('PENDING','PAID','REJECTED')),
+          tx_hash TEXT,
+          reason TEXT,
+          created_at INTEGER NOT NULL,
+          reviewed_at INTEGER,
+          reviewed_by TEXT
+        )\`,
+        \`CREATE INDEX IF NOT EXISTS idx_ticket_payout_status
+          ON ticket_payout_requests(status, created_at DESC)\`,
+        \`CREATE TABLE IF NOT EXISTS ranking_cycles (
+          id TEXT PRIMARY KEY,
+          starts_at INTEGER NOT NULL,
+          ends_at INTEGER NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('OPEN','CLOSED')),
+          created_at INTEGER NOT NULL,
+          closed_at INTEGER
+        )\`,
+        \`CREATE UNIQUE INDEX IF NOT EXISTS idx_ranking_cycles_one_open
+          ON ranking_cycles(status) WHERE status = 'OPEN'\`,
+        \`CREATE TABLE IF NOT EXISTS ranking_cycle_boss_scores (
+          cycle_id TEXT NOT NULL REFERENCES ranking_cycles(id),
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          score INTEGER NOT NULL DEFAULT 0 CHECK (score >= 0),
+          last_boss_obsidian INTEGER NOT NULL DEFAULT 0 CHECK (last_boss_obsidian >= 0),
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (cycle_id, pilot_id)
+        )\`,
+        \`CREATE TABLE IF NOT EXISTS ranking_pool_contributions (
+          id TEXT PRIMARY KEY,
+          vip_payment_id TEXT NOT NULL REFERENCES vip_payment_requests(id),
+          ranking_type TEXT NOT NULL CHECK (ranking_type IN ('BOSSES','REFERRALS')),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents = 150),
+          created_at INTEGER NOT NULL,
+          UNIQUE(vip_payment_id, ranking_type)
+        )\`,
+        \`CREATE TABLE IF NOT EXISTS ranking_prize_payouts (
+          id TEXT PRIMARY KEY,
+          cycle_id TEXT NOT NULL REFERENCES ranking_cycles(id),
+          ranking_type TEXT NOT NULL CHECK (ranking_type IN ('BOSSES','REFERRALS')),
+          position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 5),
+          pilot_id TEXT NOT NULL REFERENCES pilots(pilot_id),
+          score INTEGER NOT NULL,
+          prize_cents INTEGER NOT NULL CHECK (prize_cents > 0),
+          status TEXT NOT NULL CHECK (status IN ('PENDING','PAID')),
+          tx_hash TEXT,
+          created_at INTEGER NOT NULL,
+          paid_at INTEGER,
+          paid_by TEXT,
+          UNIQUE(cycle_id, ranking_type, position),
+          UNIQUE(cycle_id, ranking_type, pilot_id)
+        )\`,
+        \`CREATE TABLE IF NOT EXISTS real_economy_admin_logs (
+          id TEXT PRIMARY KEY,
+          action TEXT NOT NULL,
+          reference_id TEXT NOT NULL,
+          detail TEXT NOT NULL,
+          admin_email TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )\`,
+      ];
+      for (const statement of statements) await db.prepare(statement).run();
+    })().catch((error) => {
+      realEconomySchemaPromise = undefined;
+      throw error;
+    });
+  }
+  return realEconomySchemaPromise;
+}
+
+type RankingCycleRow = { id: string; starts_at: number; ends_at: number };
+
+const RANKING_PRIZE_SHARES = [40, 25, 15, 12, 8] as const;
+const RANKING_CYCLE_MS = 15 * 24 * 60 * 60 * 1000;
+const VIP_PRICE_CENTS = 1000;
+const VIP_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+async function createRankingCycle(
+  db: D1Database,
+  startsAt = Date.now(),
+): Promise<RankingCycleRow> {
+  const cycle = {
+    id: \`rank_\${randomHex(10)}\`,
+    starts_at: startsAt,
+    ends_at: startsAt + RANKING_CYCLE_MS,
+  };
+  try {
+    await db
+      .prepare("INSERT INTO ranking_cycles (id,starts_at,ends_at,status,created_at) VALUES (?,?,?,'OPEN',?)")
+      .bind(cycle.id, cycle.starts_at, cycle.ends_at, Date.now())
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO ranking_cycle_boss_scores (cycle_id,pilot_id,score,last_boss_obsidian,updated_at) SELECT ?,pilot_id,0,boss_obsidian,? FROM pilots",
+      )
+      .bind(cycle.id, Date.now())
+      .run();
+    return cycle;
+  } catch (error) {
+    const existing = await db
+      .prepare("SELECT id,starts_at,ends_at FROM ranking_cycles WHERE status='OPEN' LIMIT 1")
+      .first<RankingCycleRow>();
+    if (existing) return existing;
+    throw error;
+  }
+}
+
+async function rankingRowsForCycle(
+  db: D1Database,
+  cycle: RankingCycleRow,
+  rankingType: "BOSSES" | "REFERRALS",
+): Promise<{ pilot_id: string; callsign: string; score: number }[]> {
+  if (rankingType === "BOSSES") {
+    const { results = [] } = await db
+      .prepare(
+        \`SELECT s.pilot_id,
+          COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,
+          s.score
+        FROM ranking_cycle_boss_scores s
+        JOIN pilots p ON p.pilot_id=s.pilot_id
+        LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+        WHERE s.cycle_id=? AND s.score>0
+        ORDER BY s.score DESC,callsign ASC,s.pilot_id ASC LIMIT 5\`,
+      )
+      .bind(cycle.id)
+      .all<{ pilot_id: string; callsign: string; score: number }>();
+    return results;
+  }
+  const { results = [] } = await db
+    .prepare(
+      \`SELECT r.referrer_pilot_id AS pilot_id,
+        COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,
+        COUNT(*) AS score
+      FROM referrals r
+      JOIN pilots p ON p.pilot_id=r.referrer_pilot_id
+      LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+      WHERE r.redeemed_at>=? AND r.redeemed_at<?
+      GROUP BY r.referrer_pilot_id
+      ORDER BY score DESC,callsign ASC,p.pilot_id ASC LIMIT 5\`,
+    )
+    .bind(cycle.starts_at, cycle.ends_at)
+    .all<{ pilot_id: string; callsign: string; score: number }>();
+  return results;
+}
+
+async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Promise<void> {
+  const [bosses, referrals, pools] = await Promise.all([
+    rankingRowsForCycle(db, cycle, "BOSSES"),
+    rankingRowsForCycle(db, cycle, "REFERRALS"),
+    db
+      .prepare(
+        "SELECT ranking_type,SUM(amount_cents) AS total FROM ranking_pool_contributions WHERE created_at>=? AND created_at<? GROUP BY ranking_type",
+      )
+      .bind(cycle.starts_at, cycle.ends_at)
+      .all<{ ranking_type: "BOSSES" | "REFERRALS"; total: number }>(),
+  ]);
+  const poolByType = new Map((pools.results ?? []).map((row) => [row.ranking_type, Number(row.total)]));
+  const statements: D1Statement[] = [];
+  for (const [type, rows] of [["BOSSES", bosses], ["REFERRALS", referrals]] as const) {
+    const pool = poolByType.get(type) ?? 0;
+    let allocated = 0;
+    rows.forEach((row, index) => {
+      const amount =
+        index === rows.length - 1
+          ? pool - allocated
+          : Math.floor((pool * RANKING_PRIZE_SHARES[index]!) / 100);
+      allocated += amount;
+      if (amount <= 0) return;
+      statements.push(
+        db
+          .prepare(
+            "INSERT OR IGNORE INTO ranking_prize_payouts (id,cycle_id,ranking_type,position,pilot_id,score,prize_cents,status,created_at) VALUES (?,?,?,?,?,?,?,'PENDING',?)",
+          )
+          .bind(
+            \`prize_\${randomHex(10)}\`,
+            cycle.id,
+            type,
+            index + 1,
+            row.pilot_id,
+            row.score,
+            amount,
+            Date.now(),
+          ),
+      );
+    });
+  }
+  statements.push(
+    db
+      .prepare("UPDATE ranking_cycles SET status='CLOSED',closed_at=? WHERE id=? AND status='OPEN'")
+      .bind(Date.now(), cycle.id),
+  );
+  if (statements.length) await db.batch(statements);
+}
+
+async function getCurrentRankingCycle(db: D1Database, now = Date.now()): Promise<RankingCycleRow> {
+  let cycle = await db
+    .prepare("SELECT id,starts_at,ends_at FROM ranking_cycles WHERE status='OPEN' LIMIT 1")
+    .first<RankingCycleRow>();
+  if (!cycle) cycle = await createRankingCycle(db, now);
+  let safety = 0;
+  while (cycle.ends_at <= now && safety < 100) {
+    await finalizeRankingCycle(db, cycle);
+    cycle = await createRankingCycle(db, cycle.ends_at);
+    safety += 1;
+  }
+  return cycle;
+}
+
+async function recordRankingBossProgress(
+  db: D1Database,
+  pilotId: string,
+  currentBossObsidian: number,
+): Promise<void> {
+  const cycle = await getCurrentRankingCycle(db);
+  const now = Date.now();
+  await db
+    .prepare(
+      \`INSERT INTO ranking_cycle_boss_scores
+        (cycle_id,pilot_id,score,last_boss_obsidian,updated_at)
+      VALUES (?,?,0,?,?)
+      ON CONFLICT(cycle_id,pilot_id) DO UPDATE SET
+        score=ranking_cycle_boss_scores.score +
+          MAX(0,excluded.last_boss_obsidian-ranking_cycle_boss_scores.last_boss_obsidian),
+        last_boss_obsidian=MAX(ranking_cycle_boss_scores.last_boss_obsidian,excluded.last_boss_obsidian),
+        updated_at=excluded.updated_at\`,
+    )
+    .bind(cycle.id, pilotId, currentBossObsidian, now)
+    .run();
+}
+
+async function getPublicRankingPayload(db: D1Database): Promise<Record<string, unknown>> {
+  const cycle = await getCurrentRankingCycle(db);
+  const [bosses, referrals, pools] = await Promise.all([
+    rankingRowsForCycle(db, cycle, "BOSSES"),
+    rankingRowsForCycle(db, cycle, "REFERRALS"),
+    db
+      .prepare(
+        "SELECT ranking_type,SUM(amount_cents) AS total FROM ranking_pool_contributions WHERE created_at>=? AND created_at<? GROUP BY ranking_type",
+      )
+      .bind(cycle.starts_at, cycle.ends_at)
+      .all<{ ranking_type: "BOSSES" | "REFERRALS"; total: number }>(),
+  ]);
+  const poolByType = new Map((pools.results ?? []).map((row) => [row.ranking_type, Number(row.total)]));
+  const withPrizes = (rows: { pilot_id: string; callsign: string; score: number }[], type: "BOSSES" | "REFERRALS") =>
+    rows.map((row, index) => ({
+      position: index + 1,
+      pilot_id: row.pilot_id,
+      callsign: row.callsign,
+      prize_usdt: Number((((poolByType.get(type) ?? 0) * RANKING_PRIZE_SHARES[index]!) / 10000).toFixed(2)),
+    }));
+  return {
+    cycle_ends_at: cycle.ends_at,
+    bosses: withPrizes(bosses, "BOSSES"),
+    referrals: withPrizes(referrals, "REFERRALS"),
+  };
+}
+
+async function handleRealEconomyRequest(
+  request: Request,
+  env: WorkerEnv | undefined,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  const isVipInfo = url.pathname === "/api/vip/payment-info";
+  const isVipPurchases = url.pathname === "/api/vip/purchases";
+  const isTickets = url.pathname === "/api/rewards/tickets";
+  const isRankings = url.pathname === "/api/rewards/rankings";
+  const isAdmin = url.pathname === "/api/admin/real-economy";
+  if (!isVipInfo && !isVipPurchases && !isTickets && !isRankings && !isAdmin) return null;
+  if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
+  if (request.method !== "GET" && request.method !== "POST") {
+    return json({ error: "Método no permitido." }, 405);
+  }
+  if (request.method === "POST" && !isSameOriginPost(request, url)) {
+    return json({ error: "Solicitud no autorizada." }, 403);
+  }
+  const db = env.DB;
+  try {
+    await ensureAuthSchema(db);
+    await ensureMarketSchema(db);
+    await ensureRealEconomySchema(db);
+  } catch (error) {
+    console.error("No se pudo preparar la economía real:", error);
+    return json({ error: "No se pudo preparar la economía real." }, 503);
+  }
+
+  if (isRankings) {
+    if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
+    try {
+      return json(await getPublicRankingPayload(db));
+    } catch (error) {
+      console.error("No se pudieron cargar los premios del ranking:", error);
+      return json({ error: "No se pudieron cargar los premios." }, 503);
+    }
+  }
+
+  const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
+  if (!account) return json({ error: "Inicia sesión con Google para continuar." }, 401);
+
+  if (isAdmin) {
+    if (
+      account.email.toLowerCase() !== ADMIN_EMAIL ||
+      !(await hasValidAdminSession(db, request, account.google_sub))
+    ) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
+    }
+    if (request.method === "GET") {
+      const cycle = await getCurrentRankingCycle(db);
+      const [vipPayments, ticketRequests, cycles, payouts, pools] = await Promise.all([
+        db.prepare(
+          \`SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
+          FROM vip_payment_requests r JOIN pilots p ON p.pilot_id=r.pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+          LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
+          ORDER BY CASE WHEN r.status='PENDING' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100\`,
+        ).all(),
+        db.prepare(
+          \`SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
+          FROM ticket_payout_requests r JOIN pilots p ON p.pilot_id=r.pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+          LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
+          ORDER BY CASE WHEN r.status='PENDING' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 100\`,
+        ).all(),
+        db.prepare("SELECT * FROM ranking_cycles ORDER BY starts_at DESC LIMIT 10").all(),
+        db.prepare(
+          \`SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign
+          FROM ranking_prize_payouts r JOIN pilots p ON p.pilot_id=r.pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+          ORDER BY r.created_at DESC LIMIT 100\`,
+        ).all(),
+        db.prepare(
+          "SELECT ranking_type,SUM(amount_cents) AS total_cents FROM ranking_pool_contributions WHERE created_at>=? AND created_at<? GROUP BY ranking_type",
+        ).bind(cycle.starts_at, cycle.ends_at).all(),
+      ]);
+      return json({
+        distribution: { vip_price_usd: 10, admin_usd: 6, referral_usd: 1, bosses_pool_usd: 1.5, referrals_pool_usd: 1.5 },
+        cycle,
+        pools: pools.results ?? [],
+        vip_payments: vipPayments.results ?? [],
+        ticket_requests: ticketRequests.results ?? [],
+        cycles: cycles.results ?? [],
+        payouts: payouts.results ?? [],
+      });
+    }
+
+    const body = await readJson(request, 4096);
+    const action = typeof body?.["action"] === "string" ? body["action"] : "";
+    const id = typeof body?.["id"] === "string" ? body["id"].trim() : "";
+    const now = Date.now();
+    const log = (referenceId: string, detail: string) =>
+      db.prepare(
+        "INSERT INTO real_economy_admin_logs (id,action,reference_id,detail,admin_email,created_at) VALUES (?,?,?,?,?,?)",
+      ).bind(randomHex(12), action, referenceId, detail.slice(0, 240), account.email, now);
+
+    if (action === "approve-vip") {
+      const payment = await db.prepare(
+        "SELECT id,pilot_id,status FROM vip_payment_requests WHERE id=?",
+      ).bind(id).first<{ id: string; pilot_id: string; status: string }>();
+      if (!payment) return json({ error: "No se encontró la compra VIP." }, 404);
+      if (payment.status !== "PENDING") return json({ error: "Esta compra ya fue revisada." }, 409);
+      const results = await db.batch([
+        db.prepare(
+          "UPDATE vip_payment_requests SET status='APPROVED',reviewed_at=?,reviewed_by=? WHERE id=? AND status='PENDING'",
+        ).bind(now, account.email, id),
+        db.prepare(
+          "INSERT OR IGNORE INTO vip_purchase_effects (vip_payment_id,pilot_id,vip_applied_at) SELECT id,pilot_id,NULL FROM vip_payment_requests WHERE id=? AND status='APPROVED' AND changes()=1",
+        ).bind(id),
+        db.prepare(
+          "UPDATE pilots SET vip_until=MAX(COALESCE(vip_until,0),?)+?,updated_at=? WHERE pilot_id=? AND EXISTS (SELECT 1 FROM vip_purchase_effects WHERE vip_payment_id=? AND vip_applied_at IS NULL)",
+        ).bind(now, VIP_DURATION_MS, now, payment.pilot_id, id),
+        db.prepare(
+          "UPDATE vip_purchase_effects SET vip_applied_at=? WHERE vip_payment_id=? AND vip_applied_at IS NULL AND changes()=1",
+        ).bind(now, id),
+        db.prepare(
+          \`INSERT OR IGNORE INTO referral_vip_rewards (referred_pilot_id,vip_payment_id,referrer_pilot_id,amount_cents,created_at)
+          SELECT p.pilot_id,?,p.referred_by,100,? FROM pilots p
+          JOIN vip_purchase_effects e ON e.pilot_id=p.pilot_id
+          WHERE e.vip_payment_id=? AND e.vip_applied_at=? AND p.referred_by IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM referral_vip_rewards r WHERE r.referred_pilot_id=p.pilot_id)\`,
+        ).bind(id, now, id, now),
+        db.prepare(
+          \`INSERT OR IGNORE INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
+          SELECT ?,referrer_pilot_id,100,'REFERRAL_VIP',?,? FROM referral_vip_rewards WHERE vip_payment_id=?\`,
+        ).bind(\`ticket_\${randomHex(10)}\`, id, now, id),
+        db.prepare(
+          \`INSERT OR IGNORE INTO ranking_pool_contributions (id,vip_payment_id,ranking_type,amount_cents,created_at)
+          SELECT ?,?,'BOSSES',150,? WHERE EXISTS (SELECT 1 FROM vip_purchase_effects WHERE vip_payment_id=? AND vip_applied_at=?)
+          UNION ALL
+          SELECT ?,?,'REFERRALS',150,? WHERE EXISTS (SELECT 1 FROM vip_purchase_effects WHERE vip_payment_id=? AND vip_applied_at=?)\`,
+        ).bind(
+          \`pool_\${randomHex(10)}\`, id, now, id, now,
+          \`pool_\${randomHex(10)}\`, id, now, id, now,
+        ),
+        log(id, "Compra VIP aprobada; membresía, referido y fondos de ranking procesados."),
+      ]);
+      if (results[0]?.meta?.changes !== 1 || results[1]?.meta?.changes !== 1 ||
+          results[2]?.meta?.changes !== 1 || results[3]?.meta?.changes !== 1) {
+        return json({ error: "No se pudo aplicar la compra VIP de forma segura." }, 409);
+      }
+      return json({ success: true, status: "APPROVED" });
+    }
+
+    if (action === "reject-vip") {
+      const reason = typeof body?.["reason"] === "string" ? body.reason.trim().slice(0, 240) : "";
+      if (reason.length < 5) return json({ error: "Escribe un motivo de rechazo." }, 400);
+      const result = await db.prepare(
+        "UPDATE vip_payment_requests SET status='REJECTED',reviewed_at=?,reviewed_by=?,rejection_reason=? WHERE id=? AND status='PENDING'",
+      ).bind(now, account.email, reason, id).run();
+      if (result.meta?.changes !== 1) return json({ error: "La compra ya fue revisada." }, 409);
+      await log(id, "Compra VIP rechazada: " + reason).run();
+      return json({ success: true, status: "REJECTED" });
+    }
+
+    if (action === "pay-ticket") {
+      const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
+      if (!/^0x[a-f0-9]{64}$/.test(txHash)) return json({ error: "Introduce el TX hash del pago." }, 400);
+      const result = await db.batch([
+        db.prepare(
+          "UPDATE ticket_payout_requests SET status='PAID',tx_hash=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status='PENDING'",
+        ).bind(txHash, now, account.email, id),
+        db.prepare(
+          \`INSERT INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
+          SELECT ?,pilot_id,-amount_cents,'TICKET_PAYOUT',?,? FROM ticket_payout_requests
+          WHERE id=? AND status='PAID' AND changes()=1\`,
+        ).bind(\`ticket_\${randomHex(10)}\`, id, now, id),
+        log(id, "Solicitud de tickets pagada · TX " + txHash),
+      ]);
+      if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1)
+        return json({ error: "La solicitud ya fue procesada o no se pudo descontar el saldo." }, 409);
+      return json({ success: true, status: "PAID" });
+    }
+
+    if (action === "reject-ticket") {
+      const reason = typeof body?.["reason"] === "string" ? body.reason.trim().slice(0, 240) : "";
+      if (reason.length < 5) return json({ error: "Escribe un motivo de rechazo." }, 400);
+      const result = await db.prepare(
+        "UPDATE ticket_payout_requests SET status='REJECTED',reason=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status='PENDING'",
+      ).bind(reason, now, account.email, id).run();
+      if (result.meta?.changes !== 1) return json({ error: "La solicitud ya fue procesada." }, 409);
+      await log(id, "Solicitud de tickets rechazada: " + reason).run();
+      return json({ success: true, status: "REJECTED" });
+    }
+
+    if (action === "pay-prize") {
+      const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
+      if (!/^0x[a-f0-9]{64}$/.test(txHash)) return json({ error: "Introduce el TX hash del premio." }, 400);
+      const result = await db.prepare(
+        "UPDATE ranking_prize_payouts SET status='PAID',tx_hash=?,paid_at=?,paid_by=? WHERE id=? AND status='PENDING'",
+      ).bind(txHash, now, account.email, id).run();
+      if (result.meta?.changes !== 1) return json({ error: "El premio ya fue pagado o no existe." }, 409);
+      await log(id, "Premio de ranking pagado · TX " + txHash).run();
+      return json({ success: true, status: "PAID" });
+    }
+
+    return json({ error: "Operación económica no válida." }, 400);
+  }
+
+  if (isVipInfo) {
+    if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
+    const settings = await db.prepare(
+      "SELECT wallet_address,qr_url FROM admin_payment_settings WHERE id=1",
+    ).first<{ wallet_address: string; qr_url: string | null }>();
+    return json({ price_usdt: 10, network: "POLYGON", wallet_address: settings?.wallet_address ?? "", qr_url: settings?.qr_url ?? null });
+  }
+
+  if (isVipPurchases) {
+    if (request.method === "GET") {
+      const rows = await db.prepare(
+        "SELECT id,amount_cents,currency,network,tx_hash,status,created_at,reviewed_at,rejection_reason FROM vip_payment_requests WHERE pilot_id=? ORDER BY created_at DESC LIMIT 20",
+      ).bind(account.pilot_id).all();
+      return json({ purchases: rows.results ?? [] });
+    }
+    const body = await readJson(request, 2048);
+    const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
+    if (!/^0x[a-f0-9]{64}$/.test(txHash)) return json({ error: "Introduce un TX hash válido de Polygon." }, 400);
+    const settings = await db.prepare(
+      "SELECT wallet_address FROM admin_payment_settings WHERE id=1",
+    ).first<{ wallet_address: string }>();
+    if (!settings?.wallet_address) return json({ error: "La administración todavía no ha configurado la wallet de cobro." }, 503);
+    const duplicateObs = await db.prepare(
+      "SELECT id FROM obsidian_payment_requests WHERE lower(tx_hash)=? LIMIT 1",
+    ).bind(txHash).first<{ id: string }>();
+    if (duplicateObs) return json({ error: "Este TX ya fue utilizado en otra solicitud." }, 409);
+    const id = \`vip_\${randomHex(10)}\`;
+    try {
+      await db.prepare(
+        "INSERT INTO vip_payment_requests (id,pilot_id,amount_cents,currency,network,tx_hash,wallet_address,status,created_at) VALUES (?,?,1000,'USDT','POLYGON',?,?,'PENDING',?)",
+      ).bind(id, account.pilot_id, txHash, settings.wallet_address, Date.now()).run();
+    } catch {
+      return json({ error: "Este TX ya fue registrado o no se pudo crear la solicitud." }, 409);
+    }
+    return json({ success: true, id, status: "PENDING", amount_usdt: 10 });
+  }
+
+  if (isTickets) {
+    if (request.method === "GET") {
+      const [balance, requests, history] = await Promise.all([
+        db.prepare(
+          "SELECT COALESCE(SUM(delta_cents),0) AS total FROM real_money_ticket_ledger WHERE pilot_id=?",
+        ).bind(account.pilot_id).first<{ total: number }>(),
+        db.prepare(
+          "SELECT id,amount_cents,wallet_address,status,tx_hash,reason,created_at,reviewed_at FROM ticket_payout_requests WHERE pilot_id=? ORDER BY created_at DESC LIMIT 20",
+        ).bind(account.pilot_id).all(),
+        db.prepare(
+          "SELECT delta_cents,kind,created_at FROM real_money_ticket_ledger WHERE pilot_id=? ORDER BY created_at DESC LIMIT 50",
+        ).bind(account.pilot_id).all(),
+      ]);
+      const pending = await db.prepare(
+        "SELECT COALESCE(SUM(amount_cents),0) AS total FROM ticket_payout_requests WHERE pilot_id=? AND status='PENDING'",
+      ).bind(account.pilot_id).first<{ total: number }>();
+      const total = Number(balance?.total ?? 0);
+      const reserved = Number(pending?.total ?? 0);
+      return json({ balance_cents: total, available_cents: Math.max(0, total - reserved), requests: requests.results ?? [], history: history.results ?? [] });
+    }
+    const body = await readJson(request, 2048);
+    const amount = body?.["amount_usd"];
+    const wallet = typeof body?.["wallet_address"] === "string" ? body.wallet_address.trim() : "";
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount < 1 || amount > 10000)
+      return json({ error: "Indica una cantidad entera de al menos 1 USDT." }, 400);
+    if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return json({ error: "Introduce una dirección válida de Polygon para recibir el pago." }, 400);
+    const id = \`tpay_\${randomHex(10)}\`;
+    const cents = amount * 100;
+    const result = await db.prepare(
+      \`INSERT INTO ticket_payout_requests (id,pilot_id,amount_cents,wallet_address,status,created_at)
+      SELECT ?,?, ?,?,'PENDING',?
+      WHERE (SELECT COALESCE(SUM(delta_cents),0) FROM real_money_ticket_ledger WHERE pilot_id=?)
+        - (SELECT COALESCE(SUM(amount_cents),0) FROM ticket_payout_requests WHERE pilot_id=? AND status='PENDING') >= ?\`,
+    ).bind(id, account.pilot_id, cents, wallet, Date.now(), account.pilot_id, account.pilot_id, cents).run();
+    if (result.meta?.changes !== 1) return json({ error: "No tienes suficientes tickets disponibles para esa solicitud." }, 409);
+    return json({ success: true, id, status: "PENDING" });
+  }
+
+  return json({ error: "Ruta de economía real no encontrada." }, 404);
+}
+
 type LeaderboardEntry = {
   pilot_id: string;
   callsign: string;
@@ -1503,6 +2086,7 @@ async function handleLeaderboardRequest(
   try {
     await ensureAuthSchema(db);
     await ensureMarketSchema(db);
+    await ensureRealEconomySchema(db);
   } catch (error) {
     console.error("No se pudo preparar la base de datos de la clasificación:", error);
     return json({ error: "No se pudo preparar la clasificación." }, 503);
@@ -1564,6 +2148,13 @@ async function handleLeaderboardRequest(
           : 0,
       score,
     });
+    await recordRankingBossProgress(
+      db,
+      account.pilot_id,
+      typeof bossObsidian === "number" && Number.isSafeInteger(bossObsidian) && bossObsidian >= 0
+        ? bossObsidian
+        : 0,
+    );
     return json({ success: true });
   } catch (error) {
     console.error("No se pudo actualizar la clasificación:", error);
@@ -7974,6 +8565,8 @@ export default {
       if (authResponse) return authResponse;
       const adminAuthResponse = await handleAdminAuthRequest(request, workerEnv);
       if (adminAuthResponse) return adminAuthResponse;
+      const realEconomyResponse = await handleRealEconomyRequest(request, workerEnv);
+      if (realEconomyResponse) return realEconomyResponse;
       const socialResponse = await handleSocialRequest(request, workerEnv);
       if (socialResponse) return socialResponse;
       const leaderboardResponse = await handleLeaderboardRequest(request, workerEnv);
