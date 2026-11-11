@@ -126,7 +126,7 @@ export function MarketBuy({
             ANUNCIOS DEL MERCADO
           </h2>
           <p className="mt-2 text-[8px] uppercase tracking-widest text-white/40">
-            COMISIÓN DE COMPRA · {P2P_FEE_OBSIDIAN.purchase} OBS · NO REEMBOLSABLE
+            COMISIÓN DE COMPRA · {P2P_FEE_OBSIDIAN.purchase} OBS · REEMBOLSABLE SI LA ORDEN SE CANCELA O VENCE ANTES DEL REPORTE DE PAGO
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
