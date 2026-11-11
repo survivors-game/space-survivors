@@ -154,8 +154,8 @@
 }
 
 
-/* Apply the same softer color and brightness treatment to every screen,
-   including portals, dialogs, menus, the game canvas and admin sections. */
+/* Slightly reduce brightness globally while preserving the original color saturation
+   across every screen, portal, dialog, menu, game canvas and admin section. */
 html {
-  filter: saturate(0.55) brightness(0.82);
+  filter: brightness(0.94);
 }
