@@ -1,4 +1,4 @@
-import {
+ import {
   useCallback,
   useEffect,
   useRef,
@@ -41,7 +41,7 @@ import { MarketSection } from "@/components/hangar/MarketSection";
 import { InventorySection } from "@/components/hangar/InventorySection";
 import { MissionsSection } from "@/components/hangar/MissionsSection";
 import { UpgradesSection } from "@/components/hangar/UpgradesSection";
-import { RoadmapPage, WikiPage } from "@/components/wiki/WikiPage";
+import { WikiPage } from "@/components/wiki/WikiPage";
 import { BoostButton } from "@/components/game/BoostButton";
 import { Audio } from "@/game/audio";
 import { BOSSES, bossById } from "@/game/data/bosses";
@@ -205,7 +205,6 @@ function Index() {
   const [progress, setProgress] = useState<Progress>(() => defaultProgress());
   const [selectedShipId, setSelectedShipId] = useState("falcon");
   const [selectedStageId, setSelectedStageId] = useState("nova");
-  const [roadmapOpen, setRoadmapOpen] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [hud, setHud] = useState<HudState | null>(null);
   const [choices, setChoices] = useState<UpgradeChoice[]>([]);
@@ -1978,7 +1977,11 @@ function Index() {
             {screen === "WIKI" ? (
               <WikiPage onClose={() => setScreen(returnScreen)} />
             ) : (
-              <RoadmapPage onClose={() => setScreen(returnScreen)} />
+              <RoadmapRiver
+                isOpen
+                onClose={() => setScreen(returnScreen)}
+                onSelectStage={(stageId) => chooseStage(stageId)}
+              />
             )}
           </>
         ) : null}
@@ -2085,7 +2088,6 @@ function Index() {
                 setScreen("HANGAR");
               }}
               onOpenVip={() => setVipModalOpen(true)}
-              onOpenRoadmap={() => setRoadmapOpen(true)}
             />
           </section>
         ) : null}
@@ -2988,11 +2990,6 @@ function Index() {
           </section>
         ) : null}
 
-        <RoadmapRiver
-          isOpen={roadmapOpen}
-          onClose={() => setRoadmapOpen(false)}
-          onSelectStage={(stageId) => chooseStage(stageId)}
-        />
         {googlePlayer && (screen === "MENU" || screen === "HANGAR" || screen === "SELECT") && (
           <GameChat />
         )}
