@@ -1,4 +1,4 @@
- @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap");
+ @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @source "../src";
 @import "tw-animate-css";
@@ -19,8 +19,8 @@
 
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-arcade: "Orbitron", "Inter", sans-serif;
-  --font-pixel: "Silkscreen", monospace;
+  --font-arcade: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-pixel: "Inter", ui-sans-serif, system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -248,14 +248,20 @@
   }
 }
 
-/* Títulos y elementos de marca: Orbitron (ciencia ficción, en tamaños grandes). */
-.font-arcade {
-  font-family: "Orbitron", "Inter", sans-serif;
+/* Una sola tipografía para toda la interfaz: la misma familia usada en el Hub. */
+.font-arcade,
+.font-pixel {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif !important;
 }
 
-/* Marcadores de juego pixel (uso puntual). */
-.font-pixel {
-  font-family: "Silkscreen", monospace;
+/* Fuerza la tipografía única en pantallas, menús, ventanas, anuncios,
+   portales, controles y elementos creados dinámicamente. */
+html,
+body,
+body *,
+body *::before,
+body *::after {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif !important;
 }
 
 /*

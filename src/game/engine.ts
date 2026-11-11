@@ -3200,7 +3200,7 @@ export class Engine {
         PLAYER_SCALE,
       );
       ctx.fillStyle = "#ff4df0";
-      ctx.font = "bold 10px monospace";
+      ctx.font = "600 10px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("AYUDANTE", this.helperPosition.x, this.helperPosition.y - 24);
       ctx.restore();
@@ -3335,7 +3335,7 @@ export class Engine {
     let damageFont = "";
     this.dmgNums.forEachAlive((n) => {
       ctx.globalAlpha = Math.min(1, n.life / 0.3);
-      const font = `${n.crit ? 14 : 10}px "Press Start 2P", monospace`;
+      const font = `600 ${n.crit ? 14 : 10}px Inter, sans-serif`;
       if (font !== damageFont) {
         ctx.font = font;
         damageFont = font;
