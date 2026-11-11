@@ -1762,7 +1762,7 @@ export class Engine {
       if (this.boss) this.boss.alive = false;
       this.boss = null;
       this.settleBossAttempt("defeat");
-      this.banner("TIEMPO AGOTADO", "Leviatán sigue vivo · DERROTA", "bad");
+      this.banner("TIEMPO AGOTADO", "Leviatán sigue vivo · DERROTA", "alert");
       this.state = "DYING";
       this.endTimer = 1.2;
       return;
