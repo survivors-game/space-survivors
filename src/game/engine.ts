@@ -503,11 +503,20 @@ export class Engine {
   }
 
   private frame(dt: number) {
+    const pausedAtFrameStart = this.state === "PAUSED";
     Input.pollGamepad();
     if (Input.consumePause()) {
       if (this.state === "PLAYING") this.pause();
       else if (this.state === "PAUSED") this.resume();
     }
+
+    // Do not advance simulation time or render while paused. If the pause key
+    // resumes the mission, wait for the next RAF tick so no paused-frame dt leaks in.
+    if (this.state === "PAUSED" || pausedAtFrameStart) {
+      Input.endFrame();
+      return;
+    }
+
     this.realTime += dt;
     if (this.state === "PLAYING" || this.state === "DYING") this.update(dt);
     else if (this.state === "WINNING") this.update(dt * 0.35);
