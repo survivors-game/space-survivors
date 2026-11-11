@@ -24,6 +24,7 @@ import {
   MessagesSquare,
   Search,
   Settings,
+  RotateCcw,
   Shield,
   ShoppingCart,
   Swords,
@@ -53,7 +54,8 @@ type SectionId =
   | "vip"
   | "seguridad"
   | "config"
-  | "economia-real";
+  | "economia-real"
+  | "reinicio";
 
 interface Col {
   key: string;
@@ -281,6 +283,12 @@ const SECTIONS: SectionDef[] = [
     label: "Economía real",
     icon: Wallet,
     desc: "Compras VIP, tickets de referidos y premios USDT",
+  },
+  {
+    id: "reinicio",
+    label: "Reinicio de pruebas",
+    icon: RotateCcw,
+    desc: "Restablecer el progreso de los pilotos de prueba sin borrar sus cuentas ni registros económicos",
   },
 ];
 
@@ -594,6 +602,8 @@ function SectionView({
         <SecurityAdminSection />
       ) : def.id === "config" ? (
         <ConfigAdminSection />
+      ) : def.id === "reinicio" ? (
+        <TestProgressResetSection />
       ) : (
         <>
           {def.stats ? (
@@ -758,6 +768,71 @@ interface AdminSummaryPayload {
     alerts: number;
   };
   alerts: AdminSummaryAlert[];
+}
+
+function TestProgressResetSection() {
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const runReset = async () => {
+    if (confirmation !== "REINICIAR PRUEBAS" || busy) return;
+    setBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/reset-test-progress", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirmation }),
+      });
+      const payload = (await response.json()) as {
+        success?: boolean;
+        players?: number;
+        error?: string;
+      };
+      if (!response.ok || !payload.success) throw new Error(payload.error ?? "No se pudo reiniciar el progreso.");
+      setMessage(`Reinicio completado. Pilotos restablecidos: ${payload.players ?? 0}. Las cuentas y los registros económicos se conservaron.`);
+      setConfirmation("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No se pudo completar el reinicio.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="max-w-2xl space-y-4 rounded border border-rose-400/25 bg-rose-400/[0.04] p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-rose-200">
+        <AlertTriangle className="size-4" />
+        Reinicio global del progreso de prueba
+      </div>
+      <p className="text-sm text-white/70">
+        Restablece CR y OBS de prueba, naves desbloqueadas, mejoras, inventario de juego,
+        estadísticas, récords, misiones, desafíos, Pase de Temporada y puntuaciones de ranking.
+      </p>
+      <p className="text-sm text-white/70">
+        Conserva cuentas Google, nombres, estado VIP, pagos, tickets, retiros, referidos,
+        historial económico, auditoría y operaciones del mercado. Los jugadores deberán
+        iniciar sesión de nuevo para cargar el progreso limpio.
+      </p>
+      <label className="block text-xs text-white/70">
+        Escribe REINICIAR PRUEBAS para habilitar la operación.
+        <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)}
+          className="mt-2 h-10 w-full rounded border border-white/15 bg-black/40 px-3 text-sm text-white outline-none focus:border-rose-400/50"
+          autoComplete="off" />
+      </label>
+      <button type="button" disabled={confirmation !== "REINICIAR PRUEBAS" || busy}
+        onClick={() => void runReset()}
+        className="rounded bg-rose-500 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+        {busy ? "Reiniciando..." : "Reiniciar progreso de todos los pilotos"}
+      </button>
+      {message ? <p role="status" className="text-sm text-emerald-300">{message}</p> : null}
+      {error ? <p role="alert" className="text-sm text-rose-300">{error}</p> : null}
+    </section>
+  );
 }
 
 function AdminSummarySection() {
