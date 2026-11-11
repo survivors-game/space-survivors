@@ -25,6 +25,8 @@ import {
 import { spriteUrl } from "@/game/sprites";
 import type { ShipDef } from "@/game/data/ships";
 import type { StageDef } from "@/game/data/stages";
+import { SEASON_LEVELS, getSeasonBarInfo } from "@/game/meta/missions";
+import type { SeasonProgress } from "@/game/meta/progress";
 
 export interface PilotHubProps {
   pilotName: string;
@@ -34,6 +36,7 @@ export interface PilotHubProps {
   obsidian: number;
   runs: number;
   kills: number;
+  season: SeasonProgress;
   shipsCount: number;
   selectedShip: ShipDef;
   selectedStage: StageDef;
@@ -56,19 +59,6 @@ const MAGENTA = "#ff0055";
 const VIOLET = "#c4a1ff";
 const ORANGE = "#ff8a3d";
 const GREEN = "#4ade80";
-
-/**
- * Progreso del pase de temporada. Valores de presentación: se sustituirán por
- * el progreso real cuando el pase exponga sus datos al hub.
- */
-const SEASON = {
-  number: 1,
-  level: 3,
-  maxLevel: 25,
-  points: 140,
-  pointsGoal: 200,
-  nextReward: "50 CR",
-} as const;
 
 /** Rango táctico derivado de las misiones completadas (de mayor a menor). */
 const RANKS: { min: number; name: string }[] = [
@@ -216,6 +206,7 @@ export function PilotHub({
   obsidian,
   runs,
   kills,
+  season,
   shipsCount,
   selectedShip,
   selectedStage,
@@ -238,7 +229,14 @@ export function PilotHub({
     .replace(/[^a-z0-9]/gi, "")
     .slice(0, 8)
     .toUpperCase()}`;
-  const seasonPct = clamp01(SEASON.points / SEASON.pointsGoal) * 100;
+  const seasonBar = getSeasonBarInfo(season.pt);
+  const seasonNumber = Number(season.seasonId.slice(1)) || 1;
+  const nextSeasonNode = SEASON_LEVELS[seasonBar.level] ?? null;
+  const seasonPct = seasonBar.fraction * 100;
+  const seasonProgressText = seasonBar.nextPt === null
+    ? `${fmt(season.pt)} PT · TEMPORADA COMPLETADA`
+    : `${fmt(season.pt - seasonBar.floorPt)}/${fmt(seasonBar.nextPt - seasonBar.floorPt)} PT`;
+  const nextRewardText = nextSeasonNode?.freeReward.label ?? "Temporada completada";
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-3 p-2 text-white font-sans sm:p-4">
@@ -506,7 +504,7 @@ export function PilotHub({
               className="font-arcade text-[9px] uppercase tracking-wider"
               style={{ color: GOLD }}
             >
-              TEMPORADA {SEASON.number} · NIVEL {pad2(SEASON.level)}/{SEASON.maxLevel}
+              TEMPORADA {seasonNumber} · NIVEL {pad2(seasonBar.level)}/{SEASON_LEVELS.length}
             </span>
           </div>
           <div className="relative h-3 flex-1 overflow-hidden border border-amber-400/40 bg-black/50">
@@ -527,8 +525,8 @@ export function PilotHub({
             />
           </div>
           <span className="shrink-0 whitespace-nowrap text-[10px] tabular-nums text-white/75">
-            {SEASON.points}/{SEASON.pointsGoal} PT ·{" "}
-            <span className="text-amber-300">SIGUIENTE RECOMPENSA: {SEASON.nextReward}</span>
+            {seasonProgressText} ·{" "}
+            <span className="text-amber-300">SIGUIENTE RECOMPENSA: {nextRewardText}</span>
           </span>
         </div>
 
