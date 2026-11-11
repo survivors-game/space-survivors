@@ -321,6 +321,28 @@ function Index() {
   }, [googleSessionLoading, googlePlayer]);
 
   useEffect(() => {
+    if (googleSessionLoading || !googlePlayer) return;
+    let active = true;
+    const refreshMarketState = async () => {
+      try {
+        const [pilot, myAds, history] = await Promise.all([
+          marketRequest<P2PPilotState>("/api/market/pilot-state"),
+          marketRequest<{ ads: P2PMyAd[] }>("/api/market/my-ads"),
+          marketRequest<{ orders: P2PHistoryOrder[] }>("/api/market/history"),
+        ]);
+        if (!active) return;
+        setMarketPilot(pilot);
+        setMarketAds(myAds.ads);
+        setMarketHistory(history.orders);
+      } catch (error) {
+        console.error("No se pudo actualizar el mercado automáticamente:", error);
+      }
+    };
+    const interval = window.setInterval(() => void refreshMarketState(), 10000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [googleSessionLoading, googlePlayer]);
+
+  useEffect(() => {
     if (googleSessionLoading) return;
     if (!googlePlayer) {
       setMarketPilot(null);
@@ -646,12 +668,12 @@ function Index() {
     }
   };
 
-  const reportMarketPayment = async (orderId: string) => {
+  const reportMarketPayment = async (orderId: string, reference: string, proofUrl: string) => {
     setMarketError("");
     try {
       await marketRequest<{ success: boolean }>("/api/market/report-payment", {
         method: "POST",
-        body: JSON.stringify({ order_id: orderId }),
+        body: JSON.stringify({ order_id: orderId, payment_reference: reference, payment_proof_url: proofUrl }),
       });
       setMarketRefresh((version) => version + 1);
     } catch (error) {
