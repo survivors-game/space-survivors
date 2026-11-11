@@ -231,6 +231,7 @@ describe("P2P purchase flow", () => {
 
     const reported = await requestJson<{ status: string }>("/api/market/report-payment", "POST", {
       order_id: bought.payload.order_id,
+      payment_reference: "TEST-TRANSFER-REF",
     });
     expect(reported.response.status).toBe(200);
     expect(reported.payload.status).toBe("PAGO_REPORTADO");
@@ -279,6 +280,7 @@ describe("P2P purchase flow", () => {
     expect(bought.response.status).toBe(200);
     const reported = await requestJson("/api/market/report-payment", "POST", {
       order_id: bought.payload.order_id,
+      payment_reference: "TEST-TRANSFER-REF",
     });
     expect(reported.response.status).toBe(200);
 
@@ -455,6 +457,28 @@ describe("P2P purchase flow", () => {
         "is_locked"
       ],
     ).toBe(0);
+  });
+
+
+  it("rejects payment reports without evidence and stores a valid transfer reference", async () => {
+    const listingId = await createListing();
+    const bought = await requestJson<{ order_id: string }>("/api/market/buy", "POST", {
+      listing_id: listingId,
+      payment_method: "NEQUI",
+    });
+    expect(bought.response.status).toBe(200);
+    const missing = await requestJson<{ error: string }>("/api/market/report-payment", "POST", {
+      order_id: bought.payload.order_id,
+    });
+    expect(missing.response.status).toBe(400);
+    const reported = await requestJson<{ status: string }>("/api/market/report-payment", "POST", {
+      order_id: bought.payload.order_id,
+      payment_reference: "BANK-TRANSFER-123",
+    });
+    expect(reported.response.status).toBe(200);
+    expect(db.prepare("SELECT payment_reference, release_deadline_at FROM p2p_orders WHERE id = ?").get(bought.payload.order_id)).toMatchObject({
+      payment_reference: "BANK-TRANSFER-123",
+    });
   });
 
   it("rejects buying one's own listing", async () => {
@@ -702,6 +726,7 @@ describe("P2P purchase flow", () => {
     expect(bought.response.status).toBe(200);
     const reported = await requestJson<{ status: string }>("/api/market/report-payment", "POST", {
       order_id: bought.payload.order_id,
+      payment_reference: "TEST-TRANSFER-REF",
     });
     expect(reported.response.status).toBe(200);
     const released = await requestJson<{ status: string }>(
