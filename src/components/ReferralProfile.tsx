@@ -38,6 +38,9 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
   const [ticketBusy, setTicketBusy] = useState(false);
   const [ticketNotice, setTicketNotice] = useState("");
   const [ticketError, setTicketError] = useState("");
+  const [walletSaving, setWalletSaving] = useState(false);
+  const [walletNotice, setWalletNotice] = useState("");
+  const [walletError, setWalletError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -113,6 +116,44 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/rewards/wallet", {
+      credentials: "same-origin",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        const data = await response.json() as { wallet_address?: string };
+        if (active && response.ok) setTicketWallet(data.wallet_address ?? "");
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const savePayoutWallet = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setWalletSaving(true);
+    setWalletError("");
+    setWalletNotice("");
+    try {
+      const response = await fetch("/api/rewards/wallet", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ wallet_address: ticketWallet.trim() }),
+      });
+      const data = await response.json() as { error?: string; success?: boolean };
+      if (!response.ok || !data.success) throw new Error(data.error ?? "No se pudo guardar la wallet.");
+      setWalletNotice("Wallet Polygon guardada para recibir premios.");
+    } catch (cause) {
+      setWalletError(cause instanceof Error ? cause.message : "No se pudo guardar la wallet.");
+    } finally {
+      setWalletSaving(false);
+    }
+  };
 
   const requestTicketPayout = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -258,6 +299,30 @@ export function ReferralProfile({ onRedeemed }: ReferralProfileProps) {
         )}
         {error ? <p className="mt-3 text-xs text-rose-300">{error}</p> : null}
         {message ? <p className="mt-3 text-xs text-emerald-300">{message}</p> : null}
+      </section>
+
+      <section className="border border-emerald-400/25 bg-[#0b0d1c]/75 p-4 sm:p-6">
+        <h2 className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">
+          Wallet Polygon para premios
+        </h2>
+        <p className="mt-1 text-xs text-white/55">
+          Registra la dirección donde quieres recibir los premios de los rankings en USDT.
+        </p>
+        <form onSubmit={(event) => void savePayoutWallet(event)} className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            aria-label="Wallet Polygon para premios"
+            value={ticketWallet}
+            onChange={(event) => setTicketWallet(event.target.value)}
+            placeholder="0x..."
+            maxLength={42}
+            className="h-10 min-w-0 flex-1 border border-white/15 bg-[#070814] px-3 font-mono text-xs text-white"
+          />
+          <Button type="submit" disabled={walletSaving} className="h-10 rounded-none bg-emerald-300 px-4 text-[9px] font-bold uppercase text-black hover:bg-emerald-200 disabled:opacity-40">
+            {walletSaving ? "Guardando..." : "Guardar wallet"}
+          </Button>
+        </form>
+        {walletError ? <p role="alert" className="mt-2 text-xs text-rose-300">{walletError}</p> : null}
+        {walletNotice ? <p role="status" className="mt-2 text-xs text-emerald-200">{walletNotice}</p> : null}
       </section>
 
       <section className="border border-emerald-400/25 bg-[#0b0d1c]/75 p-4 sm:p-6">
