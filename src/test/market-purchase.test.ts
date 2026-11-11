@@ -235,6 +235,10 @@ describe("P2P purchase flow", () => {
     });
     expect(reported.response.status).toBe(200);
     expect(reported.payload.status).toBe("PAGO_REPORTADO");
+    const reservedCatalog = await requestJson<{ listings: { listing_id: string }[] }>("/api/market/listings");
+    expect(reservedCatalog.payload.listings.some((listing) => listing.listing_id === listingId)).toBe(false);
+    const sellerHistory = await requestJson<{ orders: { payment_reference: string | null }[] }>("/api/market/history", "GET", undefined, SELLER_TOKEN);
+    expect(sellerHistory.payload.orders[0]?.payment_reference).toBe("TEST-TRANSFER-REF");
     const legacyConfirm = await requestJson("/api/market/confirm", "POST", {
       order_id: bought.payload.order_id,
     });
