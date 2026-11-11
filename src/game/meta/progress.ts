@@ -295,9 +295,7 @@ export function sanitize(raw: unknown): Progress {
   if (p.season.pacingVersion < 2) {
     const scaledPt = Math.round((p.season.pt * 2350) / 5040);
     const claimedLevel = Math.max(0, ...p.season.claimedFree, ...p.season.claimedVip);
-    const claimedFloor = claimedLevel
-      ? (SEASON_LEVELS[claimedLevel - 1]?.requiredPt ?? 0)
-      : 0;
+    const claimedFloor = claimedLevel ? (SEASON_LEVELS[claimedLevel - 1]?.requiredPt ?? 0) : 0;
     p.season.pt = Math.min(2350, Math.max(scaledPt, claimedFloor));
     p.season.pacingVersion = 2;
   }
