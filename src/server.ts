@@ -3533,10 +3533,13 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
               )
               THEN RAISE(ABORT, 'market order cannot be cancelled') END;
           END`,
-        `CREATE TRIGGER IF NOT EXISTS market_order_cancel_apply
+        `DROP TRIGGER IF EXISTS market_order_cancel_apply`,
+        `CREATE TRIGGER market_order_cancel_apply
           AFTER UPDATE OF status ON p2p_orders
           WHEN NEW.status = 'CANCELADA' AND OLD.status = 'PENDIENTE'
           BEGIN
+            UPDATE pilots SET obsidian = obsidian + 1, updated_at = NEW.updated_at
+            WHERE pilot_id = NEW.buyer_pilot_id;
             UPDATE pilot_inventory SET is_locked = 0, updated_at = NEW.updated_at
             WHERE id = (SELECT inventory_id FROM p2p_ads WHERE id = NEW.ad_id)
               AND pilot_id = (
