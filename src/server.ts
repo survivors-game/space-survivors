@@ -1573,6 +1573,12 @@ async function ensureRealEconomySchema(db: D1Database): Promise<void> {
           admin_email TEXT NOT NULL,
           created_at INTEGER NOT NULL
         )`,
+        `CREATE TABLE IF NOT EXISTS real_economy_payout_txs (
+          tx_hash TEXT PRIMARY KEY,
+          payout_type TEXT NOT NULL CHECK (payout_type IN ('TICKET','RANKING')),
+          payout_id TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL
+        )`,
       ];
       for (const statement of statements) await db.prepare(statement).run();
     })().catch((error) => {
@@ -1881,6 +1887,7 @@ async function handleRealEconomyRequest(
     const action = typeof body?.["action"] === "string" ? body["action"] : "";
     const id = typeof body?.["id"] === "string" ? body["id"].trim() : "";
     const now = Date.now();
+    if (action === "approve-vip") await getCurrentRankingCycle(db, now);
     const log = (referenceId: string, detail: string) =>
       db
         .prepare(
@@ -1984,9 +1991,14 @@ async function handleRealEconomyRequest(
       const result = await db.batch([
         db
           .prepare(
-            "UPDATE ticket_payout_requests SET status='PAID',tx_hash=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status='PENDING'",
+            "INSERT OR IGNORE INTO real_economy_payout_txs (tx_hash,payout_type,payout_id,created_at) SELECT ?,'TICKET',?,? WHERE EXISTS (SELECT 1 FROM ticket_payout_requests WHERE id=? AND status='PENDING')",
           )
-          .bind(txHash, now, account.email, id),
+          .bind(txHash, id, now, id),
+        db
+          .prepare(
+            "UPDATE ticket_payout_requests SET status='PAID',tx_hash=?,reviewed_at=?,reviewed_by=? WHERE id=? AND status='PENDING' AND EXISTS (SELECT 1 FROM real_economy_payout_txs WHERE tx_hash=? AND payout_type='TICKET' AND payout_id=?)",
+          )
+          .bind(txHash, now, account.email, id, txHash, id),
         db
           .prepare(
             `INSERT INTO real_money_ticket_ledger (id,pilot_id,delta_cents,kind,reference_id,created_at)
@@ -1996,9 +2008,9 @@ async function handleRealEconomyRequest(
           .bind(`ticket_${randomHex(10)}`, id, now, id),
         log(id, "Solicitud de tickets pagada · TX " + txHash),
       ]);
-      if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1)
+      if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1 || result[2]?.meta?.changes !== 1)
         return json(
-          { error: "La solicitud ya fue procesada o no se pudo descontar el saldo." },
+          { error: "La solicitud ya fue procesada, el TX ya fue usado o no se pudo descontar el saldo." },
           409,
         );
       return json({ success: true, status: "PAID" });
@@ -2022,15 +2034,17 @@ async function handleRealEconomyRequest(
       const txHash = typeof body?.["tx_hash"] === "string" ? body.tx_hash.trim().toLowerCase() : "";
       if (!/^0x[a-f0-9]{64}$/.test(txHash))
         return json({ error: "Introduce el TX hash del premio." }, 400);
-      const result = await db
-        .prepare(
-          "UPDATE ranking_prize_payouts SET status='PAID',tx_hash=?,paid_at=?,paid_by=? WHERE id=? AND status='PENDING'",
-        )
-        .bind(txHash, now, account.email, id)
-        .run();
-      if (result.meta?.changes !== 1)
-        return json({ error: "El premio ya fue pagado o no existe." }, 409);
-      await log(id, "Premio de ranking pagado · TX " + txHash).run();
+      const result = await db.batch([
+        db.prepare(
+          "INSERT OR IGNORE INTO real_economy_payout_txs (tx_hash,payout_type,payout_id,created_at) SELECT ?,'RANKING',?,? WHERE EXISTS (SELECT 1 FROM ranking_prize_payouts WHERE id=? AND status='PENDING')",
+        ).bind(txHash, id, now, id),
+        db.prepare(
+          "UPDATE ranking_prize_payouts SET status='PAID',tx_hash=?,paid_at=?,paid_by=? WHERE id=? AND status='PENDING' AND EXISTS (SELECT 1 FROM real_economy_payout_txs WHERE tx_hash=? AND payout_type='RANKING' AND payout_id=?)",
+        ).bind(txHash, now, account.email, id, txHash, id),
+        log(id, "Premio de ranking pagado · TX " + txHash),
+      ]);
+      if (result[0]?.meta?.changes !== 1 || result[1]?.meta?.changes !== 1)
+        return json({ error: "El premio ya fue pagado, el TX ya fue usado o no existe." }, 409);
       return json({ success: true, status: "PAID" });
     }
 
