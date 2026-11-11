@@ -328,6 +328,36 @@ describe("real-money VIP and ranking economy", () => {
       { ranking_type: "REFERRALS", total_cents: 90 },
     ]);
 
+    db.prepare("UPDATE pilots SET boss_obsidian=60 WHERE pilot_id=?").run(INVITEE_ID);
+    let nextLeaderboardValue: string | null = null;
+    const nextLeaderboard = {
+      async get() {
+        return nextLeaderboardValue;
+      },
+      async put(_key: string, value: string) {
+        nextLeaderboardValue = value;
+      },
+    };
+    const nextProgress = await server.fetch(
+      request("/api/leaderboard/update", INVITEE_TOKEN, "POST", {
+        pilot_id: INVITEE_ID,
+        callsign: "INVITEE",
+        score: 123,
+      }),
+      { DB: database, LEADERBOARD: nextLeaderboard },
+    );
+    expect(nextProgress.status).toBe(200);
+    const nextRankingResponse = await server.fetch(
+      new Request("https://game.example/api/rewards/rankings"),
+      { DB: database },
+    );
+    const nextRanking = (await nextRankingResponse.json()) as {
+      bosses: Array<{ pilot_id: string; prize_usdt: number }>;
+    };
+    expect(nextRanking.bosses).toEqual([
+      { position: 1, pilot_id: INVITEE_ID, callsign: "INVITEE", prize_usdt: 0.36 },
+    ]);
+
     const prize = db
       .prepare(
         "SELECT id FROM ranking_prize_payouts WHERE ranking_type='REFERRALS' AND status='PENDING'",
