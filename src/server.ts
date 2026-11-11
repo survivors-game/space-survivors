@@ -1838,7 +1838,7 @@ async function handleRealEconomyRequest(
     }
     if (request.method === "GET") {
       const cycle = await getCurrentRankingCycle(db);
-      const [vipPayments, ticketRequests, cycles, payouts, pools] = await Promise.all([
+      const [vipPayments, ticketRequests, cycles, payouts, pools, ticketBalances, totals] = await Promise.all([
         db
           .prepare(
             `SELECT r.*,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email
@@ -1874,6 +1874,24 @@ async function handleRealEconomyRequest(
           )
           .bind(cycle.starts_at, cycle.ends_at)
           .all(),
+        db.prepare(
+          `SELECT p.pilot_id,COALESCE(NULLIF(profile.display_name,''),p.callsign,'PILOTO') AS callsign,pa.email,
+            SUM(l.delta_cents) AS balance_cents,
+            SUM(l.delta_cents)-COALESCE((SELECT SUM(r.amount_cents) FROM ticket_payout_requests r WHERE r.pilot_id=p.pilot_id AND r.status='PENDING'),0) AS available_cents
+          FROM real_money_ticket_ledger l JOIN pilots p ON p.pilot_id=l.pilot_id
+          LEFT JOIN player_profiles profile ON profile.pilot_id=p.pilot_id
+          LEFT JOIN player_accounts pa ON pa.pilot_id=p.pilot_id
+          GROUP BY p.pilot_id HAVING SUM(l.delta_cents)>0
+          ORDER BY balance_cents DESC LIMIT 200`,
+        ).all(),
+        db.prepare(
+          `SELECT
+            (SELECT COUNT(*) FROM vip_payment_requests WHERE status='APPROVED') AS approved_sales,
+            (SELECT COALESCE(SUM(amount_cents),0) FROM referral_vip_rewards) AS referral_paid_cents,
+            (SELECT COALESCE(SUM(amount_cents),0) FROM ranking_pool_contributions) AS ranking_funded_cents,
+            (SELECT COALESCE(SUM(delta_cents),0) FROM real_money_ticket_ledger WHERE kind='REFERRAL_VIP') AS tickets_issued_cents,
+            (SELECT COALESCE(SUM(delta_cents),0) FROM real_money_ticket_ledger) AS tickets_outstanding_cents`,
+        ).first(),
       ]);
       return json({
         distribution: {
@@ -1885,6 +1903,11 @@ async function handleRealEconomyRequest(
         },
         cycle,
         pools: pools.results ?? [],
+        totals: {
+          ...(totals ?? {}),
+          admin_earned_cents: Number(totals?.approved_sales ?? 0) * 600,
+        },
+        ticket_balances: ticketBalances.results ?? [],
         vip_payments: vipPayments.results ?? [],
         ticket_requests: ticketRequests.results ?? [],
         cycles: cycles.results ?? [],
