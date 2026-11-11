@@ -214,6 +214,27 @@ export function RealEconomyAdminSection() {
             </div>
           </section>
 
+          <section className="space-y-2 border border-white/10 bg-black/20 p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-200">Historial de ciclos de 15 días</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-left text-xs">
+                <thead className="text-white/45">
+                  <tr><th className="p-2">Inicio</th><th className="p-2">Cierre</th><th className="p-2">Estado</th></tr>
+                </thead>
+                <tbody>
+                  {data.cycles.map((cycle) => (
+                    <tr key={cycle.id} className="border-t border-white/10">
+                      <td className="p-2">{date(cycle.starts_at)}</td>
+                      <td className="p-2">{date(cycle.ends_at)}</td>
+                      <td className="p-2">{cycle.status === "OPEN" ? "En curso" : "Cerrado"}</td>
+                    </tr>
+                  ))}
+                  {!data.cycles.length ? <tr><td colSpan={3} className="p-4 text-center text-white/40">Sin ciclos anteriores.</td></tr> : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
           <section className="space-y-3">
             <div>
               <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-200">
@@ -262,7 +283,11 @@ export function RealEconomyAdminSection() {
                           <div className="flex gap-1">
                             <button
                               disabled={busyId === payment.id}
-                              onClick={() => void action(payment.id, "approve-vip")}
+                              onClick={() => {
+                                if (window.confirm("¿Verificaste en PolygonScan que llegaron 10 USDT a la wallet de cobro?")) {
+                                  void action(payment.id, "approve-vip");
+                                }
+                              }}
                               className="border border-emerald-400/30 px-2 py-1 text-emerald-200 disabled:opacity-40"
                             >
                               Aprobar
