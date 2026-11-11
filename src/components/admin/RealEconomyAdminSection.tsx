@@ -228,6 +228,7 @@ export function RealEconomyAdminSection() {
                     <th className="p-2">Jugador</th>
                     <th className="p-2">Fecha</th>
                     <th className="p-2">Monto</th>
+                    <th className="p-2">Wallet destino</th>
                     <th className="p-2">TX Polygon</th>
                     <th className="p-2">Estado</th>
                     <th className="p-2">Acciones</th>
@@ -244,6 +245,7 @@ export function RealEconomyAdminSection() {
                       </td>
                       <td className="p-2 whitespace-nowrap">{date(payment.created_at)}</td>
                       <td className="p-2">{money(payment.amount_cents)}</td>
+                      <td className="max-w-40 break-all p-2 font-mono text-[10px] text-white/55">{payment.wallet_address}</td>
                       <td className="p-2">
                         <a
                           className="font-mono text-cyan-200 underline"
@@ -281,7 +283,7 @@ export function RealEconomyAdminSection() {
                   ))}
                   {!data.vip_payments.length ? (
                     <tr>
-                      <td colSpan={6} className="p-5 text-center text-white/40">
+                      <td colSpan={7} className="p-5 text-center text-white/40">
                         No hay compras VIP registradas.
                       </td>
                     </tr>
@@ -381,6 +383,7 @@ export function RealEconomyAdminSection() {
                     <th className="p-2">Ranking</th>
                     <th className="p-2">Puesto</th>
                     <th className="p-2">Jugador</th>
+                    <th className="p-2">Wallet Polygon</th>
                     <th className="p-2">Premio</th>
                     <th className="p-2">Estado</th>
                     <th className="p-2">Acción</th>
@@ -395,6 +398,7 @@ export function RealEconomyAdminSection() {
                       </td>
                       <td className="p-2">{payout.position}.º</td>
                       <td className="p-2">{payout.callsign}</td>
+                      <td className="max-w-40 break-all p-2 font-mono text-[10px] text-white/55">{payout.wallet_address || "Wallet pendiente"}</td>
                       <td className="p-2 font-bold text-emerald-200">
                         {money(payout.prize_cents)}
                       </td>
@@ -425,7 +429,7 @@ export function RealEconomyAdminSection() {
                   ))}
                   {!data.payouts.length ? (
                     <tr>
-                      <td colSpan={7} className="p-5 text-center text-white/40">
+                      <td colSpan={8} className="p-5 text-center text-white/40">
                         Todavía no hay premios cerrados.
                       </td>
                     </tr>
