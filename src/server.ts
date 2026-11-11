@@ -1274,6 +1274,7 @@ async function handleSocialRequest(
   try {
     await ensureAuthSchema(db);
     await ensureMarketSchema(db);
+    await ensureRealEconomySchema(db);
   } catch (error) {
     console.error("No se pudo preparar el sistema de invitaciones:", error);
     return json({ error: "No se pudo preparar el sistema de invitaciones." }, 503);
@@ -1281,6 +1282,7 @@ async function handleSocialRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
   if (!account) return json({ error: "Inicia sesión con Google para usar las invitaciones." }, 401);
+  if (isRedeem) await getCurrentRankingCycle(db);
 
   try {
     if (isMyCode) {
