@@ -167,12 +167,9 @@ describe("real-money VIP and ranking economy", () => {
       true,
     );
     expect(repeatedApproval.response.status).toBe(409);
-    const reusedTx = await call<{ error?: string }>(
-      "/api/vip/purchases",
-      INVITEE_TOKEN,
-      "POST",
-      { tx_hash: txHash },
-    );
+    const reusedTx = await call<{ error?: string }>("/api/vip/purchases", INVITEE_TOKEN, "POST", {
+      tx_hash: txHash,
+    });
     expect(reusedTx.response.status).toBe(409);
 
     const vip = db.prepare("SELECT vip_until FROM pilots WHERE pilot_id=?").get(INVITEE_ID) as {
@@ -216,7 +213,13 @@ describe("real-money VIP and ranking economy", () => {
     expect(deniedAdminData.response.status).toBe(403);
 
     const adminData = await call<{
-      distribution: { vip_price_usd: number; admin_usd: number; referral_usd: number; bosses_pool_usd: number; referrals_pool_usd: number };
+      distribution: {
+        vip_price_usd: number;
+        admin_usd: number;
+        referral_usd: number;
+        bosses_pool_usd: number;
+        referrals_pool_usd: number;
+      };
       totals: { approved_sales: number; admin_earned_cents: number; ranking_funded_cents: number };
       ticket_balances: Array<{ pilot_id: string; balance_cents: number }>;
     }>("/api/admin/real-economy", ADMIN_TOKEN, "GET", undefined, true);
@@ -253,57 +256,64 @@ describe("real-money VIP and ranking economy", () => {
       },
     };
     const response = await server.fetch(
-      request(
-        "/api/leaderboard/update",
-        INVITEE_TOKEN,
-        "POST",
-        { pilot_id: INVITEE_ID, callsign: "INVITEE", score: 123 },
-      ),
+      request("/api/leaderboard/update", INVITEE_TOKEN, "POST", {
+        pilot_id: INVITEE_ID,
+        callsign: "INVITEE",
+        score: 123,
+      }),
       { DB: database, LEADERBOARD: leaderboard },
     );
     expect(response.status).toBe(200);
 
-    const rankings = await server.fetch(
-      new Request("https://game.example/api/rewards/rankings"),
-      { DB: database },
-    );
-    const payload = await rankings.json() as {
+    const rankings = await server.fetch(new Request("https://game.example/api/rewards/rankings"), {
+      DB: database,
+    });
+    const payload = (await rankings.json()) as {
       bosses: Array<{ pilot_id: string; prize_usdt: number }>;
     };
-    expect(payload.bosses).toEqual([{ position: 1, pilot_id: INVITEE_ID, callsign: "INVITEE", prize_usdt: 0.6 }]);
+    expect(payload.bosses).toEqual([
+      { position: 1, pilot_id: INVITEE_ID, callsign: "INVITEE", prize_usdt: 0.6 },
+    ]);
   });
 
   it("closes the 15-day cycle and creates payable USDT prizes with the registered Polygon wallet", async () => {
     const wallet = "0x" + "c".repeat(40);
-    const saved = await call<{ success?: boolean }>(
-      "/api/rewards/wallet",
-      REFERRER_TOKEN,
-      "POST",
-      { wallet_address: wallet },
-    );
+    const saved = await call<{ success?: boolean }>("/api/rewards/wallet", REFERRER_TOKEN, "POST", {
+      wallet_address: wallet,
+    });
     expect(saved.response.status).toBe(200);
     expect(saved.payload.success).toBe(true);
 
-    const cycle = db.prepare("SELECT id FROM ranking_cycles WHERE status='OPEN'").get() as { id: string };
-    const contribution = db.prepare("SELECT MAX(created_at) AS latest FROM ranking_pool_contributions").get() as { latest: number };
-    db.prepare("UPDATE ranking_cycles SET ends_at=? WHERE id=?").run(contribution.latest + 1, cycle.id);
+    const cycle = db.prepare("SELECT id FROM ranking_cycles WHERE status='OPEN'").get() as {
+      id: string;
+    };
+    const contribution = db
+      .prepare("SELECT MAX(created_at) AS latest FROM ranking_pool_contributions")
+      .get() as { latest: number };
+    db.prepare("UPDATE ranking_cycles SET ends_at=? WHERE id=?").run(
+      contribution.latest + 1,
+      cycle.id,
+    );
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    const closed = await server.fetch(
-      new Request("https://game.example/api/rewards/rankings"),
-      { DB: database },
-    );
+    const closed = await server.fetch(new Request("https://game.example/api/rewards/rankings"), {
+      DB: database,
+    });
     expect(closed.status).toBe(200);
-    const payouts = db.prepare(
-      "SELECT ranking_type,position,prize_cents,status FROM ranking_prize_payouts ORDER BY ranking_type",
-    ).all();
+    const payouts = db
+      .prepare(
+        "SELECT ranking_type,position,prize_cents,status FROM ranking_prize_payouts ORDER BY ranking_type",
+      )
+      .all();
     expect(payouts).toEqual([
       { ranking_type: "BOSSES", position: 1, prize_cents: 60, status: "PENDING" },
       { ranking_type: "REFERRALS", position: 1, prize_cents: 60, status: "PENDING" },
     ]);
     expect(
       db
-        .prepare("SELECT ranking_type,amount_cents FROM ranking_pool_reserves ORDER BY ranking_type")
+        .prepare(
+          "SELECT ranking_type,amount_cents FROM ranking_pool_reserves ORDER BY ranking_type",
+        )
         .all(),
     ).toEqual([
       { ranking_type: "BOSSES", amount_cents: 90 },
@@ -318,9 +328,11 @@ describe("real-money VIP and ranking economy", () => {
       { ranking_type: "REFERRALS", total_cents: 90 },
     ]);
 
-    const prize = db.prepare(
-      "SELECT id FROM ranking_prize_payouts WHERE ranking_type='REFERRALS' AND status='PENDING'",
-    ).get() as { id: string };
+    const prize = db
+      .prepare(
+        "SELECT id FROM ranking_prize_payouts WHERE ranking_type='REFERRALS' AND status='PENDING'",
+      )
+      .get() as { id: string };
     const paid = await call<{ success?: boolean; status?: string }>(
       "/api/admin/real-economy",
       ADMIN_TOKEN,
