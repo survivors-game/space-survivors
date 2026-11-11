@@ -1986,6 +1986,8 @@ function MarketAdminSection() {
     resolved_by: string | null;
     resolution_note: string | null;
     order_status: string;
+    payment_reference: string | null;
+    payment_proof_url: string | null;
     buyer_pilot_id: string;
     seller_pilot_id: string;
     item_name: string;
@@ -2246,6 +2248,8 @@ function MarketAdminSection() {
                 <div className="rounded bg-black/20 p-3 text-sm text-white/75">
                   <b>Motivo:</b> {dispute.reason}
                 </div>
+                {dispute.payment_reference ? <p className="break-all text-xs text-amber-100">Referencia de pago: {dispute.payment_reference}</p> : null}
+                {dispute.payment_proof_url ? <p className="text-xs"><a href={dispute.payment_proof_url} target="_blank" rel="noreferrer" className="text-cyan-200 underline">Ver comprobante de pago del comprador</a></p> : null}
                 {dispute.evidence_url ? (
                   <p className="break-all text-xs">
                     <a
