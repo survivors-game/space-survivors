@@ -88,6 +88,39 @@ describe("misiones de temporada: persistencia", () => {
     expect(p.season).toEqual(defaultProgress().season);
   });
 
+  it("convierte el progreso guardado a la nueva escala sin repetir recompensas", () => {
+    const old = sanitize({
+      ships: ["falcon"],
+      weaponsUsed: ["laser"],
+      season: {
+        seasonId: getSeasonId(),
+        pt: 480,
+        claimedFree: [],
+        claimedVip: [],
+        baseline: { kills: 0, wins: 0, bossKills: {} },
+      },
+    });
+    expect(old.season.pacingVersion).toBe(2);
+    expect(old.season.pt).toBe(224);
+    expect(seasonLevelFor(old.season.pt)).toBe(5);
+    expect(old.season.baseline.ships).toEqual(["falcon"]);
+    expect(old.season.baseline.weaponsUsed).toEqual(["laser"]);
+  });
+
+  it("conserva el nivel mínimo de recompensas que ya fueron reclamadas", () => {
+    const old = sanitize({
+      season: {
+        seasonId: getSeasonId(),
+        pt: 480,
+        claimedFree: [6],
+        claimedVip: [],
+        baseline: { kills: 0, wins: 0, bossKills: {}, ships: ["falcon"], weaponsUsed: [] },
+      },
+    });
+    expect(seasonLevelFor(old.season.pt)).toBe(6);
+    expect(old.season.claimedFree).toContain(6);
+  });
+
   it("normaliza valores corruptos de temporada", () => {
     const p = sanitize({
       season: {
