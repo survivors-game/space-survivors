@@ -8161,7 +8161,7 @@ async function handleMarketRequest(
                 ))
             AND NOT EXISTS (
               SELECT 1 FROM p2p_orders pending
-              WHERE pending.ad_id = ad.id AND pending.status = 'PENDIENTE'
+              WHERE pending.ad_id = ad.id AND pending.status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')
             )
             ${whereType}
             ${whereCountry}`,
