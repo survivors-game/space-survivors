@@ -1,6 +1,6 @@
 export const VIP_DURATION_DAYS = 30;
 export const VIP_PRICE_OBSIDIAN = 20;
-export const VIP_DROP_BONUS = 14; // VIP multiplica por 15 los drops de combate.
+export const VIP_DROP_BONUS = 34; // VIP multiplica por 35 los drops de combate.
 export const VIP_CREDIT_BONUS = 0.2;
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -39,7 +39,7 @@ export function canAffordVip(obsidian: number): boolean {
   return obsidian >= VIP_PRICE_OBSIDIAN;
 }
 
-/** Multiplicador de probabilidad de consumibles (reparación, imán, PEM); VIP obtiene 15x. */
+/** Multiplicador de probabilidad de consumibles (reparación, imán, PEM); VIP obtiene 35x. */
 export function vipDropMultiplier(active: boolean): number {
   return active ? 1 + VIP_DROP_BONUS : 1;
 }
