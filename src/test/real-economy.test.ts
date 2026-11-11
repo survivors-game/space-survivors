@@ -87,10 +87,7 @@ async function call<T>(
 describe("real-money VIP and ranking economy", () => {
   beforeAll(async () => {
     // Initialize the same D1 schema used by the Worker.
-    await server.fetch(
-      new Request("https://game.example/api/vip/payment-info"),
-      { DB: database },
-    );
+    await server.fetch(new Request("https://game.example/api/vip/payment-info"), { DB: database });
     db.exec("ALTER TABLE pilots ADD COLUMN vip_until INTEGER;");
     const now = Date.now();
     db.prepare(
@@ -99,11 +96,7 @@ describe("real-money VIP and ranking economy", () => {
       VALUES (?, 'ADMIN', 5, 0, 'SG-ADM123', NULL, 1, ?, ?, 'falcon', NULL),
         (?, 'REFERRER', 5, 0, 'SG-REF123', NULL, 1, ?, ?, 'falcon', NULL),
         (?, 'INVITEE', 5, 0, 'SG-INV123', ?, 1, ?, ?, 'falcon', NULL)`,
-    ).run(
-      ADMIN_ID, now, now,
-      REFERRER_ID, now, now,
-      INVITEE_ID, REFERRER_ID, now, now,
-    );
+    ).run(ADMIN_ID, now, now, REFERRER_ID, now, now, INVITEE_ID, REFERRER_ID, now, now);
     db.prepare(
       `INSERT INTO player_accounts (google_sub,email,pilot_id,created_at,updated_at)
       VALUES ('admin-sub','emprendedora.onlinevee@gmail.com',?,?,?),
@@ -115,9 +108,15 @@ describe("real-money VIP and ranking economy", () => {
       VALUES (?, 'google:admin-sub', ?, ?), (?, 'google:referrer-sub', ?, ?),
         (?, 'google:invitee-sub', ?, ?)`,
     ).run(
-      ADMIN_HASH, now, now + 86400000,
-      REFERRER_HASH, now, now + 86400000,
-      INVITEE_HASH, now, now + 86400000,
+      ADMIN_HASH,
+      now,
+      now + 86400000,
+      REFERRER_HASH,
+      now,
+      now + 86400000,
+      INVITEE_HASH,
+      now,
+      now + 86400000,
     );
     db.prepare(
       "INSERT INTO admin_sessions (token_hash,google_sub,created_at,expires_at) VALUES (?,'admin-sub',?,?)",
@@ -166,10 +165,16 @@ describe("real-money VIP and ranking economy", () => {
     expect(vip.vip_until).toBeGreaterThan(Date.now() + 29 * 86400000);
 
     expect(
-      db.prepare("SELECT delta_cents FROM real_money_ticket_ledger WHERE pilot_id=?").get(REFERRER_ID),
+      db
+        .prepare("SELECT delta_cents FROM real_money_ticket_ledger WHERE pilot_id=?")
+        .get(REFERRER_ID),
     ).toEqual({ delta_cents: 100 });
     expect(
-      db.prepare("SELECT ranking_type,amount_cents FROM ranking_pool_contributions ORDER BY ranking_type").all(),
+      db
+        .prepare(
+          "SELECT ranking_type,amount_cents FROM ranking_pool_contributions ORDER BY ranking_type",
+        )
+        .all(),
     ).toEqual([
       { ranking_type: "BOSSES", amount_cents: 150 },
       { ranking_type: "REFERRALS", amount_cents: 150 },
@@ -179,7 +184,7 @@ describe("real-money VIP and ranking economy", () => {
       new Request("https://game.example/api/rewards/rankings"),
       { DB: database },
     );
-    const ranking = await rankingResult.json() as {
+    const ranking = (await rankingResult.json()) as {
       referrals: Array<{ callsign: string; position: number; prize_usdt: number }>;
     };
     expect(ranking.referrals).toEqual([
