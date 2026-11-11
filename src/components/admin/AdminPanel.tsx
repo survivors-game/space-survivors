@@ -1967,6 +1967,10 @@ function MarketAdminSection() {
     price_minor: number | null;
     currency_code: string | null;
     country_code: string;
+    payment_reference: string | null;
+    payment_proof_url: string | null;
+    payment_deadline_at: number | null;
+    release_deadline_at: number | null;
     buyer_name: string;
     seller_name: string;
   };
@@ -2064,6 +2068,8 @@ function MarketAdminSection() {
 
   useEffect(() => {
     void load();
+    const interval = window.setInterval(() => void load(), 10000);
+    return () => window.clearInterval(interval);
   }, [load]);
 
   const act = async (data: Record<string, unknown>, key: string) => {
@@ -2349,6 +2355,10 @@ function MarketAdminSection() {
                 {money(order.price_minor, order.currency_code)} ·{" "}
                 {order.payment_method || "Método no registrado"} · {date(order.created_at)}
               </p>
+              {order.payment_reference ? <p className="mt-1 break-all text-amber-100">Referencia de pago: {order.payment_reference}</p> : null}
+              {order.payment_proof_url ? <a href={order.payment_proof_url} target="_blank" rel="noreferrer" className="text-cyan-200 underline">Ver comprobante del comprador</a> : null}
+              {order.payment_deadline_at && order.status === "PENDIENTE" ? <p className="text-white/45">Vence pago: {date(order.payment_deadline_at)}</p> : null}
+              {order.release_deadline_at && order.status === "PAGO_REPORTADO" ? <p className="text-white/45">Vence liberación: {date(order.release_deadline_at)}</p> : null}
             </article>
           ))}
           {!filteredOrders.length && !loading ? (
