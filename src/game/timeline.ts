@@ -115,14 +115,12 @@ export const CAMPAIGN_FINAL_BOSSES: BossEvent[] = [{ minute: 15, boss: "leviatha
 export const WORLD1_MAX_ENEMIES = 90; // mayor presión para las hordas avanzadas.
 /** Probabilidades base de drop para enemigos normales en Mundo 1, hordas 1 a 10. */
 export const WORLD1_PICKUP_CHANCES = [
-  0.0005, 0.0008, 0.0011, 0.0014, 0.0017,
-  0.002, 0.0023, 0.0026, 0.0029, 0.0032,
+  0.0005, 0.0008, 0.0011, 0.0014, 0.0017, 0.002, 0.0023, 0.0026, 0.0029, 0.0032,
 ] as const;
 
 /** Probabilidades base de drop para enemigos élite en Mundo 1, hordas 1 a 10. */
 export const WORLD1_ELITE_PICKUP_CHANCES = [
-  0.001, 0.0015, 0.002, 0.0025, 0.003,
-  0.0035, 0.004, 0.0045, 0.005, 0.006,
+  0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005, 0.006,
 ] as const;
 
 /** Probabilidad de drop en Mundo 1; las larvas reciben la mitad de la probabilidad normal. */

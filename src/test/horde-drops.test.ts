@@ -10,8 +10,12 @@ import { vipDropMultiplier } from "../game/meta/vip";
 
 describe("World 1 horde pickup progression", () => {
   it("uses the agreed scarce, progressive normal drop probabilities", () => {
-    const expected = [0.0005, 0.0008, 0.0011, 0.0014, 0.0017, 0.002, 0.0023, 0.0026, 0.0029, 0.0032];
-    const chances = Array.from({ length: HORDE_COUNT }, (_, index) => world1PickupChanceAtHorde(index));
+    const expected = [
+      0.0005, 0.0008, 0.0011, 0.0014, 0.0017, 0.002, 0.0023, 0.0026, 0.0029, 0.0032,
+    ];
+    const chances = Array.from({ length: HORDE_COUNT }, (_, index) =>
+      world1PickupChanceAtHorde(index),
+    );
     expect(chances).toEqual(expected);
     for (let index = 1; index < chances.length; index++) {
       expect(chances[index]).toBeGreaterThan(chances[index - 1]!);
@@ -20,7 +24,9 @@ describe("World 1 horde pickup progression", () => {
 
   it("keeps elite drop chances modest and progressive", () => {
     const expected = [0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005, 0.006];
-    expect(Array.from({ length: HORDE_COUNT }, (_, index) => world1PickupChanceAtHorde(index, true))).toEqual(expected);
+    expect(
+      Array.from({ length: HORDE_COUNT }, (_, index) => world1PickupChanceAtHorde(index, true)),
+    ).toEqual(expected);
   });
 
   it("applies VIP x20 while preserving Free probabilities", () => {

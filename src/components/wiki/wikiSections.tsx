@@ -279,11 +279,11 @@ const partida: WikiSection = {
       </P>
       <H>Objetos</H>
       <P>
-        Al eliminar enemigos, pueden aparecer objetos. La probabilidad aumenta progresivamente
-        desde {pct(WORLD1_PICKUP_CHANCES[0])} hasta {pct(WORLD1_PICKUP_CHANCES[9])} para enemigos
+        Al eliminar enemigos, pueden aparecer objetos. La probabilidad aumenta progresivamente desde{" "}
+        {pct(WORLD1_PICKUP_CHANCES[0])} hasta {pct(WORLD1_PICKUP_CHANCES[9])} para enemigos
         normales. Los élites tienen una probabilidad moderadamente mayor, desde{" "}
-        {pct(WORLD1_ELITE_PICKUP_CHANCES[0])} hasta {pct(WORLD1_ELITE_PICKUP_CHANCES[9])}.
-        Las larvas tienen la mitad de la probabilidad normal. VIP multiplica las probabilidades por 20.
+        {pct(WORLD1_ELITE_PICKUP_CHANCES[0])} hasta {pct(WORLD1_ELITE_PICKUP_CHANCES[9])}. Las
+        larvas tienen la mitad de la probabilidad normal. VIP multiplica las probabilidades por 20.
       </P>
       <H>Resultado</H>
       <P>
