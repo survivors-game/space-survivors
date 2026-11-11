@@ -97,7 +97,7 @@ import {
 import { hangarBonuses as calcHangarBonuses } from "@/game/meta/upgrades";
 import type { HudState, PickupKind, RunResult, UpgradeChoice } from "@/game/types";
 
-type Screen = "MENU" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER" | "WIKI" | "ROADMAP";
+type Screen = "MENU" | "LANDING" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER" | "WIKI" | "ROADMAP";
 type GameMode = "CAMPAIGN" | "ENDLESS";
 
 export const Route = createFileRoute("/")({
@@ -1177,7 +1177,7 @@ function Index() {
   useEffect(() => {
     if (googleSessionLoading || googlePlayer) return;
     // La Wiki y el Roadmap son páginas públicas; no requieren iniciar sesión.
-    if (screen !== "MENU" && screen !== "WIKI" && screen !== "ROADMAP") {
+    if (screen !== "MENU" && screen !== "LANDING" && screen !== "WIKI" && screen !== "ROADMAP") {
       setScreen("MENU");
       setNotice("INICIA SESIÓN CON GOOGLE PARA ACCEDER AL HANGAR Y DESPLEGAR");
     }
@@ -1902,21 +1902,21 @@ function Index() {
             </nav>
           ) : null}
           <div className="flex items-center gap-2 sm:gap-5">
-            {screen !== "MENU" && screen !== "PLAYING" ? (
+            {screen !== "MENU" && screen !== "LANDING" && screen !== "PLAYING" ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setAdminOpen(false);
                   setVipModalOpen(false);
-                  setScreen("MENU");
+                  setScreen("LANDING");
                 }}
-                title="Volver al centro del piloto y los rankings"
+                title="Volver a la página principal y los rankings"
                 className="font-arcade h-9 border-cyan-400/40 bg-cyan-400/10 px-3 text-[8px] uppercase tracking-wider text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
               >
                 <Crosshair className="size-3.5" />
-                <span className="hidden sm:inline">CENTRO DEL PILOTO</span>
-                <span className="sm:hidden">CENTRO</span>
+                <span className="hidden sm:inline">PÁGINA PRINCIPAL</span>
+                <span className="sm:hidden">INICIO</span>
               </Button>
             ) : null}
             {googlePlayer ? (
@@ -1946,12 +1946,14 @@ function Index() {
             {adminOpen && googlePlayer?.isAdmin ? (
               <AdminPanel onClose={() => setAdminOpen(false)} />
             ) : null}
-            {screen === "MENU" ? (
+            {screen === "MENU" || screen === "LANDING" ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  if (googlePlayer) {
+                  if (googlePlayer && screen === "LANDING") {
+                    setScreen("MENU");
+                  } else if (googlePlayer) {
                     setHangarTab("PROFILE");
                     setScreen("HANGAR");
                   } else {
@@ -2112,7 +2114,7 @@ function Index() {
           </section>
         ) : null}
 
-        {screen === "MENU" && !googlePlayer ? (
+        {(screen === "MENU" && !googlePlayer) || screen === "LANDING" ? (
           <section className="grid min-w-0 flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:py-16">
             <div className="relative">
               <div className="mb-6 flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] text-cyan-300">
