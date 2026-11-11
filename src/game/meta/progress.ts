@@ -95,10 +95,22 @@ export interface Progress {
   season: SeasonProgress;
 }
 
-const EMPTY_BASELINE: SeasonBaseline = { kills: 0, wins: 0, bossKills: {} };
+const EMPTY_BASELINE: SeasonBaseline = {
+  kills: 0,
+  wins: 0,
+  bossKills: {},
+  ships: ["falcon"],
+  weaponsUsed: [],
+};
 
-function baselineOf(stats: Progress["stats"]): SeasonBaseline {
-  return { kills: stats.kills, wins: stats.wins, bossKills: { ...stats.bossKills } };
+function baselineOf(p: Progress): SeasonBaseline {
+  return {
+    kills: p.stats.kills,
+    wins: p.stats.wins,
+    bossKills: { ...p.stats.bossKills },
+    ships: [...p.ships],
+    weaponsUsed: [...p.weaponsUsed],
+  };
 }
 
 /** Temporada vacía para `seasonId`, con la línea base dada. */
@@ -191,6 +203,8 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
       kills: num(rawBase.kills),
       wins: num(rawBase.wins),
       bossKills: counters(rawBase.bossKills),
+      ships: ids(rawBase.ships),
+      weaponsUsed: ids(rawBase.weaponsUsed),
     },
     pt: Math.floor(pt),
     claimedFree: levels(r.claimedFree),
@@ -212,7 +226,7 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
  */
 function renewSeason(p: Progress, now: number): void {
   const id = getSeasonId(now);
-  if (p.season.seasonId !== id) p.season = freshSeason(id, baselineOf(p.stats));
+  if (p.season.seasonId !== id) p.season = freshSeason(id, baselineOf(p));
 }
 
 /** Merge unknown/corrupt stored data onto defaults. */
