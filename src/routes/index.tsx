@@ -97,7 +97,8 @@ import {
 import { hangarBonuses as calcHangarBonuses } from "@/game/meta/upgrades";
 import type { HudState, PickupKind, RunResult, UpgradeChoice } from "@/game/types";
 
-type Screen = "MENU" | "LANDING" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER" | "WIKI" | "ROADMAP";
+type Screen =
+  "MENU" | "LANDING" | "SELECT" | "HANGAR" | "PLAYING" | "GAMEOVER" | "WIKI" | "ROADMAP";
 type GameMode = "CAMPAIGN" | "ENDLESS";
 
 export const Route = createFileRoute("/")({
