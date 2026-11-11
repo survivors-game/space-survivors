@@ -246,6 +246,9 @@ export function RealEconomyAdminSection() {
                 </p>
               </div>
             </div>
+            <p className="mt-3 text-[10px] text-white/45">
+              Reparto privado por puesto en cada ranking: 1.º 40% · 2.º 25% · 3.º 15% · 4.º 12% · 5.º 8%.
+            </p>
           </section>
 
           <section className="space-y-2 border border-white/10 bg-black/20 p-4">
