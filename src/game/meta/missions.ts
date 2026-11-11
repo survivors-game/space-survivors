@@ -493,7 +493,7 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     goal: 3,
     reward: 60,
     pt: 30,
-    progress: (p) => p.ships.length,
+    progress: (p, b) => p.ships.filter((id) => !b.ships.includes(id)).length,
   },
   {
     id: "s_arsenal",
@@ -503,7 +503,7 @@ export const SEASON_CHALLENGES: SeasonChallengeTemplate[] = [
     goal: 9,
     reward: 50,
     pt: 25,
-    progress: (p) => p.weaponsUsed.length,
+    progress: (p, b) => p.weaponsUsed.filter((id) => !b.weaponsUsed.includes(id)).length,
   },
   {
     id: "s_wins",
