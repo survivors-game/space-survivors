@@ -246,7 +246,7 @@ export const DAILY_MISSION_TEMPLATES: RunMissionTemplate[] = [
   },
 ];
 
-/* ---------------- 12 plantillas semanales (se eligen 8 cada semana) ---------------- */
+/* ---------------- 15 plantillas semanales (se muestran las 15 cada semana) ---------------- */
 export const WEEKLY_MISSION_TEMPLATES: RunMissionTemplate[] = [
   {
     id: "w_time",
