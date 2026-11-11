@@ -1556,6 +1556,13 @@ async function ensureRealEconomySchema(db: D1Database): Promise<void> {
           created_at INTEGER NOT NULL,
           UNIQUE(vip_payment_id, ranking_type)
         )`,
+        `CREATE TABLE IF NOT EXISTS ranking_pool_reserves (
+          ranking_type TEXT PRIMARY KEY CHECK (ranking_type IN ('BOSSES','REFERRALS')),
+          amount_cents INTEGER NOT NULL DEFAULT 0 CHECK (amount_cents >= 0),
+          updated_at INTEGER NOT NULL
+        )`,
+        `INSERT OR IGNORE INTO ranking_pool_reserves (ranking_type,amount_cents,updated_at)
+          VALUES ('BOSSES',0,0),('REFERRALS',0,0)`,
         `CREATE TABLE IF NOT EXISTS ranking_prize_payouts (
           id TEXT PRIMARY KEY,
           cycle_id TEXT NOT NULL REFERENCES ranking_cycles(id),
@@ -1670,7 +1677,7 @@ async function rankingRowsForCycle(
 }
 
 async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Promise<void> {
-  const [bosses, referrals, pools] = await Promise.all([
+  const [bosses, referrals, pools, reserves] = await Promise.all([
     rankingRowsForCycle(db, cycle, "BOSSES"),
     rankingRowsForCycle(db, cycle, "REFERRALS"),
     db
@@ -1679,10 +1686,19 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
       )
       .bind(cycle.starts_at, cycle.ends_at)
       .all<{ ranking_type: "BOSSES" | "REFERRALS"; total: number }>(),
+    db
+      .prepare("SELECT ranking_type,amount_cents FROM ranking_pool_reserves")
+      .all<{ ranking_type: "BOSSES" | "REFERRALS"; amount_cents: number }>(),
   ]);
   const poolByType = new Map(
     (pools.results ?? []).map((row) => [row.ranking_type, Number(row.total)]),
   );
+  for (const reserve of reserves.results ?? []) {
+    poolByType.set(
+      reserve.ranking_type,
+      (poolByType.get(reserve.ranking_type) ?? 0) + Number(reserve.amount_cents),
+    );
+  }
   const statements: D1Statement[] = [];
   for (const [type, rows] of [
     ["BOSSES", bosses],
@@ -1691,17 +1707,19 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
     const pool = poolByType.get(type) ?? 0;
     const baseAmounts = RANKING_PRIZE_SHARES.map((share) => Math.floor((pool * share) / 100));
     const roundingRemainder = pool - baseAmounts.reduce((sum, amount) => sum + amount, 0);
+    let allocated = 0;
     rows.forEach((row, index) => {
       const amount =
         baseAmounts[index]! + (rows.length === 5 && index === 4 ? roundingRemainder : 0);
       if (amount <= 0) return;
+      allocated += amount;
       statements.push(
         db
           .prepare(
             "INSERT OR IGNORE INTO ranking_prize_payouts (id,cycle_id,ranking_type,position,pilot_id,score,prize_cents,status,created_at) VALUES (?,?,?,?,?,?,?,'PENDING',?)",
           )
           .bind(
-            `prize_${randomHex(10)}`,
+            "prize_" + randomHex(10),
             cycle.id,
             type,
             index + 1,
@@ -1712,6 +1730,13 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
           ),
       );
     });
+    statements.push(
+      db
+        .prepare(
+          "INSERT INTO ranking_pool_reserves (ranking_type,amount_cents,updated_at) VALUES (?,?,?) ON CONFLICT(ranking_type) DO UPDATE SET amount_cents=excluded.amount_cents,updated_at=excluded.updated_at",
+        )
+        .bind(type, Math.max(0, pool - allocated), Date.now()),
+    );
   }
   statements.push(
     db
@@ -1720,7 +1745,6 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
   );
   if (statements.length) await db.batch(statements);
 }
-
 async function getCurrentRankingCycle(db: D1Database, now = Date.now()): Promise<RankingCycleRow> {
   let cycle = await db
     .prepare("SELECT id,starts_at,ends_at FROM ranking_cycles WHERE status='OPEN' LIMIT 1")
@@ -1759,7 +1783,7 @@ async function recordRankingBossProgress(
 
 async function getPublicRankingPayload(db: D1Database): Promise<Record<string, unknown>> {
   const cycle = await getCurrentRankingCycle(db);
-  const [bosses, referrals, pools] = await Promise.all([
+  const [bosses, referrals, pools, reserves] = await Promise.all([
     rankingRowsForCycle(db, cycle, "BOSSES"),
     rankingRowsForCycle(db, cycle, "REFERRALS"),
     db
@@ -1768,10 +1792,19 @@ async function getPublicRankingPayload(db: D1Database): Promise<Record<string, u
       )
       .bind(cycle.starts_at, cycle.ends_at)
       .all<{ ranking_type: "BOSSES" | "REFERRALS"; total: number }>(),
+    db
+      .prepare("SELECT ranking_type,amount_cents FROM ranking_pool_reserves")
+      .all<{ ranking_type: "BOSSES" | "REFERRALS"; amount_cents: number }>(),
   ]);
   const poolByType = new Map(
     (pools.results ?? []).map((row) => [row.ranking_type, Number(row.total)]),
   );
+  for (const reserve of reserves.results ?? []) {
+    poolByType.set(
+      reserve.ranking_type,
+      (poolByType.get(reserve.ranking_type) ?? 0) + Number(reserve.amount_cents),
+    );
+  }
   const withPrizes = (
     rows: { pilot_id: string; callsign: string; score: number }[],
     type: "BOSSES" | "REFERRALS",
@@ -1793,7 +1826,6 @@ async function getPublicRankingPayload(db: D1Database): Promise<Record<string, u
     referrals: withPrizes(referrals, "REFERRALS"),
   };
 }
-
 async function handleRealEconomyRequest(
   request: Request,
   env: WorkerEnv | undefined,
@@ -1879,7 +1911,15 @@ async function handleRealEconomyRequest(
             .all(),
           db
             .prepare(
-              "SELECT ranking_type,SUM(amount_cents) AS total_cents FROM ranking_pool_contributions WHERE created_at>=? AND created_at<? GROUP BY ranking_type",
+              `SELECT kinds.ranking_type,
+                COALESCE(contributions.total_cents,0)+COALESCE(reserves.amount_cents,0) AS total_cents
+              FROM (SELECT 'BOSSES' AS ranking_type UNION ALL SELECT 'REFERRALS') kinds
+              LEFT JOIN (
+                SELECT ranking_type,SUM(amount_cents) AS total_cents
+                FROM ranking_pool_contributions WHERE created_at>=? AND created_at<?
+                GROUP BY ranking_type
+              ) contributions ON contributions.ranking_type=kinds.ranking_type
+              LEFT JOIN ranking_pool_reserves reserves ON reserves.ranking_type=kinds.ranking_type`,
             )
             .bind(cycle.starts_at, cycle.ends_at)
             .all(),
