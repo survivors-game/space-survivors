@@ -1921,10 +1921,10 @@ function Index() {
               </Button>
             ) : null}
             {googlePlayer ? (
-              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-amber-300 sm:gap-2 sm:text-[8px]">
-                <span className="size-2 bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.65)]" />{" "}
-                <span className="text-amber-300 [text-shadow:0_0_7px_rgba(252,211,77,0.28)]">{progress.credits.toLocaleString()} CR</span>
-                <span className="ml-2 inline-flex items-center gap-1 text-fuchsia-300 [text-shadow:0_0_7px_rgba(232,121,249,0.28)]">
+              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-[#ffe600] sm:gap-2 sm:text-[8px]">
+                <span className="size-2 bg-[#ffe600] shadow-[0_0_9px_rgba(255,230,0,0.85)]" />{" "}
+                <span className="font-black text-[#ffe600] [text-shadow:0_0_9px_rgba(255,230,0,0.5)]">{progress.credits.toLocaleString()} CR</span>
+                <span className="ml-2 inline-flex items-center gap-1 font-black text-[#df4dff] [text-shadow:0_0_9px_rgba(223,77,255,0.5)]">
                   <Gem className="size-3" />
                   {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
                 </span>

@@ -34,7 +34,7 @@ export function TicketBalance() {
     <span
       title="Tickets de recompensa por invitaciones VIP"
       aria-label="Saldo de tickets de recompensa"
-      className="ml-2 inline-flex items-center gap-1 text-emerald-300/85 [text-shadow:0_0_7px_rgba(110,231,183,0.24)]"
+      className="ml-2 inline-flex items-center gap-1 font-black text-[#00f58a] [text-shadow:0_0_9px_rgba(0,245,138,0.5)]"
     >
       <Banknote className="size-3" />
       {balanceCents === null ? "--" : (balanceCents / 100).toFixed(2)} USD
