@@ -1673,10 +1673,8 @@ async function finalizeRankingCycle(db: D1Database, cycle: RankingCycleRow): Pro
   const statements: D1Statement[] = [];
   for (const [type, rows] of [["BOSSES", bosses], ["REFERRALS", referrals]] as const) {
     const pool = poolByType.get(type) ?? 0;
-    let allocated = 0;
     rows.forEach((row, index) => {
       const amount = Math.floor((pool * RANKING_PRIZE_SHARES[index]!) / 100);
-      allocated += amount;
       if (amount <= 0) return;
       statements.push(
         db
