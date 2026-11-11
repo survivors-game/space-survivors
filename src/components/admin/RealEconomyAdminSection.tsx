@@ -46,7 +46,24 @@ type PrizePayout = {
   wallet_address: string;
 };
 
+type TicketBalance = {
+  pilot_id: string;
+  callsign: string;
+  email: string | null;
+  balance_cents: number;
+  available_cents: number;
+};
+
 type Payload = {
+  totals: {
+    approved_sales: number;
+    referral_paid_cents: number;
+    ranking_funded_cents: number;
+    tickets_issued_cents: number;
+    tickets_outstanding_cents: number;
+    admin_earned_cents: number;
+  };
+  ticket_balances: TicketBalance[];
   distribution: {
     vip_price_usd: number;
     admin_usd: number;
@@ -187,6 +204,20 @@ export function RealEconomyAdminSection() {
               <article key={label} className="border border-amber-400/20 bg-amber-400/[0.04] p-3">
                 <p className="text-[10px] uppercase tracking-wider text-white/50">{label}</p>
                 <p className="mt-2 text-sm font-bold text-amber-200">{value}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["Ventas VIP aprobadas", String(data.totals.approved_sales)],
+              ["Tu ganancia acumulada", money(data.totals.admin_earned_cents)],
+              ["Tickets emitidos", money(data.totals.tickets_issued_cents)],
+              ["Fondos totales de rankings", money(data.totals.ranking_funded_cents)],
+            ].map(([label, value]) => (
+              <article key={label} className="border border-emerald-400/20 bg-emerald-400/[0.04] p-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/50">{label}</p>
+                <p className="mt-2 text-sm font-bold text-emerald-200">{value}</p>
               </article>
             ))}
           </div>
@@ -412,6 +443,27 @@ export function RealEconomyAdminSection() {
                       </td>
                     </tr>
                   ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-200">Tickets acumulados por jugador</h3>
+            <div className="overflow-x-auto border border-white/10">
+              <table className="w-full min-w-[560px] text-left text-xs">
+                <thead className="bg-white/5 text-white/55">
+                  <tr><th className="p-2">Jugador</th><th className="p-2">Saldo total</th><th className="p-2">Disponible</th></tr>
+                </thead>
+                <tbody>
+                  {data.ticket_balances.map((balance) => (
+                    <tr key={balance.pilot_id} className="border-t border-white/10">
+                      <td className="p-2">{balance.callsign}<span className="block text-[10px] text-white/40">{balance.email ?? balance.pilot_id}</span></td>
+                      <td className="p-2 font-bold text-emerald-200">{money(balance.balance_cents)}</td>
+                      <td className="p-2">{money(balance.available_cents)}</td>
+                    </tr>
+                  ))}
+                  {!data.ticket_balances.length ? <tr><td colSpan={3} className="p-4 text-center text-white/40">No hay tickets acumulados.</td></tr> : null}
                 </tbody>
               </table>
             </div>
