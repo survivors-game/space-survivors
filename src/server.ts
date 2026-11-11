@@ -8689,7 +8689,7 @@ async function handleMarketRequest(
       ]);
       if (
         results.length !== 3 ||
-        results.some((result) => result.results?.length !== 1)
+        results.some((result) => result.success === false || result.meta?.changes !== 1)
       ) {
         throw new Error("La publicación no pudo confirmar el descuento, la reserva y el anuncio.");
       }
