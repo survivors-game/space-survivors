@@ -233,9 +233,10 @@ export function PilotHub({
   const seasonNumber = Number(season.seasonId.slice(1)) || 1;
   const nextSeasonNode = SEASON_LEVELS[seasonBar.level] ?? null;
   const seasonPct = seasonBar.fraction * 100;
-  const seasonProgressText = seasonBar.nextPt === null
-    ? `${fmt(season.pt)} PT · TEMPORADA COMPLETADA`
-    : `${fmt(season.pt - seasonBar.floorPt)}/${fmt(seasonBar.nextPt - seasonBar.floorPt)} PT`;
+  const seasonProgressText =
+    seasonBar.nextPt === null
+      ? `${fmt(season.pt)} PT · TEMPORADA COMPLETADA`
+      : `${fmt(season.pt - seasonBar.floorPt)}/${fmt(seasonBar.nextPt - seasonBar.floorPt)} PT`;
   const nextRewardText = nextSeasonNode?.freeReward.label ?? "Temporada completada";
 
   return (

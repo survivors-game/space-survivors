@@ -1741,7 +1741,12 @@ export class Engine {
         return;
       }
     }
-    if (this.state === "PLAYING" && this.bossAttemptToken && this.bossAttemptExpiresAt > 0 && Date.now() >= this.bossAttemptExpiresAt) {
+    if (
+      this.state === "PLAYING" &&
+      this.bossAttemptToken &&
+      this.bossAttemptExpiresAt > 0 &&
+      Date.now() >= this.bossAttemptExpiresAt
+    ) {
       if (this.boss) this.boss.alive = false;
       this.boss = null;
       this.settleBossAttempt("defeat");
