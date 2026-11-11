@@ -25,7 +25,7 @@ interface MarketBuyProps {
     sort: ListingSort,
   ) => Promise<void>;
   onBuy: (listingId: string, method: P2PPayMethod, network?: string) => Promise<P2PPurchaseOrder>;
-  onReportPayment: (orderId: string) => Promise<void>;
+  onReportPayment: (orderId: string, reference: string, proofUrl: string) => Promise<void>;
   onCancel: (orderId: string) => Promise<void>;
 }
 
@@ -47,6 +47,8 @@ export function MarketBuy({
   const [order, setOrder] = useState<P2PPurchaseOrder | null>(null);
   const [selectedMethods, setSelectedMethods] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentProofUrl, setPaymentProofUrl] = useState("");
 
   const loadPage = useCallback(
     async (targetPage: number) => {
@@ -89,7 +91,19 @@ export function MarketBuy({
     setBusyOrder(true);
     setError("");
     try {
-      await action(order.order_id);
+      if (action === onReportPayment) {
+        if (paymentReference.trim().length < 3 && !paymentProofUrl.trim()) {
+          throw new Error("Indica una referencia de pago o adjunta el enlace HTTPS del comprobante.");
+        }
+        if (paymentProofUrl.trim() && !/^https:\\/\\//i.test(paymentProofUrl.trim())) {
+          throw new Error("El comprobante debe tener un enlace HTTPS válido.");
+        }
+        await onReportPayment(order.order_id, paymentReference.trim(), paymentProofUrl.trim());
+      } else {
+        await action(order.order_id);
+      }
+      setPaymentReference("");
+      setPaymentProofUrl("");
       setOrder(null);
       await loadPage(page);
     } catch (reason) {
@@ -192,10 +206,19 @@ export function MarketBuy({
             {formatP2PPrice(order.price_minor, order.price_currency)} · COMISIÓN PAGADA:{" "}
             {order.commission_obsidian} OBS
           </p>
+          <p className="text-[8px] uppercase text-amber-100">PAGO ANTES DE: {new Date(order.payment_deadline_at).toLocaleString()}</p>
+          <label className="block space-y-1 text-[8px] uppercase text-white/60">
+            REFERENCIA O NÚMERO DE TRANSACCIÓN
+            <input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} maxLength={120} placeholder="Referencia del pago (opcional si adjuntas comprobante)" className="w-full border border-white/15 bg-black/40 p-2 text-xs text-white" />
+          </label>
+          <label className="block space-y-1 text-[8px] uppercase text-white/60">
+            ENLACE HTTPS DEL COMPROBANTE
+            <input value={paymentProofUrl} onChange={(event) => setPaymentProofUrl(event.target.value)} maxLength={2048} placeholder="https://... (opcional si indicas referencia)" className="w-full border border-white/15 bg-black/40 p-2 text-xs text-white" />
+          </label>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              disabled={busyOrder}
+              disabled={busyOrder || (paymentReference.trim().length < 3 && !paymentProofUrl.trim())}
               onClick={() => void finishOrder(onReportPayment)}
               className="rounded-none bg-cyan-300 text-[8px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
             >
