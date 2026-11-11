@@ -47,7 +47,7 @@ export interface MarketActions {
     sort: "newest" | "price_asc" | "price_desc",
   ) => Promise<void>;
   onBuy: (listingId: string, method: P2PPayMethod, network?: string) => Promise<P2PPurchaseOrder>;
-  onReportPayment: (orderId: string) => Promise<void>;
+  onReportPayment: (orderId: string, reference: string, proofUrl: string) => Promise<void>;
   onReleaseOrder: (orderId: string) => Promise<void>;
   onOpenDispute: (orderId: string, reason: string, evidenceUrl: string) => Promise<void>;
   onCancelOrder: (orderId: string) => Promise<void>;
