@@ -3001,9 +3001,12 @@ async function handleAdminAuthRequest(
 ): Promise<Response | null> {
   const url = new URL(request.url);
   if (
-    !["/api/admin/auth/login", "/api/admin/auth/status", "/api/admin/auth/logout"].includes(
-      url.pathname,
-    )
+    ![
+      "/api/admin/auth/login",
+      "/api/admin/auth/status",
+      "/api/admin/auth/logout",
+      "/api/admin/reset-test-progress",
+    ].includes(url.pathname)
   )
     return null;
   if (!env?.DB) return json({ error: "La base de datos no está disponible." }, 503);
@@ -3034,6 +3037,70 @@ async function handleAdminAuthRequest(
       .bind(randomHex(16), event, result, accessIpHash, account.email, Date.now())
       .run();
   };
+  if (url.pathname === "/api/admin/reset-test-progress") {
+    if (request.method !== "POST") return json({ error: "Método no permitido." }, 405);
+    if (!isSameOriginPost(request, url)) return json({ error: "Solicitud no autorizada." }, 403);
+    if (!(await hasValidAdminSession(db, request, account.google_sub))) {
+      return json({ error: "Acceso administrativo requerido." }, 403);
+    }
+    const body = await readJson(request, 1024);
+    if (body?.["confirmation"] !== "REINICIAR PRUEBAS") {
+      return json({ error: "Escribe REINICIAR PRUEBAS para confirmar." }, 400);
+    }
+    try {
+      await ensureMarketSchema(db);
+      await ensureRealEconomySchema(db);
+      const now = Date.now();
+      const results = await db.batch([
+        db.prepare(
+          "INSERT OR IGNORE INTO player_progress (pilot_id,progress_json,updated_at) SELECT pilot_id,?,? FROM pilots",
+        ).bind(DEFAULT_REFERRAL_PROGRESS, now),
+        db.prepare(
+          "UPDATE player_progress SET progress_json=?,updated_at=? WHERE pilot_id IN (SELECT pilot_id FROM pilots)",
+        ).bind(DEFAULT_REFERRAL_PROGRESS, now),
+        db.prepare(
+          "UPDATE pilots SET obsidian=0,boss_obsidian=0,selected_ship_id='falcon',updated_at=?",
+        ).bind(now),
+        db.prepare(
+          "DELETE FROM pilot_inventory WHERE id NOT IN (SELECT inventory_id FROM p2p_ads) AND NOT (item_id='falcon' AND item_type='nave')",
+        ),
+        db.prepare(
+          "UPDATE pilot_inventory SET quantity=0,updated_at=? WHERE item_type='objeto' AND is_locked=0",
+        ).bind(now),
+        db.prepare(
+          "UPDATE pilot_inventory SET quantity=0,updated_at=? WHERE item_type='nave' AND item_id!='falcon' AND id NOT IN (SELECT inventory_id FROM p2p_ads WHERE status IN ('ACTIVO','PAUSADO'))",
+        ).bind(now),
+        db.prepare("DELETE FROM boss_cooldowns"),
+        db.prepare("DELETE FROM boss_attempts"),
+        db.prepare(
+          "UPDATE ranking_cycle_boss_scores SET score=0,last_boss_obsidian=0,updated_at=?",
+        ).bind(now),
+        db.prepare(
+          "DELETE FROM auth_sessions WHERE wallet_address LIKE 'google:%' AND wallet_address != ?",
+        ).bind("google:" + account.google_sub),
+        db.prepare(
+          "INSERT INTO admin_access_logs (id,event,result,ip_hash,admin_email,created_at) VALUES (?,?,?,?,?,?)",
+        ).bind(randomHex(16), "test_progress_reset", "success", accessIpHash, account.email, now),
+      ]);
+      if (env.LEADERBOARD) await env.LEADERBOARD.delete(LEADERBOARD_KEY);
+      return json({
+        success: true,
+        resetAt: now,
+        players: results[2]?.meta?.changes ?? 0,
+        preserved: [
+          "cuentas Google",
+          "perfiles y nombres",
+          "VIP y pagos",
+          "tickets y solicitudes de cobro",
+          "registros económicos y auditoría",
+          "referidos y operaciones P2P",
+        ],
+      });
+    } catch (error) {
+      console.error("No se pudo reiniciar el progreso de prueba:", error);
+      return json({ error: "No se pudo completar el reinicio del progreso." }, 409);
+    }
+  }
   if (url.pathname === "/api/admin/auth/status") {
     if (request.method !== "GET") return json({ error: "Método no permitido." }, 405);
     return json({ authenticated: await hasValidAdminSession(db, request, account.google_sub) });

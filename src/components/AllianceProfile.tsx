@@ -216,7 +216,6 @@ export function AllianceProfile({
             <MpBadge tone={state?.vip ? "amber" : "muted"}>
               VIP {state?.vip ? "ACTIVO" : "INACTIVO"}
             </MpBadge>
-            <MpBadge tone="cyan">{obsidian?.toLocaleString() ?? "--"} OBS</MpBadge>
           </div>
         </div>
       </div>
@@ -392,7 +391,7 @@ export function AllianceProfile({
                 aside={<MpBadge tone="amber">20 OBS · VIP</MpBadge>}
               />
               <p className="mt-3 text-[10px] leading-5 text-white/50">
-                Requiere VIP activo y 20 OBS. Disponible: {obsidian?.toLocaleString() ?? "--"} OBS ·
+                Requiere VIP activo y 20 OBS ·
                 Estado VIP: {state?.vip ? "ACTIVO" : "INACTIVO"}
               </p>
               <form

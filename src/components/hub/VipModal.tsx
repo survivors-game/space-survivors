@@ -6,7 +6,6 @@ export interface VipModalProps {
   open: boolean;
   onClose: () => void;
   vipUntil: number | null;
-  obsidian: number | null;
 }
 
 interface Benefit {
@@ -66,7 +65,7 @@ const BENEFITS: Benefit[] = [
 const statusLabel = (status: VipPayment["status"]) =>
   status === "PENDING" ? "Pendiente de revisión" : status === "APPROVED" ? "Aprobado" : "Rechazado";
 
-export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
+export function VipModal({ open, onClose, vipUntil }: VipModalProps) {
   const [walletAddress, setWalletAddress] = useState("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [payments, setPayments] = useState<VipPayment[]>([]);
@@ -207,11 +206,7 @@ export function VipModal({ open, onClose, vipUntil, obsidian }: VipModalProps) {
                 </>
               )}
             </div>
-            <div className="border border-cyan-500/20 bg-black/40 p-3">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">Tu saldo</p>
-              <p className="mt-1 font-arcade text-[10px] text-[#ff4d9d]">{obsidian ?? "--"} OBS</p>
-            </div>
-            <section className="divide-y divide-white/10 border border-cyan-500/20 bg-black/30">
+<section className="divide-y divide-white/10 border border-cyan-500/20 bg-black/30">
               {BENEFITS.map(({ label, detail, Icon, color }) => (
                 <div key={label} className="flex items-center gap-3 px-3 py-2">
                   <Icon className="size-3.5 shrink-0" style={{ color }} />

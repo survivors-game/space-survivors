@@ -32,8 +32,6 @@ export interface PilotHubProps {
   pilotName: string;
   pilotId: string;
   vipActive: boolean;
-  credits: number;
-  obsidian: number;
   runs: number;
   kills: number;
   season: SeasonProgress;
@@ -137,30 +135,6 @@ function Bar({ label, value, color, Icon }: BarProps) {
   );
 }
 
-interface ReadoutProps {
-  label: string;
-  value: string;
-  color: string;
-  Icon: LucideIcon;
-}
-
-function Readout({ label, value, color, Icon }: ReadoutProps) {
-  return (
-    <div className="flex flex-col items-end gap-1 leading-none">
-      <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.2em] text-white/55">
-        <Icon className="size-3" style={{ color }} />
-        {label}
-      </span>
-      <span
-        className="font-arcade text-[12px] tabular-nums"
-        style={{ color, textShadow: `0 0 4px ${color}66` }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 interface NavButtonProps {
   title: string;
   subtitle: string;
@@ -202,8 +176,6 @@ export function PilotHub({
   pilotName,
   pilotId,
   vipActive,
-  credits,
-  obsidian,
   runs,
   kills,
   season,
@@ -271,8 +243,6 @@ export function PilotHub({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 lg:gap-5">
-          <Readout label="CR" value={fmt(credits)} color={CYAN} Icon={Hexagon} />
-          <Readout label="OBS" value={fmt(obsidian)} color={MAGENTA} Icon={Star} />
           <button
             type="button"
             onClick={() => onOpenVip?.()}
