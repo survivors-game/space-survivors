@@ -241,8 +241,8 @@ describe("real-money VIP and ranking economy", () => {
   it("records boss-rank progress only within the active 15-day cycle", async () => {
     db.prepare("UPDATE pilots SET boss_obsidian=50 WHERE pilot_id=?").run(INVITEE_ID);
     db.prepare(
-      "INSERT INTO player_progress (pilot_id,progress_json,updated_at) VALUES (?,'{\\"stats\\":{\\"kills\\":123}}',?)",
-    ).run(INVITEE_ID, Date.now());
+      "INSERT INTO player_progress (pilot_id,progress_json,updated_at) VALUES (?,?,?)",
+    ).run(INVITEE_ID, JSON.stringify({ stats: { kills: 123 } }), Date.now());
     let storedLeaderboard: string | null = null;
     const leaderboard = {
       async get() {
