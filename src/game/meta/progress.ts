@@ -49,6 +49,8 @@ export interface RunSummary {
  */
 export interface SeasonProgress {
   seasonId: string;
+  /** Versión de la escala de puntos aplicada al pase. */
+  pacingVersion: number;
   baseline: SeasonBaseline;
   pt: number;
   claimedFree: number[];
@@ -117,6 +119,7 @@ function baselineOf(p: Progress): SeasonBaseline {
 function freshSeason(seasonId: string, baseline: SeasonBaseline): SeasonProgress {
   return {
     seasonId,
+    pacingVersion: 2,
     baseline,
     pt: 0,
     claimedFree: [],
@@ -199,6 +202,7 @@ function sanitizeSeason(raw: unknown): SeasonProgress {
   const pt = num(r.pt);
   return {
     seasonId: typeof r.seasonId === "string" ? r.seasonId : "",
+    pacingVersion: Math.floor(num(r.pacingVersion)),
     baseline: {
       kills: num(rawBase.kills),
       wins: num(rawBase.wins),
@@ -288,6 +292,15 @@ export function sanitize(raw: unknown): Progress {
   };
   if (!p.ships.includes(p.selectedShip)) p.selectedShip = "falcon";
   if (!p.stages.includes(p.selectedStage)) p.selectedStage = "nova";
+  if (p.season.pacingVersion < 2) {
+    const scaledPt = Math.round((p.season.pt * 2350) / 5040);
+    const claimedLevel = Math.max(0, ...p.season.claimedFree, ...p.season.claimedVip);
+    const claimedFloor = claimedLevel
+      ? (SEASON_LEVELS[claimedLevel - 1]?.requiredPt ?? 0)
+      : 0;
+    p.season.pt = Math.min(2350, Math.max(scaledPt, claimedFloor));
+    p.season.pacingVersion = 2;
+  }
   const savedBaseline = (r.season as Partial<SeasonProgress> | undefined)?.baseline as
     Partial<SeasonBaseline> | undefined;
   if (savedBaseline && !Array.isArray(savedBaseline.ships)) p.season.baseline.ships = [...p.ships];
