@@ -41,6 +41,17 @@ describe("World 1 horde pickup progression", () => {
   });
 });
 
+describe("World 1 advanced horde composition", () => {
+  it("keeps combat enemies in hordes 7 to 10 instead of using parasite-only waves", () => {
+    for (const horde of WORLD1_HORDES.slice(6)) {
+      expect(horde["hunter"]).toBeGreaterThan(0);
+      expect(horde["destroyer"]).toBeGreaterThan(0);
+      expect(horde["bomber"]).toBeGreaterThan(0);
+      expect(Object.values(horde).reduce((sum, weight) => sum + weight, 0)).toBe(100);
+    }
+  });
+});
+
 describe("World 1 individual enemy difficulty progression", () => {
   it("increases enemy HP and damage in every horde without increasing spawn frequency", () => {
     expect(WORLD1_HORDE_PRESSURE).toHaveLength(HORDE_COUNT);
