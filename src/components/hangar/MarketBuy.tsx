@@ -91,21 +91,21 @@ export function MarketBuy({
     }
   };
 
-  const finishOrder = async (action: (orderId: string) => Promise<void>) => {
+  const finishOrder = async (reportPayment: boolean) => {
     if (!order) return;
     setBusyOrder(true);
     setError("");
     try {
-      if (action === onReportPayment) {
+      if (reportPayment) {
         if (paymentReference.trim().length < 3 && !paymentProofUrl.trim()) {
           throw new Error("Indica una referencia de pago o adjunta el enlace HTTPS del comprobante.");
         }
-        if (paymentProofUrl.trim() && !/^https:\\/\\//i.test(paymentProofUrl.trim())) {
+        if (paymentProofUrl.trim() && !paymentProofUrl.trim().toLowerCase().startsWith("https://")) {
           throw new Error("El comprobante debe tener un enlace HTTPS válido.");
         }
         await onReportPayment(order.order_id, paymentReference.trim(), paymentProofUrl.trim());
       } else {
-        await action(order.order_id);
+        await onCancel(order.order_id);
       }
       setPaymentReference("");
       setPaymentProofUrl("");
@@ -224,7 +224,7 @@ export function MarketBuy({
             <Button
               type="button"
               disabled={busyOrder || (paymentReference.trim().length < 3 && !paymentProofUrl.trim())}
-              onClick={() => void finishOrder(onReportPayment)}
+              onClick={() => void finishOrder(true)}
               className="rounded-none bg-cyan-300 text-[8px] font-bold uppercase text-[#070814] hover:bg-cyan-200"
             >
               YA REALICÉ EL PAGO
@@ -233,7 +233,7 @@ export function MarketBuy({
               type="button"
               variant="outline"
               disabled={busyOrder}
-              onClick={() => void finishOrder(onCancel)}
+              onClick={() => void finishOrder(false)}
               className="rounded-none border-[#ff0055]/35 text-[8px] uppercase text-[#ff9ab9]"
             >
               CANCELAR ORDEN
