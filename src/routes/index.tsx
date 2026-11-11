@@ -1921,10 +1921,10 @@ function Index() {
               </Button>
             ) : null}
             {googlePlayer ? (
-              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-[#8d8058] sm:gap-2 sm:text-[8px]">
-                <span className="size-2 bg-[#9b8750]" />{" "}
-                <span className="text-[#9b8750]">{progress.credits.toLocaleString()} CR</span>
-                <span className="ml-2 inline-flex items-center gap-1 text-[#966b91]">
+              <span className="font-arcade flex flex-wrap items-center gap-1 text-[7px] uppercase tracking-widest text-amber-300 sm:gap-2 sm:text-[8px]">
+                <span className="size-2 bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.65)]" />{" "}
+                <span className="text-amber-300 [text-shadow:0_0_7px_rgba(252,211,77,0.28)]">{progress.credits.toLocaleString()} CR</span>
+                <span className="ml-2 inline-flex items-center gap-1 text-fuchsia-300 [text-shadow:0_0_7px_rgba(232,121,249,0.28)]">
                   <Gem className="size-3" />
                   {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
                 </span>
@@ -1963,8 +1963,7 @@ function Index() {
                 }}
                 disabled={googleConnecting}
                 title={googlePlayer ? "Abrir perfil del piloto" : "Iniciar sesión con Google"}
-                className="font-arcade h-9 border-amber-400/25 bg-amber-400/5 px-3 text-[8px] uppercase tracking-wider text-amber-200/65 shadow-none hover:bg-amber-400/10 hover:text-amber-200/80"
-                style={{ filter: "brightness(0.84)" }}
+                className="font-arcade h-9 border-amber-400/45 bg-amber-400/10 px-3 text-[8px] uppercase tracking-wider text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.14)] hover:bg-amber-400/15 hover:text-amber-100 hover:shadow-[0_0_16px_rgba(251,191,36,0.22)]"
               >
                 <Wallet className="size-3.5" />
                 <span className="flex flex-col items-start leading-tight">
@@ -1976,7 +1975,7 @@ function Index() {
                         : "INICIAR SESIÓN CON GOOGLE"}
                   </span>
                   {googlePlayer ? (
-                    <span className="mt-1 text-[7px] normal-case tracking-normal text-cyan-200/45">
+                    <span className="mt-1 text-[7px] normal-case tracking-normal text-cyan-200/75">
                       PERFIL DEL PILOTO
                     </span>
                   ) : null}
