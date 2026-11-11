@@ -118,7 +118,7 @@ const PHASES: Phase[] = [
       },
       { Icon: Cpu, text: "Puente de Mando 2187, Hangar 1-10 con módulos de especialización." },
       { Icon: Shield, text: "Mercado P2P, Alianzas, guerras de clanes y auxilio Boss Help." },
-      { Icon: Sparkles, text: "Membresía VIP: +35% de drops, +20% de créditos y chat dorado." },
+      { Icon: Sparkles, text: "Membresía VIP: ×35 de probabilidad de drops, +20% de créditos y chat dorado." },
       { Icon: CheckCircle2, text: "Misiones diarias y semanales, y Pase de Temporada." },
     ],
   },
