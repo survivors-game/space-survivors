@@ -62,6 +62,7 @@ import { CombatStatsOverlay } from "@/components/game/CombatStatsOverlay";
 import { WeaponHotbar } from "@/components/game/WeaponHotbar";
 import { GameChat } from "@/components/GameChat";
 import { Leaderboard } from "@/components/Leaderboard";
+import { TicketBalance } from "@/components/TicketBalance";
 import { ReferralProfile } from "@/components/ReferralProfile";
 import { AllianceProfile } from "@/components/AllianceProfile";
 import { MenuAttractBackdrop } from "@/components/game/MenuAttractBackdrop";
@@ -1909,6 +1910,7 @@ function Index() {
                   <Gem className="size-3" />
                   {marketPilot ? marketPilot.obsidian.toLocaleString() : "--"} OBS
                 </span>
+                <TicketBalance />
               </span>
             ) : null}
             {screen === "MENU" &&
