@@ -50,19 +50,19 @@ const run = (over: Partial<RunResult> = {}): RunResult => ({
 const NOON_SUNDAY = Date.UTC(2026, 10, 8, 12, 0, 0);
 
 describe("misiones de temporada: calendario y selección", () => {
-  it("elige 6 diarias deterministas con 2 por tier", () => {
+  it("elige 5 diarias deterministas: 2 básicas, 2 de piloto y 1 élite", () => {
     const a = getActiveDailyMissions("2026-11-08");
     const b = getActiveDailyMissions("2026-11-08");
     expect(a.map((m) => m.id)).toEqual(b.map((m) => m.id));
-    expect(a).toHaveLength(6);
+    expect(a).toHaveLength(5);
     expect(a.filter((m) => m.tier === "BASIC")).toHaveLength(2);
     expect(a.filter((m) => m.tier === "PILOT")).toHaveLength(2);
-    expect(a.filter((m) => m.tier === "ELITE")).toHaveLength(2);
+    expect(a.filter((m) => m.tier === "ELITE")).toHaveLength(1);
   });
 
-  it("elige 8 semanales únicas", () => {
+  it("elige 15 semanales únicas", () => {
     const w = getActiveWeeklyMissions("2026-11-02");
-    expect(w).toHaveLength(8);
+    expect(w).toHaveLength(15);
     expect(new Set(w.map((m) => m.id)).size).toBe(8);
   });
 
@@ -153,7 +153,7 @@ describe("misiones de temporada: avance y reclamos", () => {
     expect(next.season.pt).toBe(done.template.pt);
   });
 
-  it("el cofre se desbloquea con 5 diarias reclamadas y se reclama una vez", () => {
+  it("el cofre se desbloquea con 4 diarias reclamadas y se reclama una vez", () => {
     let p = applyRun(
       defaultProgress(),
       run({
@@ -169,14 +169,14 @@ describe("misiones de temporada: avance y reclamos", () => {
     ).progress;
     let claimedCount = 0;
     for (const e of getSeasonBoard(p, NOON_SUNDAY).daily) {
-      if (!e.completed || claimedCount === 5) continue;
+      if (!e.completed || claimedCount === 4) continue;
       const r = claimPeriodMission(p, "DAILY", e.template.id, NOON_SUNDAY);
       if (r.ok) {
         p = r.progress;
         claimedCount++;
       }
     }
-    expect(claimedCount).toBe(5);
+    expect(claimedCount).toBe(4);
     const chest = claimDailyChest(p, NOON_SUNDAY);
     expect(chest.ok).toBe(true);
     if (!chest.ok) return;
@@ -185,7 +185,7 @@ describe("misiones de temporada: avance y reclamos", () => {
 
   it("los desafíos mayores usan estadísticas de vida y se reclaman una vez", () => {
     const base = defaultProgress();
-    const p = { ...base, stats: { ...base.stats, kills: 500 } };
+    const p = { ...base, stats: { ...base.stats, kills: 3000 } };
     const res = claimSeasonChallenge(p, "s_kills_500");
     expect(res.ok).toBe(true);
     if (!res.ok) return;
@@ -197,7 +197,7 @@ describe("misiones de temporada: avance y reclamos", () => {
 describe("pase de temporada", () => {
   it("calcula el nivel según el PT acumulado", () => {
     expect(seasonLevelFor(0)).toBe(1);
-    expect(seasonLevelFor(130)).toBe(3);
+    expect(seasonLevelFor(130)).toBe(4);
     expect(seasonLevelFor(999_999)).toBe(20);
     expect(getSeasonBarInfo(999_999).nextPt).toBeNull();
   });
@@ -205,7 +205,7 @@ describe("pase de temporada", () => {
   it("bloquea el carril VIP sin VIP y lo permite con VIP", () => {
     const p = addSeasonPt(defaultProgress(), 130);
     expect(claimSeasonLevel(p, "FREE", 2, false).ok).toBe(true);
-    expect(claimSeasonLevel(p, "FREE", 4, false).ok).toBe(false);
+    expect(claimSeasonLevel(p, "FREE", 5, false).ok).toBe(false);
     const noVip = claimSeasonLevel(p, "VIP", 1, false);
     expect(noVip.ok).toBe(false);
     const withVip = claimSeasonLevel(p, "VIP", 1, true);
@@ -231,6 +231,26 @@ describe("temporadas: identificador, reinicio y línea base", () => {
     expect(out.progress.season.pt).toBe(0);
     expect(out.progress.credits).toBe(prev.credits + out.credits);
     expect(out.progress.ships).toEqual(["falcon", "nova"]);
+  });
+
+  it("los desafíos de naves y armas no cuentan desbloqueos anteriores a la temporada", () => {
+    const base = defaultProgress();
+    const p = {
+      ...base,
+      ships: ["falcon", "nova", "ash", "omega"],
+      weaponsUsed: ["laser", "spread", "missile"],
+      season: {
+        ...base.season,
+        baseline: {
+          ...base.season.baseline,
+          ships: ["falcon", "nova", "ash", "omega"],
+          weaponsUsed: ["laser", "spread", "missile"],
+        },
+      },
+    };
+    const board = getSeasonBoard(p, NOON_SUNDAY);
+    expect(board.challenges.find((c) => c.template.id === "s_fleet")?.progress).toBe(0);
+    expect(board.challenges.find((c) => c.template.id === "s_arsenal")?.progress).toBe(0);
   });
 
   it("los desafíos miden solo desde el inicio de la temporada", () => {
