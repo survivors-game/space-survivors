@@ -2248,8 +2248,23 @@ function MarketAdminSection() {
                 <div className="rounded bg-black/20 p-3 text-sm text-white/75">
                   <b>Motivo:</b> {dispute.reason}
                 </div>
-                {dispute.payment_reference ? <p className="break-all text-xs text-amber-100">Referencia de pago: {dispute.payment_reference}</p> : null}
-                {dispute.payment_proof_url ? <p className="text-xs"><a href={dispute.payment_proof_url} target="_blank" rel="noreferrer" className="text-cyan-200 underline">Ver comprobante de pago del comprador</a></p> : null}
+                {dispute.payment_reference ? (
+                  <p className="break-all text-xs text-amber-100">
+                    Referencia de pago: {dispute.payment_reference}
+                  </p>
+                ) : null}
+                {dispute.payment_proof_url ? (
+                  <p className="text-xs">
+                    <a
+                      href={dispute.payment_proof_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-cyan-200 underline"
+                    >
+                      Ver comprobante de pago del comprador
+                    </a>
+                  </p>
+                ) : null}
                 {dispute.evidence_url ? (
                   <p className="break-all text-xs">
                     <a
@@ -2359,10 +2374,27 @@ function MarketAdminSection() {
                 {money(order.price_minor, order.currency_code)} ·{" "}
                 {order.payment_method || "Método no registrado"} · {date(order.created_at)}
               </p>
-              {order.payment_reference ? <p className="mt-1 break-all text-amber-100">Referencia de pago: {order.payment_reference}</p> : null}
-              {order.payment_proof_url ? <a href={order.payment_proof_url} target="_blank" rel="noreferrer" className="text-cyan-200 underline">Ver comprobante del comprador</a> : null}
-              {order.payment_deadline_at && order.status === "PENDIENTE" ? <p className="text-white/45">Vence pago: {date(order.payment_deadline_at)}</p> : null}
-              {order.release_deadline_at && order.status === "PAGO_REPORTADO" ? <p className="text-white/45">Vence liberación: {date(order.release_deadline_at)}</p> : null}
+              {order.payment_reference ? (
+                <p className="mt-1 break-all text-amber-100">
+                  Referencia de pago: {order.payment_reference}
+                </p>
+              ) : null}
+              {order.payment_proof_url ? (
+                <a
+                  href={order.payment_proof_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-cyan-200 underline"
+                >
+                  Ver comprobante del comprador
+                </a>
+              ) : null}
+              {order.payment_deadline_at && order.status === "PENDIENTE" ? (
+                <p className="text-white/45">Vence pago: {date(order.payment_deadline_at)}</p>
+              ) : null}
+              {order.release_deadline_at && order.status === "PAGO_REPORTADO" ? (
+                <p className="text-white/45">Vence liberación: {date(order.release_deadline_at)}</p>
+              ) : null}
             </article>
           ))}
           {!filteredOrders.length && !loading ? (
