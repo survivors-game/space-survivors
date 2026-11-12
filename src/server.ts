@@ -3598,14 +3598,41 @@ async function ensureMarketSchema(db: D1Database): Promise<void> {
       if (!(orderColumns.results ?? []).some((column) => column.name === "buyer_paid_at")) {
         await db.prepare("ALTER TABLE p2p_orders ADD COLUMN buyer_paid_at INTEGER").run();
       }
-      const orderColumnNames = new Set((await db.prepare("PRAGMA table_info(p2p_orders)").all<{ name: string }>()).results?.map((column) => column.name) ?? []);
-      for (const [name, definition] of [["payment_reference", "TEXT"], ["payment_proof_url", "TEXT"], ["payment_deadline_at", "INTEGER"], ["release_deadline_at", "INTEGER"]] as const) {
-        if (!orderColumnNames.has(name)) await db.prepare(`ALTER TABLE p2p_orders ADD COLUMN ${name} ${definition}`).run();
+      const orderColumnNames = new Set(
+        (await db.prepare("PRAGMA table_info(p2p_orders)").all<{ name: string }>()).results?.map(
+          (column) => column.name,
+        ) ?? [],
+      );
+      for (const [name, definition] of [
+        ["payment_reference", "TEXT"],
+        ["payment_proof_url", "TEXT"],
+        ["payment_deadline_at", "INTEGER"],
+        ["release_deadline_at", "INTEGER"],
+      ] as const) {
+        if (!orderColumnNames.has(name)) {
+          await db.prepare(`ALTER TABLE p2p_orders ADD COLUMN ${name} ${definition}`).run();
+        }
       }
-      await db.prepare("UPDATE p2p_orders SET payment_deadline_at = created_at + 1800000 WHERE status = 'PENDIENTE' AND payment_deadline_at IS NULL").run();
-      await db.prepare("UPDATE p2p_orders SET release_deadline_at = COALESCE(buyer_paid_at, updated_at) + 1800000 WHERE status = 'PAGO_REPORTADO' AND release_deadline_at IS NULL").run();
-      await db.prepare("CREATE INDEX IF NOT EXISTS idx_p2p_orders_payment_deadline ON p2p_orders(status, payment_deadline_at)").run();
-      await db.prepare("CREATE INDEX IF NOT EXISTS idx_p2p_orders_release_deadline ON p2p_orders(status, release_deadline_at)").run();
+      await db
+        .prepare(
+          "UPDATE p2p_orders SET payment_deadline_at = created_at + 1800000 WHERE status = 'PENDIENTE' AND payment_deadline_at IS NULL",
+        )
+        .run();
+      await db
+        .prepare(
+          "UPDATE p2p_orders SET release_deadline_at = COALESCE(buyer_paid_at, updated_at) + 1800000 WHERE status = 'PAGO_REPORTADO' AND release_deadline_at IS NULL",
+        )
+        .run();
+      await db
+        .prepare(
+          "CREATE INDEX IF NOT EXISTS idx_p2p_orders_payment_deadline ON p2p_orders(status, payment_deadline_at)",
+        )
+        .run();
+      await db
+        .prepare(
+          "CREATE INDEX IF NOT EXISTS idx_p2p_orders_release_deadline ON p2p_orders(status, release_deadline_at)",
+        )
+        .run();
       await db
         .prepare(
           "CREATE UNIQUE INDEX IF NOT EXISTS idx_p2p_orders_one_active_per_ad ON p2p_orders(ad_id) WHERE status IN ('PENDIENTE', 'PAGO_REPORTADO', 'DISPUTA')",
@@ -6823,15 +6850,46 @@ async function handleMarketRequest(
 
   if (url.pathname.startsWith("/api/market/") && account) {
     const now = Date.now();
-    await db.prepare("UPDATE p2p_orders SET status = 'CANCELADA', updated_at = ? WHERE status = 'PENDIENTE' AND payment_deadline_at <= ?").bind(now, now).run();
-    const overdue = await db.prepare("SELECT id, buyer_pilot_id FROM p2p_orders WHERE status = 'PAGO_REPORTADO' AND release_deadline_at <= ? LIMIT 25").bind(now).all<{ id: string; buyer_pilot_id: string }>();
+    await db
+      .prepare(
+        "UPDATE p2p_orders SET status = 'CANCELADA', updated_at = ? WHERE status = 'PENDIENTE' AND payment_deadline_at <= ?",
+      )
+      .bind(now, now)
+      .run();
+    const overdue = await db
+      .prepare(
+        "SELECT id, buyer_pilot_id FROM p2p_orders WHERE status = 'PAGO_REPORTADO' AND release_deadline_at <= ? LIMIT 25",
+      )
+      .bind(now)
+      .all<{ id: string; buyer_pilot_id: string }>();
     for (const order of overdue.results ?? []) {
       const disputeId = "dsp_" + randomHex(12);
       const results = await db.batch([
-        db.prepare("UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status = 'PAGO_REPORTADO' AND release_deadline_at <= ?").bind(now, order.id, now),
-        db.prepare("INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, status, created_at) SELECT ?, ?, ?, 'El vendedor no liberó el artículo dentro del plazo. Revisión administrativa requerida.', 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA') AND NOT EXISTS (SELECT 1 FROM p2p_disputes WHERE order_id = ?)").bind(disputeId, order.id, order.buyer_pilot_id, now, order.id, order.id),
+        db
+          .prepare(
+            "UPDATE p2p_orders SET status = 'DISPUTA', updated_at = ? WHERE id = ? AND status = 'PAGO_REPORTADO' AND release_deadline_at <= ?",
+          )
+          .bind(now, order.id, now),
+        db
+          .prepare(
+            "INSERT INTO p2p_disputes (id, order_id, opened_by_pilot_id, reason, status, created_at) SELECT ?, ?, ?, 'El vendedor no liberó el artículo dentro del plazo. Revisión administrativa requerida.', 'OPEN', ? WHERE EXISTS (SELECT 1 FROM p2p_orders WHERE id = ? AND status = 'DISPUTA') AND NOT EXISTS (SELECT 1 FROM p2p_disputes WHERE order_id = ?)",
+          )
+          .bind(disputeId, order.id, order.buyer_pilot_id, now, order.id, order.id),
       ]);
-      if (results[0]?.meta?.changes === 1 && results[1]?.meta?.changes === 1) await db.prepare("INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, created_at) VALUES (?, ?, ?, ?, ?)").bind("dmsg_" + randomHex(12), disputeId, order.buyer_pilot_id, "El plazo de liberación venció. Se solicita revisión administrativa.", now).run();
+      if (results[0]?.meta?.changes === 1 && results[1]?.meta?.changes === 1) {
+        await db
+          .prepare(
+            "INSERT INTO p2p_dispute_messages (id, dispute_id, author_pilot_id, message, created_at) VALUES (?, ?, ?, ?, ?)",
+          )
+          .bind(
+            "dmsg_" + randomHex(12),
+            disputeId,
+            order.buyer_pilot_id,
+            "El plazo de liberación venció. Se solicita revisión administrativa.",
+            now,
+          )
+          .run();
+      }
     }
   }
 
