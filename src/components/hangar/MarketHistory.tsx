@@ -236,16 +236,16 @@ export function MarketHistory({
                 </Button>
               </div>
             ) : null}
+            {order.status === "PAGO_REPORTADO" ? (
+              <p className="text-[8px] uppercase text-amber-100">
+                EL VENDEDOR DEBE LIBERAR ANTES DE:{" "}
+                {order.release_deadline_at
+                  ? new Date(order.release_deadline_at).toLocaleString()
+                  : "30 MINUTOS DESDE EL REPORTE"}
+              </p>
+            ) : null}
             {order.role === "VENDEDOR" && (order.status === "PAGO_REPORTADO" || order.status === "DISPUTA") ? (
               <div className="space-y-2 border-t border-white/10 pt-3">
-                {order.status === "PAGO_REPORTADO" ? (
-                  <p className="text-[8px] uppercase text-amber-100">
-                    LIBERAR ANTES DE:{" "}
-                    {order.release_deadline_at
-                      ? new Date(order.release_deadline_at).toLocaleString()
-                      : "30 MINUTOS DESDE EL REPORTE"}
-                  </p>
-                ) : null}
                 {order.payment_reference ? (
                   <p className="break-all text-xs text-white">
                     REFERENCIA: {order.payment_reference}
