@@ -676,7 +676,11 @@ function Index() {
     try {
       await marketRequest<{ success: boolean }>("/api/market/report-payment", {
         method: "POST",
-        body: JSON.stringify({ order_id: orderId, payment_reference: reference, payment_proof_url: proofUrl }),
+        body: JSON.stringify({
+          order_id: orderId,
+          payment_reference: reference,
+          payment_proof_url: proofUrl,
+        }),
       });
       setMarketRefresh((version) => version + 1);
     } catch (error) {
