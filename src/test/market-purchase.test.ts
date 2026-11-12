@@ -492,11 +492,19 @@ describe("P2P purchase flow", () => {
       payment_method: "NEQUI",
     });
     expect(bought.response.status).toBe(200);
-    db.prepare("UPDATE p2p_orders SET payment_deadline_at = ? WHERE id = ?").run(Date.now() - 1, bought.payload.order_id);
+    db
+      .prepare("UPDATE p2p_orders SET payment_deadline_at = ? WHERE id = ?")
+      .run(Date.now() - 1, bought.payload.order_id);
     const history = await requestJson<{ orders: { status: string }[] }>("/api/market/history");
     expect(history.payload.orders[0]?.status).toBe("CANCELADA");
-    expect(db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"]).toBe(5);
-    expect(db.prepare("SELECT is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()?.["is_locked"]).toBe(0);
+    expect(
+      db.prepare("SELECT obsidian FROM pilots WHERE pilot_id = ?").get(BUYER_ID)?.["obsidian"],
+    ).toBe(5);
+    expect(
+      db.prepare("SELECT is_locked FROM pilot_inventory WHERE id = 'inv-boss-ship'").get()?.[
+        "is_locked"
+      ],
+    ).toBe(0);
   });
 
   it("moves overdue seller releases into an administrative dispute", async () => {
@@ -510,10 +518,16 @@ describe("P2P purchase flow", () => {
       payment_reference: "TRANSFER-OVERDUE",
     });
     expect(reported.response.status).toBe(200);
-    db.prepare("UPDATE p2p_orders SET release_deadline_at = ? WHERE id = ?").run(Date.now() - 1, bought.payload.order_id);
+    db
+      .prepare("UPDATE p2p_orders SET release_deadline_at = ? WHERE id = ?")
+      .run(Date.now() - 1, bought.payload.order_id);
     const history = await requestJson<{ orders: { status: string }[] }>("/api/market/history");
     expect(history.payload.orders[0]?.status).toBe("DISPUTA");
-    expect(db.prepare("SELECT COUNT(*) AS count FROM p2p_disputes WHERE order_id = ?").get(bought.payload.order_id)?.["count"]).toBe(1);
+    expect(
+      db
+        .prepare("SELECT COUNT(*) AS count FROM p2p_disputes WHERE order_id = ?")
+        .get(bought.payload.order_id)?.["count"],
+    ).toBe(1);
   });
 
   it("rejects buying one's own listing", async () => {
