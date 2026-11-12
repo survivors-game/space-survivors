@@ -339,7 +339,10 @@ function Index() {
       }
     };
     const interval = window.setInterval(() => void refreshMarketState(), 10000);
-    return () => { active = false; window.clearInterval(interval); };
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [googleSessionLoading, googlePlayer]);
 
   useEffect(() => {
