@@ -6848,7 +6848,13 @@ async function handleMarketRequest(
 
   const account = await getAuthenticatedAccount(db, await requestSessionHash(request));
 
-  if (url.pathname.startsWith("/api/market/") && account) {
+  const authorizedMarketAdmin = Boolean(
+    isAdminMarketPath &&
+      account &&
+      account.email.toLowerCase() === ADMIN_EMAIL &&
+      (await hasValidAdminSession(db, request, account.google_sub)),
+  );
+  if ((url.pathname.startsWith("/api/market/") && account) || authorizedMarketAdmin) {
     const now = Date.now();
     await db
       .prepare(
