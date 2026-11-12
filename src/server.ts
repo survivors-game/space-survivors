@@ -8373,11 +8373,37 @@ async function handleMarketRequest(
   if (url.pathname === "/api/market/report-payment" && request.method === "POST") {
     const body = await readJson(request, 4096);
     const orderId = typeof body?.["order_id"] === "string" ? body["order_id"].trim() : "";
-    const reference = typeof body?.["payment_reference"] === "string" ? body["payment_reference"].trim().slice(0, 120) : "";
-    const proofUrl = typeof body?.["payment_proof_url"] === "string" ? body["payment_proof_url"].trim() : "";
-    if (!orderId || orderId.length > 64) return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
-    if (reference.length < 3 && !proofUrl) return pilotJson(request, pilotId, { error: "Debes indicar una referencia de pago o adjuntar el enlace del comprobante." }, 400);
-    if (proofUrl) { try { if (proofUrl.length > 2048 || new URL(proofUrl).protocol !== "https:") throw new Error("invalid"); } catch { return pilotJson(request, pilotId, { error: "El comprobante debe tener un enlace HTTPS válido." }, 400); } }
+    const reference =
+      typeof body?.["payment_reference"] === "string"
+        ? body["payment_reference"].trim().slice(0, 120)
+        : "";
+    const proofUrl =
+      typeof body?.["payment_proof_url"] === "string" ? body["payment_proof_url"].trim() : "";
+    if (!orderId || orderId.length > 64) {
+      return pilotJson(request, pilotId, { error: "La orden indicada no es válida." }, 400);
+    }
+    if (reference.length < 3 && !proofUrl) {
+      return pilotJson(
+        request,
+        pilotId,
+        { error: "Debes indicar una referencia de pago o adjuntar el enlace del comprobante." },
+        400,
+      );
+    }
+    if (proofUrl) {
+      try {
+        if (proofUrl.length > 2048 || new URL(proofUrl).protocol !== "https:") {
+          throw new Error("invalid");
+        }
+      } catch {
+        return pilotJson(
+          request,
+          pilotId,
+          { error: "El comprobante debe tener un enlace HTTPS válido." },
+          400,
+        );
+      }
+    }
     const now = Date.now();
     const result = await db
       .prepare(
